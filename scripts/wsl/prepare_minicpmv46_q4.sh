@@ -12,6 +12,8 @@ model_dir="${MODEL_DIR:-${repo_root}/models/MiniCPM-V-4_6}"
 f16_model="${F16_MODEL:-${model_dir}/ggml-model-f16.gguf}"
 f16_mmproj="${F16_MMPROJ:-${model_dir}/mmproj-model-f16.gguf}"
 quant_type="${QUANT_TYPE:-Q4_K_M}"
+quantize_threads="${QUANTIZE_THREADS:-1}"
+min_output_bytes="${MIN_OUTPUT_BYTES:-1048576000}"
 q_model="${Q_MODEL:-${model_dir}/ggml-model-${quant_type}.gguf}"
 
 if [[ ! -f "${convert_script}" ]]; then
@@ -25,6 +27,28 @@ if [[ ! -x "${quantize_bin}" ]]; then
   echo "Build it first with scripts/wsl/build_llama_cpp.sh" >&2
   exit 2
 fi
+
+quantize_lib_dir="$(cd "$(dirname "${quantize_bin}")" && pwd)"
+export LD_LIBRARY_PATH="${quantize_lib_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+file_size() {
+  stat -c '%s' "$1"
+}
+
+needs_quantize() {
+  local output_path="$1"
+  if [[ ! -f "${output_path}" ]]; then
+    return 0
+  fi
+  local size
+  size="$(file_size "${output_path}")"
+  if (( size < min_output_bytes )); then
+    echo "Existing quantized output is too small (${size} bytes < ${min_output_bytes}); replacing: ${output_path}" >&2
+    rm -f "${output_path}"
+    return 0
+  fi
+  return 1
+}
 
 mkdir -p "${model_dir}"
 
@@ -65,11 +89,11 @@ else
   echo "MMPROJ GGUF already exists: ${f16_mmproj}"
 fi
 
-if [[ ! -f "${q_model}" ]]; then
-  echo "Quantizing ${f16_model} -> ${q_model} (${quant_type})"
-  "${quantize_bin}" "${f16_model}" "${q_model}" "${quant_type}"
+if needs_quantize "${q_model}"; then
+  echo "Quantizing ${f16_model} -> ${q_model} (${quant_type}, threads=${quantize_threads})"
+  "${quantize_bin}" "${f16_model}" "${q_model}" "${quant_type}" "${quantize_threads}"
 else
-  echo "Quantized model already exists: ${q_model}"
+  echo "Quantized model already exists: ${q_model} ($(file_size "${q_model}") bytes)"
 fi
 
 cat <<EOF

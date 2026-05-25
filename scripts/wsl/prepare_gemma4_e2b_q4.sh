@@ -11,6 +11,8 @@ hf_repo="${MODEL_REF:-ggml-org/gemma-4-E2B-it-GGUF}"
 source_model_file="${SOURCE_MODEL_FILE:-gemma-4-E2B-it-bf16.gguf}"
 source_mmproj_file="${SOURCE_MMPROJ_FILE:-mmproj-gemma-4-E2B-it-bf16.gguf}"
 quant_type="${QUANT_TYPE:-Q4_K_M}"
+quantize_threads="${QUANTIZE_THREADS:-1}"
+min_output_bytes="${MIN_OUTPUT_BYTES:-1048576000}"
 output_model_file="${OUTPUT_MODEL_FILE:-gemma-4-E2B-it-${quant_type}.gguf}"
 output_mmproj_file="${OUTPUT_MMPROJ_FILE:-${source_mmproj_file}}"
 
@@ -19,6 +21,28 @@ if [[ ! -x "${quantize_bin}" ]]; then
   echo "Build it first with scripts/wsl/build_llama_cpp.sh" >&2
   exit 2
 fi
+
+quantize_lib_dir="$(cd "$(dirname "${quantize_bin}")" && pwd)"
+export LD_LIBRARY_PATH="${quantize_lib_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+file_size() {
+  stat -c '%s' "$1"
+}
+
+needs_quantize() {
+  local output_path="$1"
+  if [[ ! -f "${output_path}" ]]; then
+    return 0
+  fi
+  local size
+  size="$(file_size "${output_path}")"
+  if (( size < min_output_bytes )); then
+    echo "Existing quantized output is too small (${size} bytes < ${min_output_bytes}); replacing: ${output_path}" >&2
+    rm -f "${output_path}"
+    return 0
+  fi
+  return 1
+}
 
 mkdir -p "${model_dir}"
 
@@ -41,11 +65,11 @@ for filename in (model_file, mmproj_file):
 source_model_path="${model_dir}/${source_model_file}"
 output_model_path="${model_dir}/${output_model_file}"
 
-if [[ ! -f "${output_model_path}" ]]; then
-  echo "Quantizing ${source_model_path} -> ${output_model_path} (${quant_type})"
-  "${quantize_bin}" "${source_model_path}" "${output_model_path}" "${quant_type}"
+if needs_quantize "${output_model_path}"; then
+  echo "Quantizing ${source_model_path} -> ${output_model_path} (${quant_type}, threads=${quantize_threads})"
+  "${quantize_bin}" "${source_model_path}" "${output_model_path}" "${quant_type}" "${quantize_threads}"
 else
-  echo "Quantized model already exists: ${output_model_path}"
+  echo "Quantized model already exists: ${output_model_path} ($(file_size "${output_model_path}") bytes)"
 fi
 
 if [[ "${output_mmproj_file}" != "${source_mmproj_file}" ]]; then
