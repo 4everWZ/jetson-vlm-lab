@@ -11,11 +11,26 @@ model_ref="${MODEL_REF:-ggml-org/gemma-4-E2B-it-GGUF}"
 ctx_size="${CTX_SIZE:-4096}"
 n_gpu_layers="${N_GPU_LAYERS:-99}"
 model_alias="${MODEL_ALIAS:-gemma4-e2b-it-q4}"
+model_path="${MODEL_PATH:-${GEMMA4_GGUF_MODEL:-}}"
+mmproj_path="${MMPROJ_PATH:-${GEMMA4_MMPROJ:-}}"
 
 if [[ ! -x "${server_bin}" ]]; then
   echo "llama-server not found or not executable: ${server_bin}" >&2
   echo "Build first with scripts/wsl/build_llama_cpp.sh or set LLAMA_SERVER_BIN." >&2
   exit 2
+fi
+
+model_args=()
+if [[ -n "${model_path}" || -n "${mmproj_path}" ]]; then
+  if [[ -z "${model_path}" || -z "${mmproj_path}" ]]; then
+    echo "Set both MODEL_PATH and MMPROJ_PATH for local Gemma GGUF runtime." >&2
+    exit 2
+  fi
+  [[ -f "${model_path}" ]] || { echo "MODEL_PATH not found: ${model_path}" >&2; exit 2; }
+  [[ -f "${mmproj_path}" ]] || { echo "MMPROJ_PATH not found: ${mmproj_path}" >&2; exit 2; }
+  model_args=(-m "${model_path}" --mmproj "${mmproj_path}")
+else
+  model_args=(-hf "${model_ref}")
 fi
 
 extra_args=()
@@ -24,7 +39,7 @@ if [[ -n "${LLAMA_SERVER_EXTRA_ARGS:-}" ]]; then
 fi
 
 exec "${server_bin}" \
-  -hf "${model_ref}" \
+  "${model_args[@]}" \
   --alias "${model_alias}" \
   --host "${host}" \
   --port "${port}" \
