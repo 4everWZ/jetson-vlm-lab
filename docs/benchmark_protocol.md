@@ -70,11 +70,19 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
   --output outputs/benchmarks/gemma4-e2b-q8-wsl.jsonl
 ```
 
-For MiniCPM-V 4.6, provide local converted GGUF files first:
+For MiniCPM-V 4.6, inspect metadata before attempting local conversion on WSL:
+
+```bash
+scripts/wsl/inspect_minicpmv46_hf.sh
+```
+
+Then provide local converted GGUF files only after a deliberate high-memory preparation run or external conversion:
 
 ```bash
 MODEL_PATH=/path/to/ggml-model-Q4_K_M.gguf \
 MMPROJ_PATH=/path/to/mmproj-model-f16.gguf \
+CTX_SIZE=512 \
+N_GPU_LAYERS=0 \
 scripts/wsl/run_minicpmv46_llama.sh
 ```
 

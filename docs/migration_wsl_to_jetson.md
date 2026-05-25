@@ -57,7 +57,7 @@ For MiniCPM-V 4.6, pre-place converted files:
 /mnt/nvme/models/MiniCPM-V-4_6/mmproj-model-f16.gguf
 ```
 
-The conversion itself is better done on WSL or another larger Linux machine. Jetson should not be the primary conversion/build machine unless there is no alternative.
+The conversion itself is better done on WSL or another larger Linux machine. Start with `scripts/wsl/inspect_minicpmv46_hf.sh`; only run the full preparation path with `ALLOW_MINICPM_FULL_PREPARE=1` on a machine with enough memory and disk. Jetson should not be the primary conversion/build machine unless there is no alternative.
 
 ## First-Run Checklist
 

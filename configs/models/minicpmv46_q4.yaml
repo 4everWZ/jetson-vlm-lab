@@ -12,8 +12,8 @@ server:
 
 runtime:
   launch_mode: local_gguf_with_mmproj
-  ctx_size: 4096
-  n_gpu_layers: 99
+  ctx_size: 512
+  n_gpu_layers: 0
   model_path_env: MODEL_PATH
   mmproj_path_env: MMPROJ_PATH
   wsl_script: scripts/wsl/run_minicpmv46_llama.sh
@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: llama.cpp documents conversion from the official Hugging Face checkpoint to separate text GGUF and mmproj GGUF. This config does not assume a prebuilt public GGUF repository.
+  status: Unverified low-memory WSL template. Metadata-only inspection found 2.44 GiB of known HF files, model.safetensors at 2600957528 bytes, and local llama.cpp MiniCPM-V 4.6 conversion signals, but local conversion/runtime has not been observed in this repository.

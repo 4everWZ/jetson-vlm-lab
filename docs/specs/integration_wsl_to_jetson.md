@@ -44,9 +44,9 @@ outputs/*.jsonl benchmark records
 
 - No performance claim is valid until a real model/server run completes.
 - No Jetson support claim is valid until the Jetson Docker/runtime path is observed.
-- MiniCPM-V 4.6 conversion and mmproj compatibility must be verified on the exact llama.cpp revision used for runtime.
+- MiniCPM-V 4.6 metadata-only inspection has observed HF file sizes and local llama.cpp conversion signals, but conversion and mmproj runtime compatibility must still be verified on the exact llama.cpp revision used for runtime.
 - Gemma BF16-to-Q4 local quantization is not a WSL acceptance path on this host; use the prepared Q8_0 artifacts or an externally prepared lower-bit artifact.
 
 ## Final Acceptance Status
 
-Partially implemented. The scaffold, scripts, configs, tests, docs, and Gemma Q8_0 local artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU-only llama.cpp build with low-memory settings. Image requests, MiniCPM-V 4.6 conversion/runtime, Jetson inference, and performance remain unverified.
+Partially implemented. The scaffold, scripts, configs, tests, docs, and Gemma Q8_0 local artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU-only llama.cpp build with low-memory settings. MiniCPM-V 4.6 metadata-only inspection passed without downloading weights. Image requests, MiniCPM-V 4.6 conversion/runtime, Jetson inference, and performance remain unverified.

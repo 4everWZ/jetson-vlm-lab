@@ -6,6 +6,7 @@ llama_cpp_dir="${LLAMA_CPP_DIR:-${repo_root}/tmp/llama.cpp}"
 convert_script="${LLAMA_CONVERT_SCRIPT:-${llama_cpp_dir}/convert_hf_to_gguf.py}"
 quantize_bin="${LLAMA_QUANTIZE_BIN:-${llama_cpp_dir}/build/bin/llama-quantize}"
 python_cmd="${PYTHON_CMD:-conda run -n transformers python}"
+allow_full_prepare="${ALLOW_MINICPM_FULL_PREPARE:-0}"
 
 hf_repo="${MODEL_REF:-openbmb/MiniCPM-V-4_6}"
 model_dir="${MODEL_DIR:-${repo_root}/models/MiniCPM-V-4_6}"
@@ -15,6 +16,23 @@ quant_type="${QUANT_TYPE:-Q4_K_M}"
 quantize_threads="${QUANTIZE_THREADS:-1}"
 min_output_bytes="${MIN_OUTPUT_BYTES:-1048576000}"
 q_model="${Q_MODEL:-${model_dir}/ggml-model-${quant_type}.gguf}"
+
+if [[ "${allow_full_prepare}" != "1" ]]; then
+  cat >&2 <<EOF
+MiniCPM-V 4.6 full preparation is disabled by default on low-memory WSL.
+
+This script can download a large HF checkpoint, convert it to F16 GGUF, and
+quantize it to ${quant_type}. Those steps may exceed this WSL memory/storage
+budget. First run the metadata-only inspection:
+
+  scripts/wsl/inspect_minicpmv46_hf.sh
+
+If you have enough disk/RAM or are using a larger conversion machine, opt in:
+
+  ALLOW_MINICPM_FULL_PREPARE=1 scripts/wsl/prepare_minicpmv46_q4.sh
+EOF
+  exit 2
+fi
 
 if [[ ! -f "${convert_script}" ]]; then
   echo "convert_hf_to_gguf.py not found: ${convert_script}" >&2

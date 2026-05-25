@@ -29,6 +29,38 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn('llama_batch_size="${LLAMA_BATCH_SIZE:-128}"', launch_script)
         self.assertIn('llama_ubatch_size="${LLAMA_UBATCH_SIZE:-32}"', launch_script)
 
+    def test_minicpm_prepare_requires_explicit_high_memory_confirmation(self):
+        prepare_script = Path("scripts/wsl/prepare_minicpmv46_q4.sh").read_text(encoding="utf-8")
+
+        self.assertIn("ALLOW_MINICPM_FULL_PREPARE", prepare_script)
+        self.assertIn("MiniCPM-V 4.6 full preparation is disabled by default", prepare_script)
+        self.assertIn("scripts/wsl/inspect_minicpmv46_hf.sh", prepare_script)
+
+    def test_minicpm_inspection_script_does_not_download_model_files(self):
+        inspect_script = Path("scripts/wsl/inspect_minicpmv46_hf.sh").read_text(encoding="utf-8")
+
+        self.assertIn("model_info", inspect_script)
+        self.assertIn("files_metadata=True", inspect_script)
+        self.assertIn("MiniCPMV4_6ForConditionalGeneration", inspect_script)
+        self.assertIn("MINICPMV4_6", inspect_script)
+        self.assertNotIn("snapshot_download", inspect_script)
+        self.assertNotIn("hf_hub_download", inspect_script)
+
+    def test_minicpm_config_uses_conservative_unverified_wsl_defaults(self):
+        from edge_vlm.config import load_model_config
+
+        config = load_model_config("configs/models/minicpmv46_q4.yaml")
+        launch_script = Path("scripts/wsl/run_minicpmv46_llama.sh").read_text(encoding="utf-8")
+
+        self.assertEqual(config["runtime"]["ctx_size"], 512)
+        self.assertEqual(config["runtime"]["n_gpu_layers"], 0)
+        self.assertIn('ctx_size="${CTX_SIZE:-512}"', launch_script)
+        self.assertIn('llama_threads="${LLAMA_THREADS:-2}"', launch_script)
+        self.assertIn('llama_parallel="${LLAMA_PARALLEL:-1}"', launch_script)
+        self.assertIn('llama_batch_size="${LLAMA_BATCH_SIZE:-128}"', launch_script)
+        self.assertIn('llama_ubatch_size="${LLAMA_UBATCH_SIZE:-32}"', launch_script)
+        self.assertIn("unverified", config["notes"]["status"].lower())
+
     def test_image_payload_uses_data_url_content_part(self):
         from edge_vlm.image_payload import build_user_content
 

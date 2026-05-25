@@ -13,7 +13,7 @@ The repository is organized so development, reference inspection, client code, b
 - Gemma BF16 GGUF source files were downloaded, but BF16 to Q4_K_M quantization was killed by WSL memory pressure. The incomplete Q4 output was removed.
 - The low-memory Gemma path is official pre-quantized Q8_0 GGUF, prepared by `scripts/wsl/prepare_gemma4_e2b_q8.sh`. In this workspace, the Q8_0 model and Q8_0 mmproj files are present under ignored `models/` storage.
 - Gemma Q8_0 text-only smoke passed on the local CPU-only llama.cpp build with `CTX_SIZE=512`, `N_GPU_LAYERS=0`, `LLAMA_THREADS=2`, one server slot, and no warmup. This is a functional smoke test, not a performance claim.
-- MiniCPM-V 4.6 preparation is still a local conversion path and must be verified on the exact llama.cpp revision before claiming runtime support.
+- MiniCPM-V 4.6 metadata-only inspection passed without downloading weights: HF reports 2.44 GiB of known files, including `model.safetensors` at 2,600,957,528 bytes. The local llama.cpp conversion modules register `MiniCPMV4_6ForConditionalGeneration`, include MiniCPM-V 4.6 projector metadata, and expose `--mmproj`. Conversion and runtime are still unverified.
 - Jetson inference is not yet observed in this repository.
 
 Full filesystem access does not reduce model quantization peak memory. For constrained WSL, prefer already-quantized GGUF files, smaller context, CPU-only smoke tests, and one server slot. Do not retry local BF16-to-Q4 quantization here unless a larger machine is available.
@@ -89,21 +89,34 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
 
 ## MiniCPM-V 4.6
 
-MiniCPM-V 4.6 is tracked as a llama.cpp local conversion path:
+MiniCPM-V 4.6 is tracked as a llama.cpp local conversion path. On this WSL host, inspect metadata first; do not start the full download/convert/quantize flow until storage and memory are confirmed:
 
 ```bash
-scripts/wsl/prepare_minicpmv46_q4.sh
+scripts/wsl/inspect_minicpmv46_hf.sh
 ```
 
-This downloads the official HF checkpoint subset, converts language and mmproj GGUF files, and quantizes the language GGUF to Q4_K_M. Treat this as unverified until the command completes on the current machine and a real llama-server request succeeds.
+Observed metadata from this workspace: known HF file total is 2.44 GiB, with `model.safetensors` at 2,600,957,528 bytes. The local llama.cpp tree has MiniCPM-V 4.6 conversion registration and projector metadata, but that is only a feasibility signal.
+
+Full preparation is guarded because it can download a large HF checkpoint, create an F16 GGUF, and quantize it to Q4_K_M. Use it only on a machine with enough RAM and disk:
+
+```bash
+ALLOW_MINICPM_FULL_PREPARE=1 scripts/wsl/prepare_minicpmv46_q4.sh
+```
+
+Treat MiniCPM-V 4.6 as unverified until conversion completes on the current llama.cpp revision and a real llama-server request succeeds.
 
 Start it only after local files exist:
 
 ```bash
 MODEL_PATH=$PWD/models/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf \
 MMPROJ_PATH=$PWD/models/MiniCPM-V-4_6/mmproj-model-f16.gguf \
-CTX_SIZE=1024 \
+CTX_SIZE=512 \
 N_GPU_LAYERS=0 \
+LLAMA_THREADS=2 \
+LLAMA_THREADS_BATCH=2 \
+LLAMA_BATCH_SIZE=128 \
+LLAMA_UBATCH_SIZE=32 \
+LLAMA_PARALLEL=1 \
 scripts/wsl/run_minicpmv46_llama.sh
 ```
 

@@ -31,3 +31,11 @@ Decision: use official pre-quantized Gemma 4 E2B-it Q8_0 GGUF artifacts as the W
 Reason: local BF16-to-Q4 quantization was observed to be killed on this WSL host while processing a large embedding tensor. Reducing quantization threads limits CPU concurrency but does not remove that tensor-level peak memory requirement.
 
 Consequence: `configs/models/gemma4_e2b_q8.yaml` and `scripts/wsl/prepare_gemma4_e2b_q8.sh` are the default WSL path. `scripts/wsl/prepare_gemma4_e2b_q4.sh` remains available only with `ALLOW_HIGH_MEMORY_QUANTIZE=1` for larger machines or externally managed conversion hosts.
+
+## TRD-005: MiniCPM Full Preparation Requires Explicit Opt-In
+
+Decision: keep MiniCPM-V 4.6 full HF download, F16 GGUF conversion, and Q4 quantization behind `ALLOW_MINICPM_FULL_PREPARE=1`.
+
+Reason: the previous WSL OOM shows this host should not treat large model conversion or quantization as a safe default. Metadata inspection can still validate repository file sizes and llama.cpp conversion-script signals without downloading weights.
+
+Consequence: `scripts/wsl/inspect_minicpmv46_hf.sh` is the default MiniCPM feasibility step. `scripts/wsl/prepare_minicpmv46_q4.sh` remains available only for a larger conversion machine or a deliberately accepted high-memory run.
