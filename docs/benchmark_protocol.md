@@ -54,10 +54,12 @@ Dry run validates payload construction and logging only. It does not contact a s
 
 ## WSL Real Run
 
-Start a server first, then check health:
+Start a server first, then check health. Prefer the CUDA wrapper on this WSL host after `tmp/llama.cpp/build-cuda` exists; use the CPU fallback when GPU access is unavailable.
 
 ```bash
-scripts/wsl/run_gemma4_e2b_llama.sh
+MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q8_0.gguf \
+MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf \
+scripts/wsl/run_gemma4_e2b_llama_cuda.sh
 scripts/common/check_server.sh
 ```
 
@@ -69,6 +71,8 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
   --cases configs/benchmark/prompt_cases.jsonl \
   --output outputs/benchmarks/gemma4-e2b-q8-wsl.jsonl
 ```
+
+Observed WSL CUDA smoke for Gemma Q8 used `CTX_SIZE=512`, `N_GPU_LAYERS=32`, one server slot, and `VLM_SERVER_PORT=18081`. The benchmark harness recorded three successful text cases; the two image cases failed because `data/sample_images/*.jpg` files were not present, and the fake-stream case was recorded as a marker for `python -m edge_vlm.fake_stream`.
 
 For MiniCPM-V 4.6, inspect metadata before attempting local conversion on WSL:
 
@@ -82,8 +86,8 @@ Then provide local converted GGUF files only after a deliberate high-memory prep
 MODEL_PATH=/path/to/ggml-model-Q4_K_M.gguf \
 MMPROJ_PATH=/path/to/mmproj-model-f16.gguf \
 CTX_SIZE=512 \
-N_GPU_LAYERS=0 \
-scripts/wsl/run_minicpmv46_llama.sh
+N_GPU_LAYERS=32 \
+scripts/wsl/run_minicpmv46_llama_cuda.sh
 ```
 
 ## Fake Stream Run

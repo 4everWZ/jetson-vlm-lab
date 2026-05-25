@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: Low-memory WSL baseline. Text-only CPU smoke has passed with ctx_size 512, N_GPU_LAYERS 0, one server slot, and official pre-quantized Q8_0 GGUF artifacts. Image and Jetson runs remain unverified.
+  status: WSL baseline using official pre-quantized Q8_0 GGUF artifacts. Text-only CPU fallback smoke passed with ctx_size 512, N_GPU_LAYERS 0, and one server slot. Text-only CUDA smoke passed with ctx_size 512, N_GPU_LAYERS 32, and one server slot. Image and Jetson runs remain unverified.

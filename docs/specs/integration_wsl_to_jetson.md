@@ -19,7 +19,7 @@ outputs/*.jsonl benchmark records
 
 ## Integration Dependencies
 
-- WSL: Conda env `transformers` for Python validation, plus optional local llama.cpp build.
+- WSL: Conda env `transformers` for Python validation, plus local llama.cpp CPU fallback and CUDA build paths.
 - Jetson: Docker and NVIDIA runtime for the provided Docker scripts, or an equivalent local llama.cpp build.
 - Models: Gemma uses the prepared Q8_0 GGUF plus `mmproj` baseline on WSL; MiniCPM-V 4.6 defaults to local converted GGUF plus `mmproj`.
 
@@ -49,4 +49,4 @@ outputs/*.jsonl benchmark records
 
 ## Final Acceptance Status
 
-Partially implemented. The scaffold, scripts, configs, tests, docs, and Gemma Q8_0 local artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU-only llama.cpp build with low-memory settings. MiniCPM-V 4.6 metadata-only inspection passed without downloading weights. Image requests, MiniCPM-V 4.6 conversion/runtime, Jetson inference, and performance remain unverified.
+Partially implemented. The scaffold, scripts, configs, tests, docs, and Gemma Q8_0 local artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU fallback llama.cpp build with low-memory settings. WSL CUDA build/run wrappers exist; the CUDA build is verified with `CMAKE_CUDA_ARCHITECTURES=86`, `BUILD_JOBS=8`, and `GGML_CUDA=ON`. Gemma Q8_0 WSL CUDA text smoke passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, and one server slot; the shared benchmark harness recorded three successful text cases, two missing-image failures, and the fake-stream marker case. MiniCPM-V 4.6 metadata-only inspection passed without downloading weights. Image requests, MiniCPM-V 4.6 conversion/runtime, Jetson inference, and broader performance remain unverified.

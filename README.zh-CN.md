@@ -2,80 +2,132 @@
 
 这是一个面向 Jetson Orin / Orin Nano 的 WSL 优先边缘 VLM 实验工作流。
 
-本项目的组织原则是：开发、参考仓库阅读、客户端代码、benchmark 脚本和迁移文档先在 WSL 上完成；Jetson 只接收最小运行包、配置、脚本、benchmark 代码，以及放在 NVMe 或外置存储上的模型文件。
+本仓库的原则是：开发、参考仓库阅读、客户端代码、benchmark harness 和迁移文档先在 WSL 上完成。Jetson 只接收尽量小的运行包：源码、配置、脚本、benchmark 代码，以及放在 NVMe 或外置存储上的模型文件。
 
-## 当前状态
+## 项目内容
 
 - 第一条支持路线是 llama.cpp `llama-server` + GGUF。
-- Python 命令使用本地 Conda 环境：`conda run -n transformers python`。
-- 当前工作区已经有本地 llama.cpp CPU-only 构建：`tmp/llama.cpp/build/bin`。
-- WSL 能看到 `nvidia-smi`，但没有 `nvcc`，所以当前实测 llama.cpp 构建不是 CUDA 构建。
-- Gemma BF16 GGUF 源文件已经下载过，但 BF16 到 Q4_K_M 的本地量化被 WSL 内存压力杀掉；不完整 Q4 文件已经清理。
-- 低内存 Gemma 主线改为官方已量化 Q8_0 GGUF：`scripts/wsl/prepare_gemma4_e2b_q8.sh`。当前工作区里，Q8_0 model 和 Q8_0 mmproj 文件已经在被 Git 忽略的 `models/` 目录下。
-- Gemma Q8_0 text-only smoke 已经在本地 CPU-only llama.cpp 构建上通过，参数是 `CTX_SIZE=512`、`N_GPU_LAYERS=0`、`LLAMA_THREADS=2`、单 server slot、关闭 warmup。这只是功能烟测，不是性能结论。
-- MiniCPM-V 4.6 metadata-only 检查已通过，且没有下载权重：HF 已知文件总量 2.44 GiB，其中 `model.safetensors` 是 2,600,957,528 bytes。本地 llama.cpp conversion modules 注册了 `MiniCPMV4_6ForConditionalGeneration`，包含 MiniCPM-V 4.6 projector metadata，并且转换入口暴露 `--mmproj`。转换和运行仍未验证。
-- Jetson 推理还没有在本仓库中实测完成。
+- WSL 和 Jetson 共享同一个 Python client 与 benchmark harness。
+- WSL 脚本和 Jetson 脚本分离。
+- 运行配置放在 `configs/`，不写死在源码里。
+- OrangePi MiniCPM-V 4.6 仓库只作为工程参考，不移植 Ascend 专用代码。
+- 文档包含从 WSL 验证迁移到 Jetson 运行的路径。
 
-`full access` 不能降低模型量化的峰值内存。对于内存有限的 WSL，更合理的办法是用已量化 GGUF、缩小 context、CPU-only smoke test、单 server slot，而不是反复尝试 BF16->Q4。除非换到更大的机器，否则不要在这里重试本地 BF16-to-Q4 量化。
+## 当前验证状态
+
+| 项 | 状态 |
+|---|---|
+| Python 环境 | 使用本地 Conda 环境：`conda run -n transformers python`。 |
+| llama.cpp CPU build | 已存在于 `tmp/llama.cpp/build/bin`；Gemma Q8 text-only smoke 之前用低内存 CPU 参数通过。 |
+| llama.cpp CUDA build | 已在本地 `tmp/llama.cpp/build-cuda` 验证，使用 `GGML_CUDA=ON`、`CMAKE_CUDA_ARCHITECTURES=86` 和 `BUILD_JOBS=8`。 |
+| WSL GPU 可见性 | `nvcc` 可用。full access 下 `nvidia-smi` 能看到 RTX 3060 Laptop GPU；沙箱命令可能看不到 NVML。 |
+| Gemma 4 E2B-it | 官方已量化 Q8_0 model 和 mmproj 文件已在被 Git 忽略的 `models/` 存储里。 |
+| Gemma Q8 WSL CUDA smoke | text-only smoke 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、单 server slot、`VLM_SERVER_PORT=18081`。benchmark harness 写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-smoke.jsonl`；图像 case 因本地样例图片缺失失败。 |
+| Gemma BF16 到 Q4 | 不作为这台 WSL 的 baseline；本地量化曾被内存压力 kill。用已量化 GGUF 或更大的转换机器。 |
+| MiniCPM-V 4.6 | metadata-only 检查已通过；本地转换和运行仍未验证。 |
+| Jetson runtime | 脚本和文档已准备，但本仓库还没有实测 Jetson 推理。 |
+
+dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前 CUDA smoke 只验证了 Gemma Q8 文本推理，不验证图像 prompt、MiniCPM-V 4.6 或 Jetson runtime。
 
 ## 目录结构
 
 ```text
 configs/models/                  模型运行配置
 configs/benchmark/               共享 benchmark prompt cases
-docs/                            设计、迁移、benchmark、参考笔记
+docs/                            设计、迁移、benchmark、矩阵和参考笔记
 scripts/wsl/                     WSL 构建、准备、运行脚本
 scripts/jetson/                  Jetson Docker 启动和监控脚本
 scripts/common/                  共享辅助脚本
-src/edge_vlm/                    OpenAI-compatible 客户端和实验 harness
+src/edge_vlm/                    OpenAI-compatible client 和 benchmark 代码
 tests/                           轻量 contract tests
 tmp/references/                  被忽略的参考仓库 clone
 models/                          被忽略的本地模型文件
 outputs/                         被忽略的 benchmark 日志
 ```
 
-## WSL 设置
+## 前置条件
 
-使用本地 `transformers` Conda 环境。不要把项目依赖装进 Conda `base`、系统 Python 或全局 Python。
+- Windows host 上的 WSL。
+- 名为 `transformers` 的 Conda 环境用于 Python 命令。
+- `git` 和 `cmake` 用于 llama.cpp build。
+- CUDA build 需要 WSL 中有 CUDA toolkit；当前工作区可用 `nvcc` 12.0。
+- 如果沙箱命令无法访问 NVML，GPU runtime check 需要 full access shell。
+
+不要把项目依赖装进 Conda `base`、系统 Python 或全局 Python。
+
+## WSL 快速开始
+
+先跑测试：
 
 ```bash
 cd /home/lawrence/code/pythonCurriculum/jetson/jetson-vlm-lab
 PYTHONPATH=src conda run -n transformers python -m unittest discover -s tests -v
 ```
 
-构建或复用 llama.cpp：
-
-```bash
-CLONE_LLAMA_CPP=1 scripts/wsl/build_llama_cpp.sh
-```
-
-构建脚本不会安装系统包。只有检测到 `nvcc`，或者你显式配置了可用 CUDA toolkit 时，才会启用 CUDA。
-
-## 准备 Gemma 4 E2B-it
-
-低内存 WSL 路线：
+如果 Gemma Q8_0 文件还不存在，先准备模型：
 
 ```bash
 scripts/wsl/prepare_gemma4_e2b_q8.sh
 ```
 
-这个脚本会把官方 Q8_0 模型和 mmproj GGUF 下载到被 Git 忽略的 `models/` 目录。它不会执行 BF16 到 Q4 的本地量化。
+跑 benchmark dry run，验证 payload 和 JSONL 日志：
 
-文件存在后，用保守参数启动 WSL server：
+```bash
+PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
+  --config configs/models/gemma4_e2b_q8.yaml \
+  --cases configs/benchmark/prompt_cases.jsonl \
+  --output outputs/benchmarks/gemma4-e2b-q8-dryrun.jsonl \
+  --dry-run
+```
+
+## llama.cpp 构建
+
+CPU fallback build：
+
+```bash
+CLONE_LLAMA_CPP=1 scripts/wsl/build_llama_cpp.sh
+```
+
+这台 WSL 的 CUDA build：
+
+```bash
+scripts/wsl/build_llama_cpp_cuda.sh
+```
+
+CUDA wrapper 默认：
+
+- `LLAMA_CPP_BUILD_DIR=$PWD/tmp/llama.cpp/build-cuda`
+- `BUILD_JOBS=8`
+- `CMAKE_CUDA_ARCHITECTURES=86`
+
+这台 12 GiB RAM + 6 GiB swap 的 WSL 机器默认保持 `BUILD_JOBS=8`。当前主线不需要继续上调构建并发，除非后续明确重新调参。
+
+## 运行 Gemma 4 E2B-it
+
+GPU 访问不可用时，用 CPU fallback：
 
 ```bash
 MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q8_0.gguf \
 MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf \
-CTX_SIZE=512 \
-N_GPU_LAYERS=0 \
-LLAMA_THREADS=2 \
-LLAMA_THREADS_BATCH=2 \
-LLAMA_BATCH_SIZE=128 \
-LLAMA_UBATCH_SIZE=32 \
-LLAMA_PARALLEL=1 \
-LLAMA_SERVER_EXTRA_ARGS='--no-ui --no-warmup' \
 scripts/wsl/run_gemma4_e2b_llama.sh
 ```
+
+WSL CUDA 路线：
+
+```bash
+MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q8_0.gguf \
+MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf \
+scripts/wsl/run_gemma4_e2b_llama_cuda.sh
+```
+
+CUDA launcher 默认 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、两个线程、单 server slot、关闭 warmup。这是中等 WSL GPU smoke 设置。如果内存和显存还有余量，可以显式提高：
+
+```bash
+N_GPU_LAYERS=48 scripts/wsl/run_gemma4_e2b_llama_cuda.sh
+N_GPU_LAYERS=99 scripts/wsl/run_gemma4_e2b_llama_cuda.sh
+```
+
+另开终端用 `nvidia-smi` 观察显存。这里用 8-10 GiB WSL host memory 做 build/runtime 是正常的；边界是不要把进程推到 OOM。`BUILD_JOBS` 主要消耗主机内存和 CPU，所以默认值按这台 12 GiB RAM + 6 GiB swap 的 WSL 设置得更积极。`N_GPU_LAYERS` 消耗 GPU 显存，所以后者要按 RTX 3060 Laptop 的 6 GiB 显存来调。
 
 另开一个终端：
 
@@ -89,50 +141,31 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
 
 ## MiniCPM-V 4.6
 
-MiniCPM-V 4.6 当前按 llama.cpp 本地转换路线管理。在这台 WSL 上，先只检查元数据；确认存储和内存足够之前，不要启动完整下载、转换和量化流程：
+先做 metadata inspection，不下载权重：
 
 ```bash
 scripts/wsl/inspect_minicpmv46_hf.sh
 ```
 
-本工作区观察到的元数据：HF 已知文件总量 2.44 GiB，`model.safetensors` 是 2,600,957,528 bytes。本地 llama.cpp tree 有 MiniCPM-V 4.6 conversion registration 和 projector metadata，但这只是可行性信号。
-
-完整制备流程默认有保护，因为它会下载较大的 HF checkpoint，生成 F16 GGUF，再量化到 Q4_K_M。只有在内存和磁盘足够的机器上才显式打开：
+完整准备流程默认有保护，因为它会下载 HF checkpoint、生成 F16 GGUF、再量化到 Q4_K_M：
 
 ```bash
 ALLOW_MINICPM_FULL_PREPARE=1 scripts/wsl/prepare_minicpmv46_q4.sh
 ```
 
-MiniCPM-V 4.6 仍然是未验证路线；只有当当前 llama.cpp 版本完成转换，并且真实 `llama-server` 请求成功后，才算可用。
-
-本地文件存在后再启动：
+只有本地转换后的 model 和 mmproj 文件存在后再运行：
 
 ```bash
 MODEL_PATH=$PWD/models/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf \
 MMPROJ_PATH=$PWD/models/MiniCPM-V-4_6/mmproj-model-f16.gguf \
-CTX_SIZE=512 \
-N_GPU_LAYERS=0 \
-LLAMA_THREADS=2 \
-LLAMA_THREADS_BATCH=2 \
-LLAMA_BATCH_SIZE=128 \
-LLAMA_UBATCH_SIZE=32 \
-LLAMA_PARALLEL=1 \
-scripts/wsl/run_minicpmv46_llama.sh
+scripts/wsl/run_minicpmv46_llama_cuda.sh
 ```
 
-## Benchmark
+MiniCPM-V 4.6 仍是未验证路线；只有选定 llama.cpp 版本完成转换且真实请求成功后，才算可用。
 
-只验证 payload 和日志格式的 dry run：
+## Fake Stream
 
-```bash
-PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
-  --config configs/models/gemma4_e2b_q8.yaml \
-  --cases configs/benchmark/prompt_cases.jsonl \
-  --output outputs/benchmarks/gemma4-e2b-q8-dryrun.jsonl \
-  --dry-run
-```
-
-Fake stream dry run：
+文件夹图片流 dry run：
 
 ```bash
 PYTHONPATH=src conda run -n transformers python -m edge_vlm.fake_stream \
@@ -143,11 +176,11 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.fake_stream \
   --dry-run
 ```
 
-图像 case 需要你在 `data/` 下放本地小样例图片；不要提交大文件或私有图片。
+图像 case 需要你在 `data/` 下放小样例图片。不要提交大文件或私有图片。
 
-## Jetson 路线
+## Jetson 迁移
 
-复制 source、configs、scripts、docs 和 tests 到 Jetson。不要复制 WSL build 目录、Conda 环境、参考仓库或无关 benchmark 输出。
+复制 source、configs、scripts、docs 和可选 tests。不要复制 WSL build 目录、Conda 环境、参考仓库或无关 benchmark 输出。
 
 ```bash
 rsync -av --delete \
@@ -175,12 +208,13 @@ N_GPU_LAYERS=99 \
 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
 
-如果模型文件已经预放在 Jetson，本地路径必须在 `MODEL_DIR` 下，并同时传 `MODEL_PATH` 和 `MMPROJ_PATH`。
+完整 checklist 见 [docs/migration_wsl_to_jetson.md](docs/migration_wsl_to_jetson.md)。
 
-## 参考文档
+## 文档
 
-- OrangePi MiniCPM-V 4.6 参考笔记：`docs/reference_notes/orangepi_minicpmv46_notes.md`
-- Runtime matrix：`docs/runtime_matrix.md`
-- Benchmark protocol：`docs/benchmark_protocol.md`
-- WSL 到 Jetson 迁移：`docs/migration_wsl_to_jetson.md`
-- APEX implementation matrix：`docs/matrix_edge_vlm_workflow.md`
+- [Runtime matrix](docs/runtime_matrix.md)
+- [Benchmark protocol](docs/benchmark_protocol.md)
+- [WSL to Jetson migration](docs/migration_wsl_to_jetson.md)
+- [Implementation plan](docs/implementation_plan.md)
+- [APEX workflow matrix](docs/matrix_edge_vlm_workflow.md)
+- [OrangePi MiniCPM-V 4.6 notes](docs/reference_notes/orangepi_minicpmv46_notes.md)

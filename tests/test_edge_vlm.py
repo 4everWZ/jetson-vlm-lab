@@ -36,6 +36,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertIn('ENABLE_CUDA="${ENABLE_CUDA:-1}"', cuda_build_script)
         self.assertIn('LLAMA_CPP_BUILD_DIR="${LLAMA_CPP_BUILD_DIR:-${llama_cpp_dir}/build-cuda}"', cuda_build_script)
+        self.assertIn('BUILD_JOBS="${BUILD_JOBS:-8}"', cuda_build_script)
         self.assertIn('CMAKE_CUDA_ARCHITECTURES="${CMAKE_CUDA_ARCHITECTURES:-86}"', cuda_build_script)
         self.assertIn("nvcc", cuda_build_script)
         self.assertIn('LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-${llama_cpp_dir}/build-cuda/bin/llama-server}"', gemma_cuda_script)

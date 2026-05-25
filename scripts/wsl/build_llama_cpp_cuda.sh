@@ -6,7 +6,7 @@ llama_cpp_dir="${LLAMA_CPP_DIR:-${repo_root}/tmp/llama.cpp}"
 
 export ENABLE_CUDA="${ENABLE_CUDA:-1}"
 export LLAMA_CPP_BUILD_DIR="${LLAMA_CPP_BUILD_DIR:-${llama_cpp_dir}/build-cuda}"
-export BUILD_JOBS="${BUILD_JOBS:-2}"
+export BUILD_JOBS="${BUILD_JOBS:-8}"
 export CMAKE_CUDA_ARCHITECTURES="${CMAKE_CUDA_ARCHITECTURES:-86}"
 
 if ! command -v nvcc >/dev/null 2>&1; then
@@ -14,7 +14,7 @@ if ! command -v nvcc >/dev/null 2>&1; then
 nvcc was not found in PATH, so a CUDA llama.cpp build cannot be created.
 
 Install or expose the CUDA toolkit in WSL, then retry:
-  BUILD_JOBS=2 scripts/wsl/build_llama_cpp_cuda.sh
+  BUILD_JOBS=8 scripts/wsl/build_llama_cpp_cuda.sh
 EOF
   exit 2
 fi
