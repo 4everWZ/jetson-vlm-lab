@@ -36,12 +36,13 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertIn('ENABLE_CUDA="${ENABLE_CUDA:-1}"', cuda_build_script)
         self.assertIn('LLAMA_CPP_BUILD_DIR="${LLAMA_CPP_BUILD_DIR:-${llama_cpp_dir}/build-cuda}"', cuda_build_script)
+        self.assertIn('CMAKE_CUDA_ARCHITECTURES="${CMAKE_CUDA_ARCHITECTURES:-86}"', cuda_build_script)
         self.assertIn("nvcc", cuda_build_script)
         self.assertIn('LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-${llama_cpp_dir}/build-cuda/bin/llama-server}"', gemma_cuda_script)
-        self.assertIn('N_GPU_LAYERS="${N_GPU_LAYERS:-99}"', gemma_cuda_script)
+        self.assertIn('N_GPU_LAYERS="${N_GPU_LAYERS:-32}"', gemma_cuda_script)
         self.assertIn('scripts/wsl/run_gemma4_e2b_llama.sh', gemma_cuda_script)
         self.assertIn('LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-${llama_cpp_dir}/build-cuda/bin/llama-server}"', minicpm_cuda_script)
-        self.assertIn('N_GPU_LAYERS="${N_GPU_LAYERS:-99}"', minicpm_cuda_script)
+        self.assertIn('N_GPU_LAYERS="${N_GPU_LAYERS:-32}"', minicpm_cuda_script)
         self.assertIn('scripts/wsl/run_minicpmv46_llama.sh', minicpm_cuda_script)
 
     def test_minicpm_prepare_requires_explicit_high_memory_confirmation(self):
