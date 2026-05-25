@@ -29,6 +29,21 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn('llama_batch_size="${LLAMA_BATCH_SIZE:-128}"', launch_script)
         self.assertIn('llama_ubatch_size="${LLAMA_UBATCH_SIZE:-32}"', launch_script)
 
+    def test_wsl_cuda_wrappers_use_separate_cuda_build_and_gpu_layers(self):
+        cuda_build_script = Path("scripts/wsl/build_llama_cpp_cuda.sh").read_text(encoding="utf-8")
+        gemma_cuda_script = Path("scripts/wsl/run_gemma4_e2b_llama_cuda.sh").read_text(encoding="utf-8")
+        minicpm_cuda_script = Path("scripts/wsl/run_minicpmv46_llama_cuda.sh").read_text(encoding="utf-8")
+
+        self.assertIn('ENABLE_CUDA="${ENABLE_CUDA:-1}"', cuda_build_script)
+        self.assertIn('LLAMA_CPP_BUILD_DIR="${LLAMA_CPP_BUILD_DIR:-${llama_cpp_dir}/build-cuda}"', cuda_build_script)
+        self.assertIn("nvcc", cuda_build_script)
+        self.assertIn('LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-${llama_cpp_dir}/build-cuda/bin/llama-server}"', gemma_cuda_script)
+        self.assertIn('N_GPU_LAYERS="${N_GPU_LAYERS:-99}"', gemma_cuda_script)
+        self.assertIn('scripts/wsl/run_gemma4_e2b_llama.sh', gemma_cuda_script)
+        self.assertIn('LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-${llama_cpp_dir}/build-cuda/bin/llama-server}"', minicpm_cuda_script)
+        self.assertIn('N_GPU_LAYERS="${N_GPU_LAYERS:-99}"', minicpm_cuda_script)
+        self.assertIn('scripts/wsl/run_minicpmv46_llama.sh', minicpm_cuda_script)
+
     def test_minicpm_prepare_requires_explicit_high_memory_confirmation(self):
         prepare_script = Path("scripts/wsl/prepare_minicpmv46_q4.sh").read_text(encoding="utf-8")
 
