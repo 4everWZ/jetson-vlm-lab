@@ -1,4 +1,8 @@
 .vscode/
+task_plan.md
+findings.md
+progress.md
+
 tmp/
 tmp/references/
 outputs/
