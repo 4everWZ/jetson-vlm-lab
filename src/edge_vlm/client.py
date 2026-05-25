@@ -147,7 +147,7 @@ class OpenAICompatClient:
                         break
                     parsed = json.loads(data)
                     delta = parsed.get("choices", [{}])[0].get("delta", {})
-                    text = delta.get("content")
+                    text = delta.get("content") or delta.get("reasoning_content")
                     if text:
                         chunks.append(str(text))
         except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
@@ -172,10 +172,17 @@ def _extract_text(response: dict[str, Any]) -> str:
     choice = response["choices"][0]
     message = choice.get("message", {})
     content = message.get("content", "")
-    if isinstance(content, str):
+    if isinstance(content, str) and content:
         return content
     if isinstance(content, list):
-        return "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+        text = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+        if text:
+            return text
+    reasoning_content = message.get("reasoning_content", "")
+    if isinstance(reasoning_content, str):
+        return reasoning_content
+    if isinstance(reasoning_content, list):
+        return "".join(str(part.get("text", "")) for part in reasoning_content if isinstance(part, dict))
     return str(content)
 
 

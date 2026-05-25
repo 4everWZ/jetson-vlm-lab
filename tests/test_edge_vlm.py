@@ -40,6 +40,23 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result.request["messages"][0]["content"], "Say hi.")
         self.assertIn("dry run", result.text)
 
+    def test_client_extracts_reasoning_content_when_final_content_is_empty(self):
+        from edge_vlm.client import _extract_text
+
+        response = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "reasoning_content": "thinking text from llama-server",
+                    }
+                }
+            ]
+        }
+
+        self.assertEqual(_extract_text(response), "thinking text from llama-server")
+
     def test_benchmark_dry_run_writes_jsonl_records(self):
         from edge_vlm.benchmark import run_benchmark
 
