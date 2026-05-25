@@ -22,12 +22,12 @@
 | llama.cpp CUDA build | 已在本地 `tmp/llama.cpp/build-cuda` 验证，使用 `GGML_CUDA=ON`、`CMAKE_CUDA_ARCHITECTURES=86` 和 `BUILD_JOBS=8`。 |
 | WSL GPU 可见性 | `nvcc` 可用。full access 下 `nvidia-smi` 能看到 RTX 3060 Laptop GPU；沙箱命令可能看不到 NVML。 |
 | Gemma 4 E2B-it | 官方已量化 Q8_0 model 和 mmproj 文件已在被 Git 忽略的 `models/` 存储里。 |
-| Gemma Q8 WSL CUDA smoke | text-only smoke 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、单 server slot、`VLM_SERVER_PORT=18081`。之前的 benchmark harness 写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-smoke.jsonl`；`data/` 下补入样例资产后，图像 runtime 仍需要重新实跑确认。 |
+| Gemma Q8 WSL CUDA smoke | 文本和样例图 benchmark 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、`LLAMA_BATCH_SIZE=512`、`LLAMA_UBATCH_SIZE=512`、单 server slot、`VLM_SERVER_PORT=18081`。真实运行写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-ub512.jsonl` 和 `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-real.jsonl`。 |
 | Gemma BF16 到 Q4 | 不作为这台 WSL 的 baseline；本地量化曾被内存压力 kill。用已量化 GGUF 或更大的转换机器。 |
 | MiniCPM-V 4.6 | metadata-only 检查已通过；本地转换和运行仍未验证。 |
 | Jetson runtime | 脚本和文档已准备，但本仓库还没有实测 Jetson 推理。 |
 
-dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前 CUDA smoke 只验证了 Gemma Q8 文本推理，不验证图像 prompt、MiniCPM-V 4.6 或 Jetson runtime。
+dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前 CUDA smoke 只验证了 WSL 上 Gemma Q8 文本和已提交样例图推理，不验证 MiniCPM-V 4.6、Jetson runtime 或泛化性能。
 
 ## 目录结构
 
@@ -121,7 +121,7 @@ MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf \
 scripts/wsl/run_gemma4_e2b_llama_cuda.sh
 ```
 
-CUDA launcher 默认 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、两个线程、单 server slot、关闭 warmup。这是中等 WSL GPU smoke 设置。如果内存和显存还有余量，可以显式提高：
+CUDA launcher 默认 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、`LLAMA_BATCH_SIZE=512`、`LLAMA_UBATCH_SIZE=512`、两个线程、单 server slot、关闭 warmup。512 batch/ubatch 是这版 llama.cpp 上 Gemma Q8 图像路径的实测可用设置；更低的 32 ubatch text-only 设置会触发 llama.cpp 图像断言。如果内存和显存还有余量，可以显式提高：
 
 ```bash
 N_GPU_LAYERS=48 scripts/wsl/run_gemma4_e2b_llama_cuda.sh

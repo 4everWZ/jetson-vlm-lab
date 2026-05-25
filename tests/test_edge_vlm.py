@@ -43,9 +43,13 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("nvcc", cuda_build_script)
         self.assertIn('LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-${llama_cpp_dir}/build-cuda/bin/llama-server}"', gemma_cuda_script)
         self.assertIn('N_GPU_LAYERS="${N_GPU_LAYERS:-32}"', gemma_cuda_script)
+        self.assertIn('LLAMA_BATCH_SIZE="${LLAMA_BATCH_SIZE:-512}"', gemma_cuda_script)
+        self.assertIn('LLAMA_UBATCH_SIZE="${LLAMA_UBATCH_SIZE:-512}"', gemma_cuda_script)
         self.assertIn('scripts/wsl/run_gemma4_e2b_llama.sh', gemma_cuda_script)
         self.assertIn('LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-${llama_cpp_dir}/build-cuda/bin/llama-server}"', minicpm_cuda_script)
         self.assertIn('N_GPU_LAYERS="${N_GPU_LAYERS:-32}"', minicpm_cuda_script)
+        self.assertIn('LLAMA_BATCH_SIZE="${LLAMA_BATCH_SIZE:-128}"', minicpm_cuda_script)
+        self.assertIn('LLAMA_UBATCH_SIZE="${LLAMA_UBATCH_SIZE:-32}"', minicpm_cuda_script)
         self.assertIn('scripts/wsl/run_minicpmv46_llama.sh', minicpm_cuda_script)
 
     def test_minicpm_prepare_requires_explicit_high_memory_confirmation(self):

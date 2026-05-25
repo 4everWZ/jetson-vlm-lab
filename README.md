@@ -22,12 +22,12 @@ The repository keeps development, reference inspection, client code, benchmark h
 | llama.cpp CUDA build | Verified locally under `tmp/llama.cpp/build-cuda` with `GGML_CUDA=ON`, `CMAKE_CUDA_ARCHITECTURES=86`, and `BUILD_JOBS=8`. |
 | WSL GPU visibility | `nvcc` is available. `nvidia-smi` works with full access and shows an RTX 3060 Laptop GPU; sandboxed commands may not see NVML. |
 | Gemma 4 E2B-it | Official pre-quantized Q8_0 model and mmproj files are present under ignored `models/` storage. |
-| Gemma Q8 WSL CUDA smoke | Text-only smoke passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, one server slot, and `VLM_SERVER_PORT=18081`. The earlier benchmark harness run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-smoke.jsonl`; image runtime still needs a fresh real run after the sample assets added under `data/`. |
+| Gemma Q8 WSL CUDA smoke | Text and sample-image benchmark passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, one server slot, and `VLM_SERVER_PORT=18081`. The real run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-ub512.jsonl` and `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-real.jsonl`. |
 | Gemma BF16 to Q4 | Not a WSL baseline here; local quantization was killed by memory pressure. Use pre-quantized GGUF or a larger conversion host. |
 | MiniCPM-V 4.6 | Metadata-only inspection passed; local conversion and runtime are still unverified. |
 | Jetson runtime | Scripted and documented, but not yet observed in this repository. |
 
-Do not treat dry runs or server startup as performance results. Performance claims need real benchmark JSONL from a running model/server. The current CUDA smoke validates Gemma Q8 text inference only; it does not validate image prompts, MiniCPM-V 4.6, or Jetson runtime.
+Do not treat dry runs or server startup as performance results. Performance claims need real benchmark JSONL from a running model/server. The current CUDA smoke validates Gemma Q8 text and committed sample-image inference on WSL only; it does not validate MiniCPM-V 4.6, Jetson runtime, or broad performance.
 
 ## Repository Layout
 
@@ -121,7 +121,7 @@ MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf \
 scripts/wsl/run_gemma4_e2b_llama_cuda.sh
 ```
 
-The CUDA launcher defaults to `CTX_SIZE=512`, `N_GPU_LAYERS=32`, two threads, one server slot, and no warmup. This is a moderate WSL GPU smoke setting. On a memory-rich run, raise the offload explicitly:
+The CUDA launcher defaults to `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, two threads, one server slot, and no warmup. The 512 batch/ubatch setting is required for the observed Gemma Q8 image path on this llama.cpp build; the lower 32 ubatch text-only setting triggered a llama.cpp image assertion. On a memory-rich run, raise the offload explicitly:
 
 ```bash
 N_GPU_LAYERS=48 scripts/wsl/run_gemma4_e2b_llama_cuda.sh

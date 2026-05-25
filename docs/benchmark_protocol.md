@@ -74,7 +74,15 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
   --summary-output outputs/benchmarks/gemma4-e2b-q8-wsl.md
 ```
 
-Observed WSL CUDA smoke for Gemma Q8 used `CTX_SIZE=512`, `N_GPU_LAYERS=32`, one server slot, and `VLM_SERVER_PORT=18081`. The earlier benchmark harness recorded three successful text cases; the two image cases failed because sample images were not present at that time, and the fake-stream case was recorded as a marker for `python -m edge_vlm.fake_stream`. After adding the sample assets, rerun this command before claiming real image runtime support.
+Observed WSL CUDA smoke for Gemma Q8 used `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, one server slot, and `VLM_SERVER_PORT=18081`. The benchmark harness recorded three successful text cases, two successful sample-image cases, and the fake-stream marker case. A real fake-stream run against `data/sample_stream/` also succeeded with one frame.
+
+The lower text-only setting `LLAMA_UBATCH_SIZE=32` triggered this llama.cpp assertion on the first image request:
+
+```text
+GGML_ASSERT((cparams.causal_attn || cparams.n_ubatch >= n_tokens_all) && "non-causal attention requires n_ubatch >= n_tokens") failed
+```
+
+Keep the Gemma CUDA wrapper's 512 batch/ubatch defaults for image smoke runs unless you are deliberately retesting that boundary.
 
 For MiniCPM-V 4.6, inspect metadata before attempting local conversion on WSL:
 
