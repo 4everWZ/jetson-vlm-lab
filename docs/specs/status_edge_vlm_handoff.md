@@ -1,7 +1,7 @@
 # Edge VLM Handoff Status
 
-Last updated: 2026-05-26T03:15:58+09:30
-Current commit: `c2ece15 docs: record wsl cuda gemma smoke`
+Last updated: 2026-05-26T04:02:45+09:30
+Current code baseline: `fd82688 feat: add out-of-box benchmark dry-run checks`
 
 ## Current Objective
 
@@ -18,6 +18,7 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
 - Shared Python OpenAI-compatible client, benchmark harness, image payload builder, and fake stream runner.
 - Runtime configs under `configs/models/`.
 - Benchmark cases under `configs/benchmark/prompt_cases.jsonl`.
+- Small non-private sample assets under `data/sample_images/` and `data/sample_stream/`.
 - Documentation for reference notes, runtime matrix, benchmark protocol, implementation plan, migration, tradeoffs, and APEX matrix.
 - Local planning files (`task_plan.md`, `findings.md`, `progress.md`) are ignored and are not part of the committed source tree.
 
@@ -56,6 +57,12 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
   - `scripts/jetson/run_gemma4_e2b_llama_docker.sh`
   - `scripts/jetson/run_minicpmv46_llama_docker.sh`
   - `scripts/jetson/monitor_tegrastats.sh`
+- Jetson launchers support `JETSON_DRY_RUN=1` for command-construction checks without Docker, model files, or Jetson hardware.
+- Shared benchmark cases now reference committed sample images:
+  - `data/sample_images/image_caption_single.png`
+  - `data/sample_images/image_safety_scene_single.png`
+  - `data/sample_stream/frame_001.png`
+- Benchmark runs can optionally write a Markdown summary with `--summary-output`.
 - README and Chinese README are project entry points, not progress logs.
 
 ### Partially Implemented
@@ -64,24 +71,24 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
   - Official pre-quantized Q8_0 model and mmproj files exist locally under ignored `models/` storage in this workspace.
   - Text-only CPU fallback smoke has passed.
   - Text-only WSL CUDA smoke has passed.
-  - Image prompt execution is not yet validated because sample images under `data/sample_images/` are not present.
+  - Image prompt execution against a real server is still not yet validated after adding committed sample images.
 - MiniCPM-V 4.6:
   - Metadata-only inspection has passed without downloading weights.
   - Local llama.cpp conversion signals were observed and documented.
   - Full conversion, quantization, and runtime are still unverified.
 - Benchmark harness:
   - JSONL output and dry-run paths are implemented and tested.
+  - Markdown summary output is implemented and tested.
   - Real Gemma Q8 WSL CUDA text cases have been observed.
-  - Markdown summary output is not implemented.
 - Jetson path:
-  - Scripts and migration docs exist.
+  - Scripts, dry-run command construction, and migration docs exist.
   - Runtime on Jetson has not been observed.
 
 ### Deferred / Not Implemented
 
 - MiniCPM-V 4.6 real GGUF conversion and `llama-server` runtime.
-- Gemma image prompt validation with real local sample images.
-- Fake stream real server run against a populated image folder.
+- Gemma image prompt validation against a real running server.
+- Fake stream real server run against the populated sample folder.
 - Jetson Docker execution and benchmark collection.
 - Ollama, NanoLLM, vLLM, TensorRT/TensorRT-LLM, and custom kernels.
 
@@ -89,7 +96,7 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
 
 ### Verified
 
-- `git status --short` was clean before this handoff document was created.
+- `git status --short` was clean before the stage 1 baseline commit was created.
 - Local Python commands use the `transformers` Conda environment.
 - Shell syntax passed:
   - `bash -n scripts/common/*.sh scripts/wsl/*.sh scripts/jetson/*.sh`
@@ -97,9 +104,18 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
   - `env PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/edge-vlm-pycache conda run -n transformers python -m py_compile src/edge_vlm/*.py`
 - Unit tests passed:
   - `env PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/edge-vlm-pycache conda run -n transformers python -m unittest discover -s tests -v`
-  - 14 tests passed.
+  - 18 tests passed.
 - Diff whitespace check passed:
   - `git diff --check`
+- Benchmark dry-run with committed sample images and Markdown summary passed:
+  - `env PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/edge-vlm-pycache conda run -n transformers python -m edge_vlm.benchmark --config configs/models/gemma4_e2b_q8.yaml --cases configs/benchmark/prompt_cases.jsonl --output outputs/benchmarks/stage1-dryrun.jsonl --summary-output outputs/benchmarks/stage1-dryrun.md --dry-run`
+  - 6 records written; all dry-run cases succeeded.
+- Fake stream dry-run with committed sample frame passed:
+  - `env PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/edge-vlm-pycache conda run -n transformers python -m edge_vlm.fake_stream --config configs/models/gemma4_e2b_q8.yaml --image-dir data/sample_stream --output outputs/fake_stream/stage1-dryrun.jsonl --prompt "Describe this frame." --interval-s 0 --max-frames 1 --dry-run`
+  - 1 frame record written.
+- Jetson command-construction dry-runs passed:
+  - `JETSON_DRY_RUN=1 MODEL_DIR=/tmp/edge-vlm-models VLM_SERVER_PORT=19090 bash scripts/jetson/run_gemma4_e2b_llama_docker.sh`
+  - `JETSON_DRY_RUN=1 MODEL_DIR=/tmp/edge-vlm-minicpm-models VLM_SERVER_PORT=19091 bash scripts/jetson/run_minicpmv46_llama_docker.sh`
 - WSL CUDA llama.cpp build passed:
   - `GGML_CUDA:BOOL=ON`
   - `CMAKE_CUDA_ARCHITECTURES=86`
@@ -166,7 +182,7 @@ PYTHONPATH=src VLM_SERVER_PORT=18081 conda run -n transformers python -m edge_vl
 
 ## Active Blockers Or Open Questions
 
-- Gemma image validation is blocked only by missing local sample images under `data/sample_images/`.
+- Gemma image validation is no longer blocked by sample assets; it still needs a real server run.
 - MiniCPM-V 4.6 runtime is blocked on deliberate model preparation: HF download, GGUF conversion, mmproj creation, and quantization must run on WSL or another machine with enough memory and disk.
 - Jetson validation is blocked on access to the target device, model placement under Jetson storage, and Docker/NVIDIA runtime readiness.
 - WSL sandboxed commands may not access NVML/GPU. Use full-access local shell for GPU runtime observations.
@@ -174,15 +190,11 @@ PYTHONPATH=src VLM_SERVER_PORT=18081 conda run -n transformers python -m edge_vl
 
 ## Recommended Next Steps
 
-1. Add small, non-private sample images:
-   - `data/sample_images/image_caption_single.jpg`
-   - `data/sample_images/image_safety_scene_single.jpg`
-   - optional `data/sample_stream/*.jpg`
-2. Re-run Gemma Q8 WSL CUDA image benchmark and fake-stream real run.
-3. Decide where MiniCPM-V 4.6 conversion should happen. Use `scripts/wsl/inspect_minicpmv46_hf.sh` first; only use `ALLOW_MINICPM_FULL_PREPARE=1` on a machine with enough memory and disk.
-4. Sync the minimal runtime package to Jetson, excluding `tmp/`, `outputs/`, Conda environments, and local WSL build artifacts.
-5. Start Jetson with Gemma Q8 text-only benchmark first, while recording `tegrastats`.
-6. Only after Gemma text works on Jetson, try image cases and then MiniCPM-V 4.6.
+1. Re-run Gemma Q8 WSL CUDA image benchmark and fake-stream real run against the committed sample assets.
+2. Decide where MiniCPM-V 4.6 conversion should happen. Use `scripts/wsl/inspect_minicpmv46_hf.sh` first; only use `ALLOW_MINICPM_FULL_PREPARE=1` on a machine with enough memory and disk.
+3. Sync the minimal runtime package to Jetson, excluding `tmp/`, `outputs/`, Conda environments, and local WSL build artifacts.
+4. Start Jetson with Gemma Q8 text-only benchmark first, while recording `tegrastats`.
+5. Only after Gemma text works on Jetson, try image cases and then MiniCPM-V 4.6.
 
 ## Key References
 
@@ -231,3 +243,4 @@ PYTHONPATH=src VLM_SERVER_PORT=18081 conda run -n transformers python -m edge_vl
 - 2026-05-26 — README and README.zh-CN were reorganized into project entry-point docs.
 - 2026-05-26 — WSL CUDA llama.cpp build completed successfully.
 - 2026-05-26 — Gemma Q8 WSL CUDA text smoke and benchmark text cases passed.
+- 2026-05-26 — Sample image assets, Markdown benchmark summary output, and Jetson launcher dry-run checks were added and verified.
