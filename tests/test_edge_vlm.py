@@ -76,6 +76,49 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(record["device"], "wsl")
         self.assertIsInstance(record["latency_s"], float)
 
+    def test_benchmark_logs_missing_image_case_without_crashing(self):
+        from edge_vlm.benchmark import run_benchmark
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            cases = tmp_path / "cases.jsonl"
+            output = tmp_path / "bench.jsonl"
+            cases.write_text(
+                json.dumps(
+                    {
+                        "id": "image_caption_single",
+                        "input_type": "image",
+                        "prompt": "Describe this image.",
+                        "image_path": str(tmp_path / "missing.jpg"),
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  image: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            count = run_benchmark(config_path=config, cases_path=cases, output_path=output, dry_run=True)
+
+            self.assertEqual(count, 1)
+            record = json.loads(output.read_text(encoding="utf-8").strip())
+
+        self.assertFalse(record["success"])
+        self.assertIn("image not found", record["error"])
+
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
 

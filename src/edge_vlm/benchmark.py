@@ -121,20 +121,30 @@ def run_benchmark(
             else:
                 started_wall = datetime.now(timezone.utc).isoformat()
                 started = time.perf_counter()
-                result = client.complete(
-                    prompt=str(case.get("prompt", "")),
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    stream=stream,
-                    image_path=image_path,
-                    dry_run=dry_run,
-                )
-                ended_wall = datetime.now(timezone.utc).isoformat()
-                latency_s = time.perf_counter() - started
-                result_ok = result.ok
-                output_text = result.text
-                error = result.error
-                response = result.response
+                try:
+                    result = client.complete(
+                        prompt=str(case.get("prompt", "")),
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        stream=stream,
+                        image_path=image_path,
+                        dry_run=dry_run,
+                    )
+                except (FileNotFoundError, ValueError, OSError) as exc:
+                    ended_wall = datetime.now(timezone.utc).isoformat()
+                    latency_s = time.perf_counter() - started
+                    result_ok = False
+                    output_text = ""
+                    error = str(exc)
+                    response = None
+                    result = None
+                else:
+                    ended_wall = datetime.now(timezone.utc).isoformat()
+                    latency_s = time.perf_counter() - started
+                    result_ok = result.ok
+                    output_text = result.text
+                    error = result.error
+                    response = result.response
             record = _build_record(
                 config=config,
                 case=case,
