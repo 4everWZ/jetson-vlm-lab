@@ -10,6 +10,7 @@ Copy:
 - `configs/`
 - `scripts/`
 - `docs/`
+- `data/sample_images/` and `data/sample_stream/` for small payload sanity checks
 - `tests/` if you want a local sanity check
 
 Do not copy:
@@ -32,6 +33,12 @@ rsync -av --delete \
   --exclude 'outputs/' \
   --exclude '__pycache__/' \
   ./ jetson:/home/jetson/edge-vlm-lab/
+```
+
+Before moving to the device, you can validate Docker command construction from any shell without requiring Docker or Jetson hardware:
+
+```bash
+JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
 
 ## Model Storage
@@ -84,7 +91,8 @@ In another terminal:
 scripts/common/check_server.sh
 EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
   --config configs/models/gemma4_e2b_q8.yaml \
-  --output outputs/benchmarks/gemma4-e2b-q8-jetson.jsonl
+  --output outputs/benchmarks/gemma4-e2b-q8-jetson.jsonl \
+  --summary-output outputs/benchmarks/gemma4-e2b-q8-jetson.md
 ```
 
 ## MiniCPM-V 4.6 On Jetson
@@ -102,7 +110,8 @@ In another terminal:
 scripts/common/check_server.sh
 EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
   --config configs/models/minicpmv46_q4.yaml \
-  --output outputs/benchmarks/minicpmv46-jetson.jsonl
+  --output outputs/benchmarks/minicpmv46-jetson.jsonl \
+  --summary-output outputs/benchmarks/minicpmv46-jetson.md
 ```
 
 ## Common Failure Modes

@@ -13,11 +13,7 @@ model_alias="${MODEL_ALIAS:-gemma4-e2b-it-q8}"
 model_path="${MODEL_PATH:-}"
 mmproj_path="${MMPROJ_PATH:-}"
 docker_gpu_args="${DOCKER_GPU_ARGS:---runtime nvidia}"
-
-if ! command -v docker >/dev/null 2>&1; then
-  echo "docker is required on Jetson for this runtime path." >&2
-  exit 2
-fi
+dry_run="${JETSON_DRY_RUN:-0}"
 
 mkdir -p "${model_dir}" "${hf_home_on_host}"
 read -r -a gpu_args <<< "${docker_gpu_args}"
@@ -40,7 +36,7 @@ else
   model_args=(-hf "${model_ref}")
 fi
 
-exec docker run --rm -it \
+docker_cmd=(docker run --rm -it \
   "${gpu_args[@]}" \
   -p "${port}:8080" \
   -v "${model_dir}:/models" \
@@ -53,4 +49,17 @@ exec docker run --rm -it \
   --port 8080 \
   -c "${ctx_size}" \
   --n-gpu-layers "${n_gpu_layers}" \
-  "$@"
+  "$@")
+
+if [[ "${dry_run}" == "1" ]]; then
+  printf '%q ' "${docker_cmd[@]}"
+  printf '\n'
+  exit 0
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "docker is required on Jetson for this runtime path." >&2
+  exit 2
+fi
+
+exec "${docker_cmd[@]}"

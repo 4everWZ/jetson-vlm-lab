@@ -22,7 +22,7 @@ The repository keeps development, reference inspection, client code, benchmark h
 | llama.cpp CUDA build | Verified locally under `tmp/llama.cpp/build-cuda` with `GGML_CUDA=ON`, `CMAKE_CUDA_ARCHITECTURES=86`, and `BUILD_JOBS=8`. |
 | WSL GPU visibility | `nvcc` is available. `nvidia-smi` works with full access and shows an RTX 3060 Laptop GPU; sandboxed commands may not see NVML. |
 | Gemma 4 E2B-it | Official pre-quantized Q8_0 model and mmproj files are present under ignored `models/` storage. |
-| Gemma Q8 WSL CUDA smoke | Text-only smoke passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, one server slot, and `VLM_SERVER_PORT=18081`. The benchmark harness wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-smoke.jsonl`; image cases failed because local sample images are absent. |
+| Gemma Q8 WSL CUDA smoke | Text-only smoke passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, one server slot, and `VLM_SERVER_PORT=18081`. The earlier benchmark harness run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-smoke.jsonl`; image runtime still needs a fresh real run after the sample assets added under `data/`. |
 | Gemma BF16 to Q4 | Not a WSL baseline here; local quantization was killed by memory pressure. Use pre-quantized GGUF or a larger conversion host. |
 | MiniCPM-V 4.6 | Metadata-only inspection passed; local conversion and runtime are still unverified. |
 | Jetson runtime | Scripted and documented, but not yet observed in this repository. |
@@ -77,6 +77,7 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
   --config configs/models/gemma4_e2b_q8.yaml \
   --cases configs/benchmark/prompt_cases.jsonl \
   --output outputs/benchmarks/gemma4-e2b-q8-dryrun.jsonl \
+  --summary-output outputs/benchmarks/gemma4-e2b-q8-dryrun.md \
   --dry-run
 ```
 
@@ -136,7 +137,8 @@ scripts/common/check_server.sh
 PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
   --config configs/models/gemma4_e2b_q8.yaml \
   --cases configs/benchmark/prompt_cases.jsonl \
-  --output outputs/benchmarks/gemma4-e2b-q8-wsl.jsonl
+  --output outputs/benchmarks/gemma4-e2b-q8-wsl.jsonl \
+  --summary-output outputs/benchmarks/gemma4-e2b-q8-wsl.md
 ```
 
 ## MiniCPM-V 4.6
@@ -176,7 +178,7 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.fake_stream \
   --dry-run
 ```
 
-Image cases require small local sample images under `data/`. Do not commit large or private media.
+Small non-private sample images are included under `data/sample_images/` and `data/sample_stream/` so dry runs and payload checks work after clone. Do not commit large or private media.
 
 ## Jetson Migration
 
@@ -206,6 +208,12 @@ MODEL_DIR=/mnt/nvme/models \
 CTX_SIZE=2048 \
 N_GPU_LAYERS=99 \
 scripts/jetson/run_gemma4_e2b_llama_docker.sh
+```
+
+Use `JETSON_DRY_RUN=1` to print the Docker command without requiring Docker or Jetson hardware:
+
+```bash
+JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
 
 See [docs/migration_wsl_to_jetson.md](docs/migration_wsl_to_jetson.md) for the full checklist.

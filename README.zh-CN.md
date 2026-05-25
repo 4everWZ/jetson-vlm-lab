@@ -22,7 +22,7 @@
 | llama.cpp CUDA build | 已在本地 `tmp/llama.cpp/build-cuda` 验证，使用 `GGML_CUDA=ON`、`CMAKE_CUDA_ARCHITECTURES=86` 和 `BUILD_JOBS=8`。 |
 | WSL GPU 可见性 | `nvcc` 可用。full access 下 `nvidia-smi` 能看到 RTX 3060 Laptop GPU；沙箱命令可能看不到 NVML。 |
 | Gemma 4 E2B-it | 官方已量化 Q8_0 model 和 mmproj 文件已在被 Git 忽略的 `models/` 存储里。 |
-| Gemma Q8 WSL CUDA smoke | text-only smoke 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、单 server slot、`VLM_SERVER_PORT=18081`。benchmark harness 写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-smoke.jsonl`；图像 case 因本地样例图片缺失失败。 |
+| Gemma Q8 WSL CUDA smoke | text-only smoke 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、单 server slot、`VLM_SERVER_PORT=18081`。之前的 benchmark harness 写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-smoke.jsonl`；`data/` 下补入样例资产后，图像 runtime 仍需要重新实跑确认。 |
 | Gemma BF16 到 Q4 | 不作为这台 WSL 的 baseline；本地量化曾被内存压力 kill。用已量化 GGUF 或更大的转换机器。 |
 | MiniCPM-V 4.6 | metadata-only 检查已通过；本地转换和运行仍未验证。 |
 | Jetson runtime | 脚本和文档已准备，但本仓库还没有实测 Jetson 推理。 |
@@ -77,6 +77,7 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
   --config configs/models/gemma4_e2b_q8.yaml \
   --cases configs/benchmark/prompt_cases.jsonl \
   --output outputs/benchmarks/gemma4-e2b-q8-dryrun.jsonl \
+  --summary-output outputs/benchmarks/gemma4-e2b-q8-dryrun.md \
   --dry-run
 ```
 
@@ -136,7 +137,8 @@ scripts/common/check_server.sh
 PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
   --config configs/models/gemma4_e2b_q8.yaml \
   --cases configs/benchmark/prompt_cases.jsonl \
-  --output outputs/benchmarks/gemma4-e2b-q8-wsl.jsonl
+  --output outputs/benchmarks/gemma4-e2b-q8-wsl.jsonl \
+  --summary-output outputs/benchmarks/gemma4-e2b-q8-wsl.md
 ```
 
 ## MiniCPM-V 4.6
@@ -176,7 +178,7 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.fake_stream \
   --dry-run
 ```
 
-图像 case 需要你在 `data/` 下放小样例图片。不要提交大文件或私有图片。
+仓库已在 `data/sample_images/` 和 `data/sample_stream/` 放入小型非私有样例图，clone 后即可做 dry run 和 payload 检查。不要提交大文件或私有图片。
 
 ## Jetson 迁移
 
@@ -206,6 +208,12 @@ MODEL_DIR=/mnt/nvme/models \
 CTX_SIZE=2048 \
 N_GPU_LAYERS=99 \
 scripts/jetson/run_gemma4_e2b_llama_docker.sh
+```
+
+用 `JETSON_DRY_RUN=1` 可以只打印 Docker 命令，不要求当前机器有 Docker 或 Jetson 硬件：
+
+```bash
+JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
 
 完整 checklist 见 [docs/migration_wsl_to_jetson.md](docs/migration_wsl_to_jetson.md)。

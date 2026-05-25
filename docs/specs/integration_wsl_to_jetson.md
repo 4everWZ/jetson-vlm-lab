@@ -15,6 +15,9 @@ src/edge_vlm client sends OpenAI-compatible requests
         |
         v
 outputs/*.jsonl benchmark records
+        |
+        v
+optional Markdown summary
 ```
 
 ## Integration Dependencies
@@ -30,15 +33,18 @@ outputs/*.jsonl benchmark records
 - Configs parse.
 - `scripts/common/check_server.sh` passes against a running server.
 - Benchmark dry run writes JSONL.
+- Benchmark dry run can write an optional Markdown summary.
+- Shared image and fake-stream sample assets are present for out-of-box payload checks.
 - Real benchmark run records observed server output.
 - Jetson run records `tegrastats` alongside benchmark JSONL.
 
 ## Benchmark / Regression Entry Points
 
 - Unit tests: `PYTHONPATH=src conda run -n transformers python -m unittest discover -s tests -v`
-- Dry benchmark: `python -m edge_vlm.benchmark --dry-run ...`
+- Dry benchmark: `python -m edge_vlm.benchmark --dry-run --summary-output ...`
 - Fake stream: `python -m edge_vlm.fake_stream --dry-run ...`
 - Server health: `scripts/common/check_server.sh`
+- Jetson launcher self-check: `JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh`
 
 ## Known Hard Boundaries
 
@@ -49,4 +55,4 @@ outputs/*.jsonl benchmark records
 
 ## Final Acceptance Status
 
-Partially implemented. The scaffold, scripts, configs, tests, docs, and Gemma Q8_0 local artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU fallback llama.cpp build with low-memory settings. WSL CUDA build/run wrappers exist; the CUDA build is verified with `CMAKE_CUDA_ARCHITECTURES=86`, `BUILD_JOBS=8`, and `GGML_CUDA=ON`. Gemma Q8_0 WSL CUDA text smoke passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, and one server slot; the shared benchmark harness recorded three successful text cases, two missing-image failures, and the fake-stream marker case. MiniCPM-V 4.6 metadata-only inspection passed without downloading weights. Image requests, MiniCPM-V 4.6 conversion/runtime, Jetson inference, and broader performance remain unverified.
+Partially implemented. The scaffold, scripts, configs, tests, docs, shared sample assets, optional benchmark Markdown summaries, and Gemma Q8_0 local artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU fallback llama.cpp build with low-memory settings. WSL CUDA build/run wrappers exist; the CUDA build is verified with `CMAKE_CUDA_ARCHITECTURES=86`, `BUILD_JOBS=8`, and `GGML_CUDA=ON`. Gemma Q8_0 WSL CUDA text smoke passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, and one server slot; the earlier shared benchmark run recorded three successful text cases, two missing-image failures, and the fake-stream marker case before sample assets were added. MiniCPM-V 4.6 metadata-only inspection passed without downloading weights. Image requests against a real running server, MiniCPM-V 4.6 conversion/runtime, Jetson inference, and broader performance remain unverified.

@@ -9,23 +9,16 @@ ctx_size="${CTX_SIZE:-2048}"
 n_gpu_layers="${N_GPU_LAYERS:-99}"
 model_alias="${MODEL_ALIAS:-minicpmv46-q4}"
 docker_gpu_args="${DOCKER_GPU_ARGS:---runtime nvidia}"
+dry_run="${JETSON_DRY_RUN:-0}"
 
 host_model_path="${MODEL_PATH_ON_HOST:-${model_dir}/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf}"
 host_mmproj_path="${MMPROJ_PATH_ON_HOST:-${model_dir}/MiniCPM-V-4_6/mmproj-model-f16.gguf}"
 container_model_path="${MODEL_PATH:-/models/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf}"
 container_mmproj_path="${MMPROJ_PATH:-/models/MiniCPM-V-4_6/mmproj-model-f16.gguf}"
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "docker is required on Jetson for this runtime path." >&2
-  exit 2
-fi
-
-[[ -f "${host_model_path}" ]] || { echo "Model GGUF not found: ${host_model_path}" >&2; exit 2; }
-[[ -f "${host_mmproj_path}" ]] || { echo "MiniCPM mmproj GGUF not found: ${host_mmproj_path}" >&2; exit 2; }
-
 read -r -a gpu_args <<< "${docker_gpu_args}"
 
-exec docker run --rm -it \
+docker_cmd=(docker run --rm -it \
   "${gpu_args[@]}" \
   -p "${port}:8080" \
   -v "${model_dir}:/models" \
@@ -37,4 +30,20 @@ exec docker run --rm -it \
   --port 8080 \
   -c "${ctx_size}" \
   --n-gpu-layers "${n_gpu_layers}" \
-  "$@"
+  "$@")
+
+if [[ "${dry_run}" == "1" ]]; then
+  printf '%q ' "${docker_cmd[@]}"
+  printf '\n'
+  exit 0
+fi
+
+[[ -f "${host_model_path}" ]] || { echo "Model GGUF not found: ${host_model_path}" >&2; exit 2; }
+[[ -f "${host_mmproj_path}" ]] || { echo "MiniCPM mmproj GGUF not found: ${host_mmproj_path}" >&2; exit 2; }
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "docker is required on Jetson for this runtime path." >&2
+  exit 2
+fi
+
+exec "${docker_cmd[@]}"

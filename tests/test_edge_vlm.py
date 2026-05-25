@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -252,6 +254,141 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertTrue(record["success"])
         self.assertIn("fake stream", record["output_excerpt"])
         self.assertEqual(record["image_path"], str(tmp_path / "frames"))
+
+    def test_benchmark_writes_markdown_summary_for_current_run(self):
+        from edge_vlm.benchmark import run_benchmark
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            image = tmp_path / "frame.png"
+            image.write_bytes(b"\x89PNG\r\n\x1a\n")
+            cases = tmp_path / "cases.jsonl"
+            output = tmp_path / "bench.jsonl"
+            summary = tmp_path / "bench.md"
+            cases.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "id": "text_case",
+                                "input_type": "text",
+                                "prompt": "Say one short sentence.",
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "id": "image_case",
+                                "input_type": "image",
+                                "prompt": "Describe this image.",
+                                "image_path": str(image),
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  backend: llama.cpp",
+                        "  quantization: Q8_0",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  image: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            count = run_benchmark(
+                config_path=config,
+                cases_path=cases,
+                output_path=output,
+                summary_path=summary,
+                dry_run=True,
+            )
+
+            summary_text = summary.read_text(encoding="utf-8")
+
+        self.assertEqual(count, 2)
+        self.assertIn("# Edge VLM Benchmark Summary", summary_text)
+        self.assertIn("- Cases written: 2", summary_text)
+        self.assertIn("- Successful: 2", summary_text)
+        self.assertIn("| text_case | text | yes |", summary_text)
+        self.assertIn("| image_case | image | yes |", summary_text)
+
+    def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
+        image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+        cases = [
+            json.loads(line)
+            for line in Path("configs/benchmark/prompt_cases.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        for case in cases:
+            input_type = case.get("input_type")
+            if input_type == "image":
+                image_path = Path(case["image_path"])
+                self.assertTrue(image_path.is_file(), f"missing sample image: {image_path}")
+                self.assertIn(image_path.suffix.lower(), image_suffixes)
+                self.assertTrue(
+                    image_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+                    or image_path.read_bytes().startswith(b"\xff\xd8\xff"),
+                    f"sample image is not a PNG or JPEG: {image_path}",
+                )
+            elif input_type == "fake_stream":
+                image_dir = Path(case["image_dir"])
+                self.assertTrue(image_dir.is_dir(), f"missing fake-stream directory: {image_dir}")
+                frames = sorted(path for path in image_dir.iterdir() if path.suffix.lower() in image_suffixes)
+                self.assertGreater(len(frames), 0, f"no sample stream frames in: {image_dir}")
+
+    def test_jetson_gemma_launcher_can_dry_run_without_docker_or_hardware(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {
+                **os.environ,
+                "JETSON_DRY_RUN": "1",
+                "MODEL_DIR": str(Path(tmp) / "models"),
+                "VLM_SERVER_PORT": "19090",
+            }
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_gemma4_e2b_llama_docker.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("docker run", result.stdout)
+        self.assertIn("ggml-org/gemma-4-E2B-it-GGUF:Q8_0", result.stdout)
+        self.assertIn("-p 19090:8080", result.stdout)
+
+    def test_jetson_minicpm_launcher_can_dry_run_without_local_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model_dir = Path(tmp) / "models"
+            env = {
+                **os.environ,
+                "JETSON_DRY_RUN": "1",
+                "MODEL_DIR": str(model_dir),
+                "VLM_SERVER_PORT": "19091",
+            }
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_minicpmv46_llama_docker.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("docker run", result.stdout)
+        self.assertIn("-m /models/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf", result.stdout)
+        self.assertIn("--mmproj /models/MiniCPM-V-4_6/mmproj-model-f16.gguf", result.stdout)
 
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream

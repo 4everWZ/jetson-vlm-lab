@@ -91,11 +91,57 @@ def _build_record(
     }
 
 
+def _format_markdown_summary(records: list[dict[str, Any]], output_path: Path) -> str:
+    successes = sum(1 for record in records if record.get("success") is True)
+    failures = len(records) - successes
+    latencies = [record.get("latency_s") for record in records if isinstance(record.get("latency_s"), (int, float))]
+    total_latency = sum(float(latency) for latency in latencies)
+    lines = [
+        "# Edge VLM Benchmark Summary",
+        "",
+        f"- Output JSONL: `{output_path}`",
+        f"- Cases written: {len(records)}",
+        f"- Successful: {successes}",
+        f"- Failed: {failures}",
+        f"- Total latency seconds: {total_latency:.3f}",
+        "",
+        "| Case | Input | Success | Latency s | Tokens | Tokens/s | Error |",
+        "|---|---|---|---:|---:|---:|---|",
+    ]
+    for record in records:
+        latency = record.get("latency_s")
+        latency_text = f"{latency:.3f}" if isinstance(latency, (int, float)) else ""
+        tokens = record.get("tokens")
+        tokens_text = str(tokens) if isinstance(tokens, int) else ""
+        tokens_per_sec = record.get("tokens_per_sec")
+        tokens_per_sec_text = f"{tokens_per_sec:.3f}" if isinstance(tokens_per_sec, (int, float)) else ""
+        error = str(record.get("error") or "").replace("|", "\\|")
+        lines.append(
+            "| {case} | {input_type} | {success} | {latency} | {tokens} | {tokens_per_sec} | {error} |".format(
+                case=record.get("prompt_case_id") or "",
+                input_type=record.get("input_type") or "",
+                success="yes" if record.get("success") else "no",
+                latency=latency_text,
+                tokens=tokens_text,
+                tokens_per_sec=tokens_per_sec_text,
+                error=error,
+            )
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _write_markdown_summary(records: list[dict[str, Any]], summary_path: Path, output_path: Path) -> None:
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(_format_markdown_summary(records, output_path), encoding="utf-8")
+
+
 def run_benchmark(
     *,
     config_path: str | Path,
     cases_path: str | Path,
     output_path: str | Path,
+    summary_path: str | Path | None = None,
     dry_run: bool = False,
     max_tokens: int = 128,
     temperature: float = 0.2,
@@ -108,6 +154,7 @@ def run_benchmark(
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     count = 0
+    records: list[dict[str, Any]] = []
     with output.open("a", encoding="utf-8") as handle:
         for case in _iter_jsonl(Path(cases_path)):
             input_type = str(case.get("input_type", "text"))
@@ -171,9 +218,12 @@ def run_benchmark(
             )
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
             handle.flush()
+            records.append(record)
             count += 1
             if stop_on_error and not result_ok:
                 break
+    if summary_path is not None:
+        _write_markdown_summary(records, Path(summary_path), output)
     return count
 
 
@@ -182,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", required=True, help="Path to model config YAML")
     parser.add_argument("--cases", default="configs/benchmark/prompt_cases.jsonl")
     parser.add_argument("--output", default="outputs/benchmarks/run.jsonl")
+    parser.add_argument("--summary-output", default=None, help="Optional Markdown summary path for this run")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--max-tokens", type=int, default=128)
     parser.add_argument("--temperature", type=float, default=0.2)
@@ -192,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
         config_path=args.config,
         cases_path=args.cases,
         output_path=args.output,
+        summary_path=args.summary_output,
         dry_run=args.dry_run,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
