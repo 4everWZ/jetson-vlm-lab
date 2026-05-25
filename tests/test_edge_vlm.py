@@ -6,6 +6,15 @@ from unittest.mock import patch
 
 
 class EdgeVlmContractsTest(unittest.TestCase):
+    def test_gemma_q8_config_is_available_for_low_memory_wsl_path(self):
+        from edge_vlm.config import load_model_config
+
+        config = load_model_config("configs/models/gemma4_e2b_q8.yaml")
+
+        self.assertEqual(config["model"]["name"], "gemma4-e2b-it-q8")
+        self.assertEqual(config["model"]["quantization"], "Q8_0")
+        self.assertTrue(config["capabilities"]["image"])
+
     def test_image_payload_uses_data_url_content_part(self):
         from edge_vlm.image_payload import build_user_content
 

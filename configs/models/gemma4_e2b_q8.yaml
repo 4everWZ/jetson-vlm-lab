@@ -1,0 +1,28 @@
+model:
+  name: gemma4-e2b-it-q8
+  family: Gemma 4
+  backend: llama.cpp
+  model_ref: ggml-org/gemma-4-E2B-it-GGUF
+  quantization: Q8_0
+
+server:
+  base_url: http://127.0.0.1:8080/v1
+  host: 127.0.0.1
+  port: 8080
+
+runtime:
+  launch_mode: local_gguf_with_mmproj
+  ctx_size: 1024
+  n_gpu_layers: 0
+  model_path_env: MODEL_PATH
+  mmproj_path_env: MMPROJ_PATH
+  wsl_script: scripts/wsl/run_gemma4_e2b_llama.sh
+  jetson_script: scripts/jetson/run_gemma4_e2b_llama_docker.sh
+
+capabilities:
+  text: true
+  image: true
+  audio: false
+
+notes:
+  status: Low-memory WSL baseline. Uses official pre-quantized Q8_0 GGUF artifacts instead of local BF16-to-Q4 quantization.
