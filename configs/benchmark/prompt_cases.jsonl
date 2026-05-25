@@ -1,0 +1,6 @@
+{"id":"text_cn_short","input_type":"text","prompt":"用三句话说明 Jetson Orin 上运行视觉语言模型时最需要关注的资源限制。","tags":["text","zh","short"]}
+{"id":"text_en_reasoning_short","input_type":"text","prompt":"Give two practical reasons why WSL should be used for development before moving an edge VLM workflow to Jetson Orin.","tags":["text","en","reasoning","short"]}
+{"id":"text_code_short","input_type":"text","prompt":"Write a small Python function that takes a latency in seconds and returns tokens per second given a token count.","tags":["text","code","short"]}
+{"id":"image_caption_single","input_type":"image","prompt":"Describe the visible scene in one concise paragraph.","image_path":"data/sample_images/image_caption_single.jpg","tags":["image","caption","single"]}
+{"id":"image_safety_scene_single","input_type":"image","prompt":"Describe any visible safety-relevant hazards in the scene. If none are visible, say so clearly.","image_path":"data/sample_images/image_safety_scene_single.jpg","tags":["image","safety","single"]}
+{"id":"fake_stream_folder_sample","input_type":"fake_stream","prompt":"For this frame, describe the most important object or activity in one sentence.","image_dir":"data/sample_stream","tags":["image","stream","folder"]}
