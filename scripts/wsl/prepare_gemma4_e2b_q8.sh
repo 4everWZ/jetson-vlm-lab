@@ -45,7 +45,6 @@ for filename in (model_file, mmproj_file):
         repo_id=repo_id,
         filename=filename,
         local_dir=local_dir,
-        local_dir_use_symlinks=False,
     )
     print(path, flush=True)
 ' "${hf_repo}" "${model_dir}" "${model_file}" "${mmproj_file}"

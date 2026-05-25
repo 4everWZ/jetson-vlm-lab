@@ -1,10 +1,10 @@
 # Runtime Matrix
 
-This matrix records the initial WSL-first and Jetson-Orin-targeted backend strategy. Status is intentionally conservative: a path is "implemented" only when this repository contains runnable scripts/client support; model inference remains unverified until a local server is actually run.
+This matrix records the WSL-first and Jetson-Orin-targeted backend strategy. Status is intentionally conservative: a path is "implemented" only when this repository contains runnable scripts/client support; model inference remains unverified until a local server is actually run.
 
 | Backend | Model Format | WSL Support | Jetson Support | Image Support | Expected Memory Pressure | Implementation Complexity | Current Status | Notes / Blockers |
 |---|---|---|---|---|---|---|---|---|
-| llama.cpp `llama-server` | GGUF plus optional `mmproj` | Supported by scripts under `scripts/wsl/` | Supported by Docker-oriented scripts under `scripts/jetson/` | Supported when model/mmproj exposes multimodal capability | Medium for Gemma E2B Q4; medium-high for MiniCPM-V 4.6 with vision; context size drives KV memory | Low-medium | First supported path | Must build or provide llama.cpp. Real inference not yet validated in this repo. |
+| llama.cpp `llama-server` | GGUF plus optional `mmproj` | Supported by scripts under `scripts/wsl/` | Supported by Docker-oriented scripts under `scripts/jetson/` | Supported when model/mmproj exposes multimodal capability | Medium for Gemma E2B Q8_0 with small context; medium-high for MiniCPM-V 4.6 with vision; context size drives KV memory | Low-medium | First supported path | Local CPU-only llama.cpp build and Gemma Q8_0 artifacts are present. Real inference still requires a server smoke test before performance claims. |
 | llama.cpp `llama-mtmd-cli` | GGUF plus `mmproj` | Documented reference path | Possible if binary/container exists | Image-first CLI support | Similar to server path | Low | Documented only | Useful for manual backend smoke tests, but project client targets OpenAI-compatible server. |
 | Ollama | Ollama model bundle / GGUF-backed | Likely usable on WSL | Possible but not first target | Model-dependent | Medium | Low if model exists; opaque runtime packaging | Notes only | Not implemented because llama.cpp exposes the runtime details and OpenAI-compatible API directly. |
 | NanoLLM / Jetson AI Lab containers | Backend-specific model packaging | Not WSL-first | Potentially strong Jetson path | Model-dependent | Potentially lower operational overhead on Jetson | Medium | Notes only | Consider after llama.cpp baseline. Need current Jetson container verification before use. |
@@ -21,5 +21,5 @@ This matrix records the initial WSL-first and Jetson-Orin-targeted backend strat
 
 ## Model Notes
 
-- Gemma 4 E2B-it: current llama.cpp multimodal docs list `ggml-org/gemma-4-E2B-it-GGUF`. The config uses this as the default HF repo reference.
+- Gemma 4 E2B-it: the low-memory WSL baseline is `configs/models/gemma4_e2b_q8.yaml` with official pre-quantized `Q8_0` model and mmproj files from `ggml-org/gemma-4-E2B-it-GGUF`. Local BF16-to-Q4 quantization was observed to exceed this WSL memory budget and is guarded behind `ALLOW_HIGH_MEMORY_QUANTIZE=1`.
 - MiniCPM-V 4.6: current llama.cpp docs describe conversion from `openbmb/MiniCPM-V-4_6` into a language-model GGUF and a separate `mmproj` GGUF. This project therefore defaults to local `MODEL_PATH` and `MMPROJ_PATH` for MiniCPM-V 4.6 unless the user supplies a verified GGUF repo through `MODEL_REF`.

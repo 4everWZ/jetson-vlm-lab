@@ -15,6 +15,21 @@ quantize_threads="${QUANTIZE_THREADS:-1}"
 min_output_bytes="${MIN_OUTPUT_BYTES:-1048576000}"
 output_model_file="${OUTPUT_MODEL_FILE:-gemma-4-E2B-it-${quant_type}.gguf}"
 output_mmproj_file="${OUTPUT_MMPROJ_FILE:-${source_mmproj_file}}"
+allow_high_memory_quantize="${ALLOW_HIGH_MEMORY_QUANTIZE:-0}"
+
+if [[ "${allow_high_memory_quantize}" != "1" ]]; then
+  cat >&2 <<EOF
+Gemma BF16 -> ${quant_type} quantization is disabled by default on low-memory WSL.
+
+This path was observed to be killed while quantizing the large embedding tensor.
+Use the low-memory prepared artifact path instead:
+  scripts/wsl/prepare_gemma4_e2b_q8.sh
+
+If you are on a larger machine and intentionally want to run local quantization:
+  ALLOW_HIGH_MEMORY_QUANTIZE=1 scripts/wsl/prepare_gemma4_e2b_q4.sh
+EOF
+  exit 2
+fi
 
 if [[ ! -x "${quantize_bin}" ]]; then
   echo "llama-quantize not found: ${quantize_bin}" >&2
@@ -57,7 +72,6 @@ for filename in (model_file, mmproj_file):
         repo_id=repo_id,
         filename=filename,
         local_dir=local_dir,
-        local_dir_use_symlinks=False,
     )
     print(path, flush=True)
 ' "${hf_repo}" "${model_dir}" "${source_model_file}" "${source_mmproj_file}"

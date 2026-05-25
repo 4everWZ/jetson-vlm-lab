@@ -21,7 +21,7 @@ outputs/*.jsonl benchmark records
 
 - WSL: Conda env `transformers` for Python validation, plus optional local llama.cpp build.
 - Jetson: Docker and NVIDIA runtime for the provided Docker scripts, or an equivalent local llama.cpp build.
-- Models: Gemma can use the documented GGUF repo default; MiniCPM-V 4.6 defaults to local converted GGUF plus `mmproj`.
+- Models: Gemma uses the prepared Q8_0 GGUF plus `mmproj` baseline on WSL; MiniCPM-V 4.6 defaults to local converted GGUF plus `mmproj`.
 
 ## Validation Checklist
 
@@ -45,7 +45,8 @@ outputs/*.jsonl benchmark records
 - No performance claim is valid until a real model/server run completes.
 - No Jetson support claim is valid until the Jetson Docker/runtime path is observed.
 - MiniCPM-V 4.6 conversion and mmproj compatibility must be verified on the exact llama.cpp revision used for runtime.
+- Gemma BF16-to-Q4 local quantization is not a WSL acceptance path on this host; use the prepared Q8_0 artifacts or an externally prepared lower-bit artifact.
 
 ## Final Acceptance Status
 
-Partially implemented. The scaffold, scripts, configs, tests, and docs exist. Real WSL and Jetson inference remain unverified.
+Partially implemented. The scaffold, scripts, configs, tests, docs, and Gemma Q8_0 local artifacts exist. Real WSL inference requires a passing server smoke test; Jetson inference remains unverified.

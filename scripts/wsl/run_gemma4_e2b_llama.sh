@@ -27,6 +27,9 @@ if [[ ! -x "${server_bin}" ]]; then
   exit 2
 fi
 
+server_lib_dir="$(cd "$(dirname "${server_bin}")" && pwd)"
+export LD_LIBRARY_PATH="${server_lib_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
 model_args=()
 if [[ -n "${model_path}" || -n "${mmproj_path}" ]]; then
   if [[ -z "${model_path}" || -z "${mmproj_path}" ]]; then

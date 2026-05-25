@@ -11,9 +11,11 @@ server:
   port: 8080
 
 runtime:
-  launch_mode: hf_repo
-  ctx_size: 4096
-  n_gpu_layers: 99
+  launch_mode: external_or_high_memory_quantized_gguf
+  ctx_size: 1024
+  n_gpu_layers: 0
+  model_path_env: MODEL_PATH
+  mmproj_path_env: MMPROJ_PATH
   wsl_script: scripts/wsl/run_gemma4_e2b_llama.sh
   jetson_script: scripts/jetson/run_gemma4_e2b_llama_docker.sh
 
@@ -23,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: llama.cpp documents this GGUF repo as multimodal. Confirm on the exact llama.cpp build before recording benchmark claims.
+  status: High-memory or externally prepared Q4 template. Local BF16-to-Q4 quantization was observed to exceed this WSL memory budget; use gemma4_e2b_q8.yaml as the WSL baseline.

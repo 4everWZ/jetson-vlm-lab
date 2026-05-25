@@ -23,3 +23,11 @@ Decision: Jetson scripts use Docker/NVIDIA runtime by default.
 Reason: the Jetson should not be the primary development machine, and Docker keeps runtime setup more reproducible than Conda-heavy local installs.
 
 Consequence: users without Docker/NVIDIA runtime configured must either fix that first or adapt scripts to a native llama.cpp build.
+
+## TRD-004: Gemma Low-Memory Baseline Uses Pre-Quantized Q8_0
+
+Decision: use official pre-quantized Gemma 4 E2B-it Q8_0 GGUF artifacts as the WSL baseline instead of local BF16-to-Q4 quantization.
+
+Reason: local BF16-to-Q4 quantization was observed to be killed on this WSL host while processing a large embedding tensor. Reducing quantization threads limits CPU concurrency but does not remove that tensor-level peak memory requirement.
+
+Consequence: `configs/models/gemma4_e2b_q8.yaml` and `scripts/wsl/prepare_gemma4_e2b_q8.sh` are the default WSL path. `scripts/wsl/prepare_gemma4_e2b_q4.sh` remains available only with `ALLOW_HIGH_MEMORY_QUANTIZE=1` for larger machines or externally managed conversion hosts.

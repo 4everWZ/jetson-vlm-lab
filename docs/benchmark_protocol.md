@@ -44,9 +44,9 @@ Token counts are recorded only when the backend response exposes usage fields. I
 
 ```bash
 PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
-  --config configs/models/gemma4_e2b_q4.yaml \
+  --config configs/models/gemma4_e2b_q8.yaml \
   --cases configs/benchmark/prompt_cases.jsonl \
-  --output outputs/benchmarks/gemma4-e2b-wsl-dryrun.jsonl \
+  --output outputs/benchmarks/gemma4-e2b-q8-wsl-dryrun.jsonl \
   --dry-run
 ```
 
@@ -65,9 +65,9 @@ In a second terminal:
 
 ```bash
 PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
-  --config configs/models/gemma4_e2b_q4.yaml \
+  --config configs/models/gemma4_e2b_q8.yaml \
   --cases configs/benchmark/prompt_cases.jsonl \
-  --output outputs/benchmarks/gemma4-e2b-wsl.jsonl
+  --output outputs/benchmarks/gemma4-e2b-q8-wsl.jsonl
 ```
 
 For MiniCPM-V 4.6, provide local converted GGUF files first:
@@ -82,10 +82,10 @@ scripts/wsl/run_minicpmv46_llama.sh
 
 ```bash
 PYTHONPATH=src conda run -n transformers python -m edge_vlm.fake_stream \
-  --config configs/models/gemma4_e2b_q4.yaml \
+  --config configs/models/gemma4_e2b_q8.yaml \
   --image-dir data/sample_stream \
   --prompt "For this frame, describe the most important object or activity in one sentence." \
-  --output outputs/fake_stream/gemma4-e2b-wsl.jsonl
+  --output outputs/fake_stream/gemma4-e2b-q8-wsl.jsonl
 ```
 
 Add `--dry-run` to validate folder iteration and JSONL logging without contacting a server.
@@ -102,9 +102,9 @@ Start the model server in another terminal, then run the same benchmark command 
 
 ```bash
 EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
-  --config configs/models/gemma4_e2b_q4.yaml \
+  --config configs/models/gemma4_e2b_q8.yaml \
   --cases configs/benchmark/prompt_cases.jsonl \
-  --output outputs/benchmarks/gemma4-e2b-jetson.jsonl
+  --output outputs/benchmarks/gemma4-e2b-q8-jetson.jsonl
 ```
 
 ## Reporting Rules
