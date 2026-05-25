@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+llama_cpp_dir="${LLAMA_CPP_DIR:-${repo_root}/tmp/llama.cpp}"
+server_bin="${LLAMA_SERVER_BIN:-${llama_cpp_dir}/build/bin/llama-server}"
+
+host="${VLM_SERVER_HOST:-127.0.0.1}"
+port="${VLM_SERVER_PORT:-8080}"
+ctx_size="${CTX_SIZE:-4096}"
+n_gpu_layers="${N_GPU_LAYERS:-99}"
+model_alias="${MODEL_ALIAS:-minicpmv46-q4}"
+model_ref="${MODEL_REF:-}"
+model_path="${MODEL_PATH:-${MINICPMV_GGUF_MODEL:-}}"
+mmproj_path="${MMPROJ_PATH:-${MINICPMV_MMPROJ:-}}"
+
+if [[ ! -x "${server_bin}" ]]; then
+  echo "llama-server not found or not executable: ${server_bin}" >&2
+  echo "Build first with scripts/wsl/build_llama_cpp.sh or set LLAMA_SERVER_BIN." >&2
+  exit 2
+fi
+
+model_args=()
+if [[ -n "${model_ref}" ]]; then
+  model_args=(-hf "${model_ref}")
+else
+  if [[ -z "${model_path}" || -z "${mmproj_path}" ]]; then
+    cat >&2 <<EOF
+MiniCPM-V 4.6 requires either:
+  MODEL_REF=<verified GGUF repo> scripts/wsl/run_minicpmv46_llama.sh
+
+or local converted files:
+  MODEL_PATH=/path/to/ggml-model-Q4_K_M.gguf \\
+  MMPROJ_PATH=/path/to/mmproj-model-f16.gguf \\
+  scripts/wsl/run_minicpmv46_llama.sh
+
+llama.cpp documents MiniCPM-V 4.6 conversion from openbmb/MiniCPM-V-4_6;
+this project does not assume a prebuilt GGUF repo is available.
+EOF
+    exit 2
+  fi
+  [[ -f "${model_path}" ]] || { echo "MODEL_PATH not found: ${model_path}" >&2; exit 2; }
+  [[ -f "${mmproj_path}" ]] || { echo "MMPROJ_PATH not found: ${mmproj_path}" >&2; exit 2; }
+  model_args=(-m "${model_path}" --mmproj "${mmproj_path}")
+fi
+
+extra_args=()
+if [[ -n "${LLAMA_SERVER_EXTRA_ARGS:-}" ]]; then
+  read -r -a extra_args <<< "${LLAMA_SERVER_EXTRA_ARGS}"
+fi
+
+exec "${server_bin}" \
+  "${model_args[@]}" \
+  --alias "${model_alias}" \
+  --host "${host}" \
+  --port "${port}" \
+  -c "${ctx_size}" \
+  --n-gpu-layers "${n_gpu_layers}" \
+  "${extra_args[@]}" \
+  "$@"
