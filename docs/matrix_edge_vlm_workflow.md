@@ -9,8 +9,8 @@
 | R5 | Keep runtime configs separate from code | Implemented | `configs/models/*.yaml` | Config parse check in `transformers` env | `.gitignore` fixed to track configs. |
 | R6 | Implement OpenAI-compatible client | Implemented | `src/edge_vlm/client.py`, `src/edge_vlm/image_payload.py` | `tests/test_edge_vlm.py` | Uses standard-library HTTP. |
 | R7 | Treat image support as backend-sensitive | Implemented | `capabilities.image`, client/benchmark checks | Unit tests and docs | Runtime server capability still must be observed. |
-| R8 | Implement benchmark harness and cases | Implemented | `src/edge_vlm/benchmark.py`, `configs/benchmark/prompt_cases.jsonl` | Unit tests; dry-run command | Markdown summary not implemented. |
-| R9 | Implement fake stream prototype | Implemented | `src/edge_vlm/fake_stream.py` | Unit tests; dry-run CLI | Folder input only; no camera. |
+| R8 | Implement benchmark harness and cases | Implemented | `src/edge_vlm/benchmark.py`, `configs/benchmark/prompt_cases.jsonl` | Unit tests; dry-run command | `fake_stream` case is a marker for the fake-stream runner. Markdown summary not implemented. |
+| R9 | Implement fake stream prototype | Implemented | `src/edge_vlm/fake_stream.py` | Unit tests; dry-run CLI | Folder input only; no camera. Continues after per-frame errors unless `--stop-on-error` is set. |
 | R10 | Create Jetson migration docs and scripts | Implemented | `docs/migration_wsl_to_jetson.md`, `scripts/jetson/*.sh` | `bash -n`; doc review | Jetson execution unverified. |
 | R11 | Avoid cloning references into source tree | Implemented | `.gitignore` ignores `tmp/`; clones under `tmp/references/` | `git status --ignored` | Reference repos not committed. |
 | R12 | Validate lightly without model downloads | Implemented | Tests, syntax checks, dry-run paths | Final validation commands | Real model download/build deferred. |

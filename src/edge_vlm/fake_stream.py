@@ -48,13 +48,35 @@ def run_fake_stream(
     with output.open("a", encoding="utf-8") as handle:
         for index, frame in enumerate(frames):
             started = datetime.now(timezone.utc).isoformat()
-            result = client.complete(
-                prompt=prompt,
-                image_path=frame,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                dry_run=dry_run,
-            )
+            try:
+                result = client.complete(
+                    prompt=prompt,
+                    image_path=frame,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    dry_run=dry_run,
+                )
+            except (FileNotFoundError, ValueError, OSError) as exc:
+                ended = datetime.now(timezone.utc).isoformat()
+                record: dict[str, Any] = {
+                    "frame_index": index,
+                    "frame_id": frame.name,
+                    "image_path": str(frame),
+                    "start_time": started,
+                    "end_time": ended,
+                    "success": False,
+                    "error": str(exc),
+                    "latency_s": 0.0,
+                    "output_excerpt": "",
+                }
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                handle.flush()
+                count += 1
+                if stop_on_error:
+                    break
+                if interval_s > 0 and index < len(frames) - 1:
+                    time.sleep(interval_s)
+                continue
             ended = datetime.now(timezone.utc).isoformat()
             record: dict[str, Any] = {
                 "frame_index": index,

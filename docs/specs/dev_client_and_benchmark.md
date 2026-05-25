@@ -18,6 +18,8 @@ Not implemented in the current version.
 - `edge_vlm.fake_stream.run_fake_stream`: Iterates a sorted image folder and writes one response record per frame.
 - `edge_vlm.config.load_model_config`: Loads YAML/JSON model configs with environment overrides for host and port.
 
+The benchmark treats `input_type=fake_stream` as a marker case and records an instruction to run `edge_vlm.fake_stream`. It does not expand a folder inside the normal benchmark loop.
+
 ## Code Mapping
 
 - Source: `src/edge_vlm/*.py`
@@ -30,6 +32,7 @@ Not implemented in the current version.
 - The client uses standard-library HTTP to avoid adding project dependencies in this scaffold.
 - The image payload uses OpenAI-style `image_url` content because llama.cpp documents this for `/v1/chat/completions`; server capability still needs runtime verification.
 - YAML parsing supports PyYAML when present and a narrow fallback parser for current config files.
+- Fake-stream execution is separate from the benchmark loop so frame-level failure handling can be explicit and resumable.
 
 ## Verification
 

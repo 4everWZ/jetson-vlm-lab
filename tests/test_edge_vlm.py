@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 class EdgeVlmContractsTest(unittest.TestCase):
@@ -119,6 +120,50 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertFalse(record["success"])
         self.assertIn("image not found", record["error"])
 
+    def test_benchmark_marks_fake_stream_case_as_separate_runner(self):
+        from edge_vlm.benchmark import run_benchmark
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            cases = tmp_path / "cases.jsonl"
+            output = tmp_path / "bench.jsonl"
+            cases.write_text(
+                json.dumps(
+                    {
+                        "id": "fake_stream_folder_sample",
+                        "input_type": "fake_stream",
+                        "prompt": "Describe this frame.",
+                        "image_dir": str(tmp_path / "frames"),
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  image: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            count = run_benchmark(config_path=config, cases_path=cases, output_path=output, dry_run=True)
+
+            self.assertEqual(count, 1)
+            record = json.loads(output.read_text(encoding="utf-8").strip())
+
+        self.assertTrue(record["success"])
+        self.assertIn("fake stream", record["output_excerpt"])
+        self.assertEqual(record["image_path"], str(tmp_path / "frames"))
+
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
 
@@ -161,6 +206,68 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(record["frame_id"], "001.jpg")
         self.assertEqual(record["success"], True)
         self.assertIn("dry run", record["output_excerpt"])
+
+    def test_fake_stream_continues_after_individual_frame_failure(self):
+        from edge_vlm.client import CompletionResult
+        from edge_vlm.fake_stream import run_fake_stream
+
+        class FakeClient:
+            def __init__(self):
+                self.calls = 0
+
+            def complete(self, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    raise ValueError("bad frame")
+                return CompletionResult(
+                    ok=True,
+                    text="second frame ok",
+                    request={},
+                    response={"dry_run": True},
+                    latency_s=0.01,
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            image_dir = tmp_path / "frames"
+            image_dir.mkdir()
+            (image_dir / "001.jpg").write_bytes(b"\xff\xd8\xff\xd9")
+            (image_dir / "002.jpg").write_bytes(b"\xff\xd8\xff\xd9")
+            output = tmp_path / "stream.jsonl"
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  image: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("edge_vlm.fake_stream.OpenAICompatClient.from_config", return_value=FakeClient()):
+                count = run_fake_stream(
+                    config_path=config,
+                    image_dir=image_dir,
+                    output_path=output,
+                    prompt="Describe this frame.",
+                    interval_s=0,
+                    max_frames=2,
+                    dry_run=False,
+                    stop_on_error=False,
+                )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(count, 2)
+        self.assertFalse(records[0]["success"])
+        self.assertEqual(records[0]["error"], "bad frame")
+        self.assertTrue(records[1]["success"])
 
 
 if __name__ == "__main__":

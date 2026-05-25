@@ -15,6 +15,8 @@ The benchmark harness is designed to run the same prompt cases on WSL and Jetson
 
 Image paths are placeholders under `data/`. Add small local sample images before running image cases. Do not commit large or private media.
 
+`fake_stream_folder_sample` is a marker case in the shared prompt list. The benchmark runner records it as a reminder to use the fake-stream harness; folder iteration itself is handled by `python -m edge_vlm.fake_stream`.
+
 ## Raw Output
 
 The benchmark writes JSONL records with:
@@ -75,6 +77,18 @@ MODEL_PATH=/path/to/ggml-model-Q4_K_M.gguf \
 MMPROJ_PATH=/path/to/mmproj-model-f16.gguf \
 scripts/wsl/run_minicpmv46_llama.sh
 ```
+
+## Fake Stream Run
+
+```bash
+PYTHONPATH=src conda run -n transformers python -m edge_vlm.fake_stream \
+  --config configs/models/gemma4_e2b_q4.yaml \
+  --image-dir data/sample_stream \
+  --prompt "For this frame, describe the most important object or activity in one sentence." \
+  --output outputs/fake_stream/gemma4-e2b-wsl.jsonl
+```
+
+Add `--dry-run` to validate folder iteration and JSONL logging without contacting a server.
 
 ## Jetson Run
 

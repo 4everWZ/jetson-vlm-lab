@@ -59,6 +59,7 @@ def _build_record(
     *,
     config: dict[str, Any],
     case: dict[str, Any],
+    image_path: str | None,
     result_ok: bool,
     output_text: str,
     error: str | None,
@@ -78,7 +79,7 @@ def _build_record(
         "device": _device_label(),
         "prompt_case_id": case.get("id"),
         "input_type": case.get("input_type"),
-        "image_path": case.get("image_path"),
+        "image_path": image_path,
         "start_time": started_wall,
         "end_time": ended_wall,
         "latency_s": latency_s,
@@ -111,7 +112,18 @@ def run_benchmark(
         for case in _iter_jsonl(Path(cases_path)):
             input_type = str(case.get("input_type", "text"))
             image_path = case.get("image_path")
-            if input_type.startswith("image") and not supports_images:
+            if input_type == "fake_stream":
+                started_wall = ended_wall = datetime.now(timezone.utc).isoformat()
+                result_ok = True
+                output_text = (
+                    "[fake stream case] run this case with "
+                    "python -m edge_vlm.fake_stream using the image_dir value"
+                )
+                error = None
+                response = {"fake_stream_case": True, "image_dir": case.get("image_dir")}
+                latency_s = 0.0
+                image_path = case.get("image_dir")
+            elif input_type.startswith("image") and not supports_images:
                 result_ok = False
                 output_text = ""
                 error = "case requires image input but selected config has capabilities.image=false"
@@ -148,6 +160,7 @@ def run_benchmark(
             record = _build_record(
                 config=config,
                 case=case,
+                image_path=image_path,
                 result_ok=result_ok,
                 output_text=output_text,
                 error=error,
