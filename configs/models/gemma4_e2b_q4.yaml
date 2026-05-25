@@ -1,0 +1,26 @@
+model:
+  name: gemma4-e2b-it-q4
+  family: Gemma 4
+  backend: llama.cpp
+  model_ref: ggml-org/gemma-4-E2B-it-GGUF
+  quantization: Q4_K_M
+
+server:
+  base_url: http://127.0.0.1:8080/v1
+  host: 127.0.0.1
+  port: 8080
+
+runtime:
+  launch_mode: hf_repo
+  ctx_size: 4096
+  n_gpu_layers: 99
+  wsl_script: scripts/wsl/run_gemma4_e2b_llama.sh
+  jetson_script: scripts/jetson/run_gemma4_e2b_llama_docker.sh
+
+capabilities:
+  text: true
+  image: true
+  audio: false
+
+notes:
+  status: llama.cpp documents this GGUF repo as multimodal. Confirm on the exact llama.cpp build before recording benchmark claims.

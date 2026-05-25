@@ -1,0 +1,28 @@
+model:
+  name: minicpmv46-q4
+  family: MiniCPM-V 4.6
+  backend: llama.cpp
+  model_ref: openbmb/MiniCPM-V-4_6
+  quantization: Q4_K_M
+
+server:
+  base_url: http://127.0.0.1:8080/v1
+  host: 127.0.0.1
+  port: 8080
+
+runtime:
+  launch_mode: local_gguf_with_mmproj
+  ctx_size: 4096
+  n_gpu_layers: 99
+  model_path_env: MODEL_PATH
+  mmproj_path_env: MMPROJ_PATH
+  wsl_script: scripts/wsl/run_minicpmv46_llama.sh
+  jetson_script: scripts/jetson/run_minicpmv46_llama_docker.sh
+
+capabilities:
+  text: true
+  image: true
+  audio: false
+
+notes:
+  status: llama.cpp documents conversion from the official Hugging Face checkpoint to separate text GGUF and mmproj GGUF. This config does not assume a prebuilt public GGUF repository.

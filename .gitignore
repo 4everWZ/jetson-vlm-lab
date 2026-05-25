@@ -14,7 +14,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-models/
+/models/
 *.gguf
 *.safetensors
 *.bin
