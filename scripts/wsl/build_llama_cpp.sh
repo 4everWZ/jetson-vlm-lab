@@ -40,10 +40,13 @@ fi
 cmake_args=(-B "${build_dir}" -S "${llama_cpp_dir}" "-DCMAKE_BUILD_TYPE=${build_type}")
 
 if [[ "${enable_cuda}" == "auto" ]]; then
-  if command -v nvcc >/dev/null 2>&1 || command -v nvidia-smi >/dev/null 2>&1; then
+  if command -v nvcc >/dev/null 2>&1; then
     enable_cuda="1"
   else
     enable_cuda="0"
+    if command -v nvidia-smi >/dev/null 2>&1; then
+      echo "nvidia-smi is visible, but nvcc is not. Building CPU-only; set ENABLE_CUDA=1 after installing the CUDA toolkit." >&2
+    fi
   fi
 fi
 
@@ -61,8 +64,8 @@ printf '  %q' cmake "${cmake_args[@]}"
 echo
 cmake "${cmake_args[@]}"
 
-echo "Building llama-server, llama-cli, and llama-mtmd-cli"
+echo "Building llama-server, llama-cli, llama-mtmd-cli, and llama-quantize"
 cmake --build "${build_dir}" --config "${build_type}" -j "${build_jobs}" \
-  --target llama-server llama-cli llama-mtmd-cli
+  --target llama-server llama-cli llama-mtmd-cli llama-quantize
 
 echo "Built binaries under ${build_dir}/bin"
