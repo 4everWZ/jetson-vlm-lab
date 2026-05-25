@@ -49,4 +49,4 @@ outputs/*.jsonl benchmark records
 
 ## Final Acceptance Status
 
-Partially implemented. The scaffold, scripts, configs, tests, docs, and Gemma Q8_0 local artifacts exist. Real WSL inference requires a passing server smoke test; Jetson inference remains unverified.
+Partially implemented. The scaffold, scripts, configs, tests, docs, and Gemma Q8_0 local artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU-only llama.cpp build with low-memory settings. Image requests, MiniCPM-V 4.6 conversion/runtime, Jetson inference, and performance remain unverified.

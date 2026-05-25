@@ -12,10 +12,11 @@
 - WSL 能看到 `nvidia-smi`，但没有 `nvcc`，所以当前实测 llama.cpp 构建不是 CUDA 构建。
 - Gemma BF16 GGUF 源文件已经下载过，但 BF16 到 Q4_K_M 的本地量化被 WSL 内存压力杀掉；不完整 Q4 文件已经清理。
 - 低内存 Gemma 主线改为官方已量化 Q8_0 GGUF：`scripts/wsl/prepare_gemma4_e2b_q8.sh`。当前工作区里，Q8_0 model 和 Q8_0 mmproj 文件已经在被 Git 忽略的 `models/` 目录下。
+- Gemma Q8_0 text-only smoke 已经在本地 CPU-only llama.cpp 构建上通过，参数是 `CTX_SIZE=512`、`N_GPU_LAYERS=0`、`LLAMA_THREADS=2`、单 server slot、关闭 warmup。这只是功能烟测，不是性能结论。
 - MiniCPM-V 4.6 仍然是本地转换路线，需要在当前 llama.cpp 版本上实际跑完转换和请求后，才能声明可用。
 - Jetson 推理还没有在本仓库中实测完成。
 
-`full access` 不能降低模型量化的峰值内存。对于内存有限的 WSL，更合理的办法是用已量化 GGUF、缩小 context、CPU-only smoke test、单 server slot，而不是反复尝试 BF16->Q4。
+`full access` 不能降低模型量化的峰值内存。对于内存有限的 WSL，更合理的办法是用已量化 GGUF、缩小 context、CPU-only smoke test、单 server slot，而不是反复尝试 BF16->Q4。除非换到更大的机器，否则不要在这里重试本地 BF16-to-Q4 量化。
 
 ## 目录结构
 
@@ -65,8 +66,14 @@ scripts/wsl/prepare_gemma4_e2b_q8.sh
 ```bash
 MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q8_0.gguf \
 MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf \
-CTX_SIZE=1024 \
+CTX_SIZE=512 \
 N_GPU_LAYERS=0 \
+LLAMA_THREADS=2 \
+LLAMA_THREADS_BATCH=2 \
+LLAMA_BATCH_SIZE=128 \
+LLAMA_UBATCH_SIZE=32 \
+LLAMA_PARALLEL=1 \
+LLAMA_SERVER_EXTRA_ARGS='--no-ui --no-warmup' \
 scripts/wsl/run_gemma4_e2b_llama.sh
 ```
 

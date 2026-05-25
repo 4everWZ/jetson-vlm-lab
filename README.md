@@ -12,10 +12,11 @@ The repository is organized so development, reference inspection, client code, b
 - WSL sees `nvidia-smi`, but `nvcc` is not installed, so the observed local llama.cpp build is CPU-only.
 - Gemma BF16 GGUF source files were downloaded, but BF16 to Q4_K_M quantization was killed by WSL memory pressure. The incomplete Q4 output was removed.
 - The low-memory Gemma path is official pre-quantized Q8_0 GGUF, prepared by `scripts/wsl/prepare_gemma4_e2b_q8.sh`. In this workspace, the Q8_0 model and Q8_0 mmproj files are present under ignored `models/` storage.
+- Gemma Q8_0 text-only smoke passed on the local CPU-only llama.cpp build with `CTX_SIZE=512`, `N_GPU_LAYERS=0`, `LLAMA_THREADS=2`, one server slot, and no warmup. This is a functional smoke test, not a performance claim.
 - MiniCPM-V 4.6 preparation is still a local conversion path and must be verified on the exact llama.cpp revision before claiming runtime support.
 - Jetson inference is not yet observed in this repository.
 
-Full filesystem access does not reduce model quantization peak memory. For constrained WSL, prefer already-quantized GGUF files, smaller context, CPU-only smoke tests, and one server slot.
+Full filesystem access does not reduce model quantization peak memory. For constrained WSL, prefer already-quantized GGUF files, smaller context, CPU-only smoke tests, and one server slot. Do not retry local BF16-to-Q4 quantization here unless a larger machine is available.
 
 ## Layout
 
@@ -65,8 +66,14 @@ Start a conservative WSL server after the files exist:
 ```bash
 MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q8_0.gguf \
 MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf \
-CTX_SIZE=1024 \
+CTX_SIZE=512 \
 N_GPU_LAYERS=0 \
+LLAMA_THREADS=2 \
+LLAMA_THREADS_BATCH=2 \
+LLAMA_BATCH_SIZE=128 \
+LLAMA_UBATCH_SIZE=32 \
+LLAMA_PARALLEL=1 \
+LLAMA_SERVER_EXTRA_ARGS='--no-ui --no-warmup' \
 scripts/wsl/run_gemma4_e2b_llama.sh
 ```
 

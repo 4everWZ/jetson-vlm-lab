@@ -55,5 +55,5 @@ Gemma 4 E2B-it Q8_0 local artifacts:
   MMPROJ_PATH=${model_dir}/${mmproj_file}
 
 Suggested low-memory WSL launch:
-  MODEL_PATH=${model_dir}/${model_file} MMPROJ_PATH=${model_dir}/${mmproj_file} CTX_SIZE=1024 N_GPU_LAYERS=0 LLAMA_SERVER_EXTRA_ARGS='--threads 4 --threads-batch 4 --parallel 1 --batch-size 256 --ubatch-size 64 --cache-type-k q8_0 --cache-type-v q8_0' scripts/wsl/run_gemma4_e2b_llama.sh
+  MODEL_PATH=${model_dir}/${model_file} MMPROJ_PATH=${model_dir}/${mmproj_file} CTX_SIZE=512 N_GPU_LAYERS=0 LLAMA_THREADS=2 LLAMA_THREADS_BATCH=2 LLAMA_BATCH_SIZE=128 LLAMA_UBATCH_SIZE=32 LLAMA_PARALLEL=1 LLAMA_SERVER_EXTRA_ARGS='--no-ui --no-warmup' scripts/wsl/run_gemma4_e2b_llama.sh
 EOF

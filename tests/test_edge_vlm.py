@@ -15,6 +15,20 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(config["model"]["quantization"], "Q8_0")
         self.assertTrue(config["capabilities"]["image"])
 
+    def test_gemma_q8_wsl_defaults_stay_within_observed_low_memory_smoke_path(self):
+        from edge_vlm.config import load_model_config
+
+        config = load_model_config("configs/models/gemma4_e2b_q8.yaml")
+        launch_script = Path("scripts/wsl/run_gemma4_e2b_llama.sh").read_text(encoding="utf-8")
+
+        self.assertEqual(config["runtime"]["ctx_size"], 512)
+        self.assertEqual(config["runtime"]["n_gpu_layers"], 0)
+        self.assertIn('ctx_size="${CTX_SIZE:-512}"', launch_script)
+        self.assertIn('llama_threads="${LLAMA_THREADS:-2}"', launch_script)
+        self.assertIn('llama_parallel="${LLAMA_PARALLEL:-1}"', launch_script)
+        self.assertIn('llama_batch_size="${LLAMA_BATCH_SIZE:-128}"', launch_script)
+        self.assertIn('llama_ubatch_size="${LLAMA_UBATCH_SIZE:-32}"', launch_script)
+
     def test_image_payload_uses_data_url_content_part(self):
         from edge_vlm.image_payload import build_user_content
 

@@ -12,7 +12,7 @@ server:
 
 runtime:
   launch_mode: local_gguf_with_mmproj
-  ctx_size: 1024
+  ctx_size: 512
   n_gpu_layers: 0
   model_path_env: MODEL_PATH
   mmproj_path_env: MMPROJ_PATH
@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: Low-memory WSL baseline. Uses official pre-quantized Q8_0 GGUF artifacts instead of local BF16-to-Q4 quantization.
+  status: Low-memory WSL baseline. Text-only CPU smoke has passed with ctx_size 512, N_GPU_LAYERS 0, one server slot, and official pre-quantized Q8_0 GGUF artifacts. Image and Jetson runs remain unverified.
