@@ -22,7 +22,7 @@
 | llama.cpp CUDA build | 已在本地 `tmp/llama.cpp/build-cuda` 验证，使用 `GGML_CUDA=ON`、`CMAKE_CUDA_ARCHITECTURES=86` 和 `BUILD_JOBS=8`。 |
 | WSL GPU 可见性 | `nvcc` 可用。full access 下 `nvidia-smi` 能看到 RTX 3060 Laptop GPU；沙箱命令可能看不到 NVML。 |
 | Gemma 4 E2B-it | 官方已量化 Q8_0 model 和 mmproj 文件已在被 Git 忽略的 `models/` 存储里。 |
-| Gemma Q8 WSL CUDA smoke | 文本和样例图 benchmark 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、`LLAMA_BATCH_SIZE=512`、`LLAMA_UBATCH_SIZE=512`、单 server slot、`VLM_SERVER_PORT=18081`。真实运行写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-ub512.jsonl` 和 `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-real.jsonl`。 |
+| Gemma Q8 WSL CUDA smoke | 文本和样例图 benchmark 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、`LLAMA_BATCH_SIZE=512`、`LLAMA_UBATCH_SIZE=512`、单 server slot、`VLM_SERVER_PORT=18081`。wrapper 默认参数真实运行写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` 和 `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`。 |
 | Gemma BF16 到 Q4 | 不作为这台 WSL 的 baseline；本地量化曾被内存压力 kill。用已量化 GGUF 或更大的转换机器。 |
 | MiniCPM-V 4.6 | metadata-only 检查已通过；本地转换和运行仍未验证。 |
 | Jetson runtime | 脚本和文档已准备，但本仓库还没有实测 Jetson 推理。 |

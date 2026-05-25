@@ -22,7 +22,7 @@ The repository keeps development, reference inspection, client code, benchmark h
 | llama.cpp CUDA build | Verified locally under `tmp/llama.cpp/build-cuda` with `GGML_CUDA=ON`, `CMAKE_CUDA_ARCHITECTURES=86`, and `BUILD_JOBS=8`. |
 | WSL GPU visibility | `nvcc` is available. `nvidia-smi` works with full access and shows an RTX 3060 Laptop GPU; sandboxed commands may not see NVML. |
 | Gemma 4 E2B-it | Official pre-quantized Q8_0 model and mmproj files are present under ignored `models/` storage. |
-| Gemma Q8 WSL CUDA smoke | Text and sample-image benchmark passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, one server slot, and `VLM_SERVER_PORT=18081`. The real run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-ub512.jsonl` and `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-real.jsonl`. |
+| Gemma Q8 WSL CUDA smoke | Text and sample-image benchmark passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, one server slot, and `VLM_SERVER_PORT=18081`. The wrapper-default real run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` and `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`. |
 | Gemma BF16 to Q4 | Not a WSL baseline here; local quantization was killed by memory pressure. Use pre-quantized GGUF or a larger conversion host. |
 | MiniCPM-V 4.6 | Metadata-only inspection passed; local conversion and runtime are still unverified. |
 | Jetson runtime | Scripted and documented, but not yet observed in this repository. |
