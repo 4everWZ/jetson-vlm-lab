@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,11 @@ def _iter_images(image_dir: Path) -> list[Path]:
     if not image_dir.exists():
         raise FileNotFoundError(f"image directory not found: {image_dir}")
     return sorted(path for path in image_dir.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES)
+
+
+def _wall_time_pair_from_latency(started_wall: datetime, latency_s: float) -> tuple[str, str]:
+    ended_wall = started_wall + timedelta(seconds=latency_s)
+    return started_wall.isoformat(), ended_wall.isoformat()
 
 
 def run_fake_stream(
@@ -47,7 +52,7 @@ def run_fake_stream(
     count = 0
     with output.open("a", encoding="utf-8") as handle:
         for index, frame in enumerate(frames):
-            started = datetime.now(timezone.utc).isoformat()
+            started_wall = datetime.now(timezone.utc)
             try:
                 result = client.complete(
                     prompt=prompt,
@@ -57,7 +62,7 @@ def run_fake_stream(
                     dry_run=dry_run,
                 )
             except (FileNotFoundError, ValueError, OSError) as exc:
-                ended = datetime.now(timezone.utc).isoformat()
+                started, ended = _wall_time_pair_from_latency(started_wall, 0.0)
                 record: dict[str, Any] = {
                     "frame_index": index,
                     "frame_id": frame.name,
@@ -77,7 +82,7 @@ def run_fake_stream(
                 if interval_s > 0 and index < len(frames) - 1:
                     time.sleep(interval_s)
                 continue
-            ended = datetime.now(timezone.utc).isoformat()
+            started, ended = _wall_time_pair_from_latency(started_wall, result.latency_s)
             record: dict[str, Any] = {
                 "frame_index": index,
                 "frame_id": frame.name,

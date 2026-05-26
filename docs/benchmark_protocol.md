@@ -84,21 +84,36 @@ GGML_ASSERT((cparams.causal_attn || cparams.n_ubatch >= n_tokens_all) && "non-ca
 
 Keep the Gemma CUDA wrapper's 512 batch/ubatch defaults for image smoke runs unless you are deliberately retesting that boundary.
 
-For MiniCPM-V 4.6, inspect metadata before attempting local conversion on WSL:
+For Gemma Q4, use the downloaded pre-built Q4 artifacts and the Q4 config:
+
+```bash
+MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf \
+MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf \
+MODEL_ALIAS=gemma4-e2b-it-q4 \
+VLM_SERVER_PORT=18083 \
+scripts/wsl/run_gemma4_e2b_llama_cuda.sh
+```
+
+For MiniCPM-V 4.6, inspect the official pre-built GGUF repo metadata without downloading model files:
 
 ```bash
 scripts/wsl/inspect_minicpmv46_hf.sh
 ```
 
-Then provide local converted GGUF files only after a deliberate high-memory preparation run or external conversion:
+Then download the official pre-built Q4_K_M model and F16 mmproj files:
 
 ```bash
-MODEL_PATH=/path/to/ggml-model-Q4_K_M.gguf \
-MMPROJ_PATH=/path/to/mmproj-model-f16.gguf \
-CTX_SIZE=512 \
-N_GPU_LAYERS=32 \
+scripts/wsl/prepare_minicpmv46_q4.sh
+```
+
+Start MiniCPM-V 4.6 from the default downloaded paths:
+
+```bash
+VLM_SERVER_PORT=18082 \
 scripts/wsl/run_minicpmv46_llama_cuda.sh
 ```
+
+Observed WSL CUDA smoke for MiniCPM-V 4.6 Q4 used `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=128`, `LLAMA_UBATCH_SIZE=32`, one server slot, and `VLM_SERVER_PORT=18082`. The benchmark harness recorded three successful text cases, two successful sample-image cases, and the fake-stream marker case. A real fake-stream run against `data/sample_stream/` also succeeded with one frame.
 
 ## Fake Stream Run
 

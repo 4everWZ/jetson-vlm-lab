@@ -2,7 +2,7 @@ model:
   name: minicpmv46-q4
   family: MiniCPM-V 4.6
   backend: llama.cpp
-  model_ref: openbmb/MiniCPM-V-4_6
+  model_ref: openbmb/MiniCPM-V-4.6-gguf
   quantization: Q4_K_M
 
 server:
@@ -11,7 +11,7 @@ server:
   port: 8080
 
 runtime:
-  launch_mode: local_gguf_with_mmproj
+  launch_mode: prequantized_gguf_with_mmproj
   ctx_size: 512
   n_gpu_layers: 0
   model_path_env: MODEL_PATH
@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: Unverified low-memory WSL template. Metadata-only inspection found 2.44 GiB of known HF files, model.safetensors at 2600957528 bytes, and local llama.cpp MiniCPM-V 4.6 conversion signals, but local conversion/runtime has not been observed in this repository.
+  status: Uses pre-built Q4_K_M GGUF model and F16 mmproj artifacts from openbmb/MiniCPM-V-4.6-gguf. WSL CUDA text and sample-image benchmark passed with ctx_size 512, N_GPU_LAYERS 32, LLAMA_BATCH_SIZE 128, LLAMA_UBATCH_SIZE 32, and one server slot after using the official pre-built files. Jetson runtime remains unverified.

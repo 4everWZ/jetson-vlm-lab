@@ -11,8 +11,10 @@ ctx_size="${CTX_SIZE:-512}"
 n_gpu_layers="${N_GPU_LAYERS:-0}"
 model_alias="${MODEL_ALIAS:-minicpmv46-q4}"
 model_ref="${MODEL_REF:-}"
-model_path="${MODEL_PATH:-${MINICPMV_GGUF_MODEL:-}}"
-mmproj_path="${MMPROJ_PATH:-${MINICPMV_MMPROJ:-}}"
+default_model_path="${repo_root}/models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf"
+default_mmproj_path="${repo_root}/models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf"
+model_path="${MODEL_PATH:-${MINICPMV_GGUF_MODEL:-${default_model_path}}}"
+mmproj_path="${MMPROJ_PATH:-${MINICPMV_MMPROJ:-${default_mmproj_path}}}"
 llama_threads="${LLAMA_THREADS:-2}"
 llama_threads_batch="${LLAMA_THREADS_BATCH:-${llama_threads}}"
 llama_parallel="${LLAMA_PARALLEL:-1}"
@@ -35,15 +37,14 @@ else
   if [[ -z "${model_path}" || -z "${mmproj_path}" ]]; then
     cat >&2 <<EOF
 MiniCPM-V 4.6 requires either:
-  MODEL_REF=<verified GGUF repo> scripts/wsl/run_minicpmv46_llama.sh
+  scripts/wsl/prepare_minicpmv46_q4.sh
 
-or local converted files:
-  MODEL_PATH=/path/to/ggml-model-Q4_K_M.gguf \\
+or explicitly supplied local GGUF files:
+  MODEL_PATH=/path/to/MiniCPM-V-4_6-Q4_K_M.gguf \\
   MMPROJ_PATH=/path/to/mmproj-model-f16.gguf \\
   scripts/wsl/run_minicpmv46_llama.sh
 
-llama.cpp documents MiniCPM-V 4.6 conversion from openbmb/MiniCPM-V-4_6;
-this project does not assume a prebuilt GGUF repo is available.
+The default files are downloaded from openbmb/MiniCPM-V-4.6-gguf.
 EOF
     exit 2
   fi

@@ -3,6 +3,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -65,24 +66,31 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn('LLAMA_UBATCH_SIZE="${LLAMA_UBATCH_SIZE:-32}"', minicpm_cuda_script)
         self.assertIn('scripts/wsl/run_minicpmv46_llama.sh', minicpm_cuda_script)
 
-    def test_minicpm_prepare_requires_explicit_high_memory_confirmation(self):
+    def test_minicpm_prepare_downloads_official_prebuilt_artifacts(self):
         prepare_script = Path("scripts/wsl/prepare_minicpmv46_q4.sh").read_text(encoding="utf-8")
+        config_text = Path("configs/models/minicpmv46_q4.yaml").read_text(encoding="utf-8")
 
-        self.assertIn("ALLOW_MINICPM_FULL_PREPARE", prepare_script)
-        self.assertIn("MiniCPM-V 4.6 full preparation is disabled by default", prepare_script)
-        self.assertIn("scripts/wsl/inspect_minicpmv46_hf.sh", prepare_script)
+        self.assertIn("openbmb/MiniCPM-V-4.6-gguf", prepare_script)
+        self.assertIn("MiniCPM-V-4_6-Q4_K_M.gguf", prepare_script)
+        self.assertIn("mmproj-model-f16.gguf", prepare_script)
+        self.assertIn("hf_hub_download", prepare_script)
+        self.assertNotIn("ALLOW_MINICPM_FULL_PREPARE", prepare_script)
+        self.assertNotIn("convert_hf_to_gguf", prepare_script)
+        self.assertNotIn("llama-quantize", prepare_script)
+        self.assertIn("prequantized_gguf", config_text)
 
     def test_minicpm_inspection_script_does_not_download_model_files(self):
         inspect_script = Path("scripts/wsl/inspect_minicpmv46_hf.sh").read_text(encoding="utf-8")
 
         self.assertIn("model_info", inspect_script)
         self.assertIn("files_metadata=True", inspect_script)
-        self.assertIn("MiniCPMV4_6ForConditionalGeneration", inspect_script)
-        self.assertIn("MINICPMV4_6", inspect_script)
+        self.assertIn("openbmb/MiniCPM-V-4.6-gguf", inspect_script)
+        self.assertIn("scripts/wsl/prepare_minicpmv46_q4.sh", inspect_script)
         self.assertNotIn("snapshot_download", inspect_script)
         self.assertNotIn("hf_hub_download", inspect_script)
+        self.assertNotIn("convert_hf_to_gguf", inspect_script)
 
-    def test_minicpm_config_uses_conservative_unverified_wsl_defaults(self):
+    def test_minicpm_config_uses_prebuilt_wsl_defaults(self):
         from edge_vlm.config import load_model_config
 
         config = load_model_config("configs/models/minicpmv46_q4.yaml")
@@ -95,7 +103,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn('llama_parallel="${LLAMA_PARALLEL:-1}"', launch_script)
         self.assertIn('llama_batch_size="${LLAMA_BATCH_SIZE:-128}"', launch_script)
         self.assertIn('llama_ubatch_size="${LLAMA_UBATCH_SIZE:-32}"', launch_script)
-        self.assertIn("unverified", config["notes"]["status"].lower())
+        self.assertIn("pre-built", config["notes"]["status"].lower())
 
     def test_image_payload_uses_data_url_content_part(self):
         from edge_vlm.image_payload import build_user_content
@@ -184,6 +192,72 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(record["success"], True)
         self.assertEqual(record["device"], "wsl")
         self.assertIsInstance(record["latency_s"], float)
+
+    def test_benchmark_end_time_follows_monotonic_latency_when_wall_clock_moves_backward(self):
+        from edge_vlm.benchmark import run_benchmark
+        from edge_vlm.client import CompletionResult
+
+        class FakeClient:
+            def complete(self, **_kwargs):
+                return CompletionResult(
+                    ok=True,
+                    text="ok",
+                    error=None,
+                    latency_s=0.01,
+                    request={"model": "local-model"},
+                    response={"usage": {"completion_tokens": 1}},
+                )
+
+        class BackwardClock:
+            calls = [
+                datetime(2026, 5, 26, 8, 2, 59, 800000, tzinfo=timezone.utc),
+                datetime(2026, 5, 26, 8, 2, 59, 100000, tzinfo=timezone.utc),
+            ]
+
+            @classmethod
+            def now(cls, tz=None):
+                value = cls.calls.pop(0)
+                if tz is not None:
+                    return value.astimezone(tz)
+                return value
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            cases = tmp_path / "cases.jsonl"
+            output = tmp_path / "bench.jsonl"
+            cases.write_text(
+                json.dumps({"id": "text_case", "input_type": "text", "prompt": "Say hi."}) + "\n",
+                encoding="utf-8",
+            )
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  image: false",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("edge_vlm.benchmark.OpenAICompatClient.from_config", return_value=FakeClient()):
+                with patch("edge_vlm.benchmark.datetime", BackwardClock):
+                    with patch("edge_vlm.benchmark.time.perf_counter", side_effect=[10.0, 10.5]):
+                        count = run_benchmark(config_path=config, cases_path=cases, output_path=output, dry_run=True)
+
+            record = json.loads(output.read_text(encoding="utf-8").strip())
+
+        self.assertEqual(count, 1)
+        start = datetime.fromisoformat(record["start_time"])
+        end = datetime.fromisoformat(record["end_time"])
+        self.assertEqual(record["latency_s"], 0.5)
+        self.assertGreaterEqual(end, start)
+        self.assertEqual(end, start + timedelta(seconds=0.5))
 
     def test_benchmark_logs_missing_image_case_without_crashing(self):
         from edge_vlm.benchmark import run_benchmark
@@ -404,8 +478,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("docker run", result.stdout)
-        self.assertIn("-m /models/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf", result.stdout)
-        self.assertIn("--mmproj /models/MiniCPM-V-4_6/mmproj-model-f16.gguf", result.stdout)
+        self.assertIn("-m /models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf", result.stdout)
+        self.assertIn("--mmproj /models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf", result.stdout)
 
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
@@ -449,6 +523,75 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(record["frame_id"], "001.jpg")
         self.assertEqual(record["success"], True)
         self.assertIn("dry run", record["output_excerpt"])
+
+    def test_fake_stream_end_time_follows_client_latency_when_wall_clock_moves_backward(self):
+        from edge_vlm.client import CompletionResult
+        from edge_vlm.fake_stream import run_fake_stream
+
+        class FakeClient:
+            def complete(self, **_kwargs):
+                return CompletionResult(
+                    ok=True,
+                    text="frame ok",
+                    request={},
+                    response={"dry_run": True},
+                    latency_s=0.25,
+                )
+
+        class BackwardClock:
+            calls = [
+                datetime(2026, 5, 26, 8, 2, 59, 800000, tzinfo=timezone.utc),
+                datetime(2026, 5, 26, 8, 2, 59, 100000, tzinfo=timezone.utc),
+            ]
+
+            @classmethod
+            def now(cls, tz=None):
+                value = cls.calls.pop(0)
+                if tz is not None:
+                    return value.astimezone(tz)
+                return value
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            image_dir = tmp_path / "frames"
+            image_dir.mkdir()
+            (image_dir / "001.jpg").write_bytes(b"\xff\xd8\xff\xd9")
+            output = tmp_path / "stream.jsonl"
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  image: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("edge_vlm.fake_stream.OpenAICompatClient.from_config", return_value=FakeClient()):
+                with patch("edge_vlm.fake_stream.datetime", BackwardClock):
+                    count = run_fake_stream(
+                        config_path=config,
+                        image_dir=image_dir,
+                        output_path=output,
+                        prompt="Describe this frame.",
+                        interval_s=0,
+                        max_frames=1,
+                    )
+
+            record = json.loads(output.read_text(encoding="utf-8").strip())
+
+        self.assertEqual(count, 1)
+        start = datetime.fromisoformat(record["start_time"])
+        end = datetime.fromisoformat(record["end_time"])
+        self.assertEqual(record["latency_s"], 0.25)
+        self.assertGreaterEqual(end, start)
+        self.assertEqual(end, start + timedelta(seconds=0.25))
 
     def test_fake_stream_continues_after_individual_frame_failure(self):
         from edge_vlm.client import CompletionResult

@@ -22,12 +22,12 @@ The default path is deliberately practical: download pre-built GGUF artifacts, s
 | llama.cpp CUDA build | Verified locally under `tmp/llama.cpp/build-cuda` with `GGML_CUDA=ON`, `CMAKE_CUDA_ARCHITECTURES=86`, and `BUILD_JOBS=8`. |
 | WSL GPU visibility | `nvcc` is available. `nvidia-smi` works with full access and shows an RTX 3060 Laptop GPU; sandboxed commands may not see NVML. |
 | Gemma 4 E2B-it Q8 | Official pre-quantized Q8_0 model and mmproj files are present under ignored `models/` storage. |
-| Gemma 4 E2B-it Q4 | Uses pre-built `Q4_K_M` GGUF from `mradermacher/gemma-4-E2B-it-GGUF`; do not quantize locally on this WSL host. |
+| Gemma 4 E2B-it Q4 | Uses pre-built `Q4_K_M` GGUF from `mradermacher/gemma-4-E2B-it-GGUF`. WSL CUDA text, sample-image benchmark, and one-frame fake-stream checks passed with `VLM_SERVER_PORT=18083`. |
 | Gemma Q8 WSL CUDA smoke | Text and sample-image benchmark passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, one server slot, and `VLM_SERVER_PORT=18081`. The wrapper-default real run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` and `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`. |
-| MiniCPM-V 4.6 | Metadata inspection and local artifact preparation have run in this workspace, but runtime still needs a real request before it is called supported. |
+| MiniCPM-V 4.6 | Official pre-built `Q4_K_M` model and F16 mmproj files from `openbmb/MiniCPM-V-4.6-gguf` are downloaded under ignored `models/` storage. WSL CUDA text, sample-image benchmark, and one-frame fake-stream checks passed with `VLM_SERVER_PORT=18082`. |
 | Jetson runtime | Scripted and documented, but not yet observed in this repository. |
 
-Do not treat dry runs or server startup as performance results. Performance claims need real benchmark JSONL from a running model/server. The current CUDA smoke validates Gemma Q8 text and committed sample-image inference on WSL only; it does not validate Gemma Q4, MiniCPM-V 4.6, Jetson runtime, or broad performance.
+Do not treat dry runs or server startup as performance results. Performance claims need real benchmark JSONL from a running model/server. The current observed runtime support covers Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 on WSL CUDA only; it does not validate Jetson runtime or broad performance.
 
 ## Repository Layout
 
@@ -64,11 +64,12 @@ cd /home/lawrence/code/pythonCurriculum/jetson/jetson-vlm-lab
 PYTHONPATH=src conda run -n transformers python -m unittest discover -s tests -v
 ```
 
-Download pre-built Gemma artifacts. Use Q8 for the already verified WSL CUDA baseline, or Q4 when memory/storage pressure matters:
+Download pre-built model artifacts. Use Gemma Q8 for the already verified WSL CUDA baseline, Gemma Q4 when memory/storage pressure matters, and MiniCPM Q4 for the verified smaller WSL CUDA VLM path:
 
 ```bash
 scripts/wsl/prepare_gemma4_e2b_q8.sh
 scripts/wsl/prepare_gemma4_e2b_q4.sh
+scripts/wsl/prepare_minicpmv46_q4.sh
 ```
 
 Build llama.cpp if the local build directories are missing:
@@ -199,27 +200,44 @@ When running Q4, use `configs/models/gemma4_e2b_q4.yaml` for benchmark records.
 
 ## MiniCPM-V 4.6
 
-Start with metadata inspection. This does not download weights:
+Inspect the official pre-built GGUF repo without downloading weights:
 
 ```bash
 scripts/wsl/inspect_minicpmv46_hf.sh
 ```
 
-Full local preparation remains guarded because it downloads the HF checkpoint, creates F16 GGUF, and quantizes to Q4_K_M. Do not run this on the memory-constrained WSL host unless you deliberately accept the resource cost:
+Download the official pre-built Q4_K_M model and F16 mmproj files:
 
 ```bash
-ALLOW_MINICPM_FULL_PREPARE=1 scripts/wsl/prepare_minicpmv46_q4.sh
+scripts/wsl/prepare_minicpmv46_q4.sh
 ```
 
-Run only after converted model and mmproj files exist:
+Downloads:
+
+- `models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf`
+- `models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf`
+
+Run the WSL CUDA path after the files exist:
 
 ```bash
-MODEL_PATH=$PWD/models/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf \
-MMPROJ_PATH=$PWD/models/MiniCPM-V-4_6/mmproj-model-f16.gguf \
+VLM_SERVER_PORT=18082 \
 scripts/wsl/run_minicpmv46_llama_cuda.sh
 ```
 
-MiniCPM-V 4.6 remains unverified until conversion completes on the selected llama.cpp revision and a real request succeeds.
+Then benchmark it:
+
+```bash
+VLM_SERVER_PORT=18082 scripts/common/check_server.sh
+PYTHONPATH=src VLM_SERVER_PORT=18082 conda run -n transformers python -m edge_vlm.benchmark \
+  --config configs/models/minicpmv46_q4.yaml \
+  --cases configs/benchmark/prompt_cases.jsonl \
+  --output outputs/benchmarks/minicpmv46-q4-wsl-cuda.jsonl \
+  --summary-output outputs/benchmarks/minicpmv46-q4-wsl-cuda.md \
+  --max-tokens 64 \
+  --temperature 0
+```
+
+The WSL CUDA smoke has passed for text, committed sample images, and one fake-stream frame. Jetson runtime remains unverified.
 
 ## Fake Stream
 

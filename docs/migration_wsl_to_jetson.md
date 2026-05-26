@@ -57,14 +57,21 @@ For Gemma 4 E2B-it, use the Q8_0 GGUF model and mmproj files as the first migrat
 /mnt/nvme/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf
 ```
 
-For MiniCPM-V 4.6, pre-place converted files:
+If Jetson memory is tighter, use the pre-built Gemma Q4 files instead:
 
 ```text
-/mnt/nvme/models/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf
-/mnt/nvme/models/MiniCPM-V-4_6/mmproj-model-f16.gguf
+/mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf
+/mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf
 ```
 
-The conversion itself is better done on WSL or another larger Linux machine. Start with `scripts/wsl/inspect_minicpmv46_hf.sh`; only run the full preparation path with `ALLOW_MINICPM_FULL_PREPARE=1` on a machine with enough memory and disk. Jetson should not be the primary conversion/build machine unless there is no alternative.
+For MiniCPM-V 4.6, pre-place the official pre-built GGUF files downloaded by `scripts/wsl/prepare_minicpmv46_q4.sh`:
+
+```text
+/mnt/nvme/models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf
+/mnt/nvme/models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf
+```
+
+Do not use Jetson as the primary conversion or quantization machine. The current WSL workflow uses downloaded GGUF artifacts for Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4.
 
 ## First-Run Checklist
 
@@ -117,7 +124,7 @@ EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
 ## Common Failure Modes
 
 - `docker: unknown runtime nvidia`: NVIDIA container runtime is not configured. Fix Jetson Docker runtime before benchmarking.
-- `Model GGUF not found`: MiniCPM-V local GGUF files are missing or paths do not match `MODEL_DIR`.
+- `Model GGUF not found`: model files are missing or paths do not match `MODEL_DIR`.
 - Server starts but image cases fail: mmproj may be missing, incompatible, or not loaded. Check `/v1/models` capabilities and server logs.
 - Out-of-memory or process killed: lower `CTX_SIZE`, reduce parallelism, close other processes, or use externally prepared lower-bit quantization. Do not run BF16-to-Q4 conversion on a memory-constrained Jetson.
 - Very slow first request: separate cold-start and steady-state measurements. Do not mix model download, load, first image preprocessing, and decode speed into one benchmark claim.

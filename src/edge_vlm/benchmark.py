@@ -8,7 +8,7 @@ import os
 import platform
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -53,6 +53,11 @@ def _usage_tokens(response: dict[str, Any] | None) -> int | None:
         if isinstance(total, int):
             return total
     return None
+
+
+def _wall_time_pair_from_latency(started_wall: datetime, latency_s: float) -> tuple[str, str]:
+    ended_wall = started_wall + timedelta(seconds=latency_s)
+    return started_wall.isoformat(), ended_wall.isoformat()
 
 
 def _build_record(
@@ -178,7 +183,7 @@ def run_benchmark(
                 latency_s = 0.0
                 started_wall = ended_wall = datetime.now(timezone.utc).isoformat()
             else:
-                started_wall = datetime.now(timezone.utc).isoformat()
+                started_wall_dt = datetime.now(timezone.utc)
                 started = time.perf_counter()
                 try:
                     result = client.complete(
@@ -190,16 +195,16 @@ def run_benchmark(
                         dry_run=dry_run,
                     )
                 except (FileNotFoundError, ValueError, OSError) as exc:
-                    ended_wall = datetime.now(timezone.utc).isoformat()
                     latency_s = time.perf_counter() - started
+                    started_wall, ended_wall = _wall_time_pair_from_latency(started_wall_dt, latency_s)
                     result_ok = False
                     output_text = ""
                     error = str(exc)
                     response = None
                     result = None
                 else:
-                    ended_wall = datetime.now(timezone.utc).isoformat()
                     latency_s = time.perf_counter() - started
+                    started_wall, ended_wall = _wall_time_pair_from_latency(started_wall_dt, latency_s)
                     result_ok = result.ok
                     output_text = result.text
                     error = result.error

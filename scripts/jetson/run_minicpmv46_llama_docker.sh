@@ -11,10 +11,10 @@ model_alias="${MODEL_ALIAS:-minicpmv46-q4}"
 docker_gpu_args="${DOCKER_GPU_ARGS:---runtime nvidia}"
 dry_run="${JETSON_DRY_RUN:-0}"
 
-host_model_path="${MODEL_PATH_ON_HOST:-${model_dir}/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf}"
-host_mmproj_path="${MMPROJ_PATH_ON_HOST:-${model_dir}/MiniCPM-V-4_6/mmproj-model-f16.gguf}"
-container_model_path="${MODEL_PATH:-/models/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf}"
-container_mmproj_path="${MMPROJ_PATH:-/models/MiniCPM-V-4_6/mmproj-model-f16.gguf}"
+host_model_path="${MODEL_PATH_ON_HOST:-${model_dir}/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf}"
+host_mmproj_path="${MMPROJ_PATH_ON_HOST:-${model_dir}/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf}"
+container_model_path="${MODEL_PATH:-/models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf}"
+container_mmproj_path="${MMPROJ_PATH:-/models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf}"
 
 read -r -a gpu_args <<< "${docker_gpu_args}"
 

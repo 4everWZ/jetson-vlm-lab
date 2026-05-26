@@ -22,12 +22,12 @@
 | llama.cpp CUDA build | 已在本地 `tmp/llama.cpp/build-cuda` 验证，使用 `GGML_CUDA=ON`、`CMAKE_CUDA_ARCHITECTURES=86` 和 `BUILD_JOBS=8`。 |
 | WSL GPU 可见性 | `nvcc` 可用。full access 下 `nvidia-smi` 能看到 RTX 3060 Laptop GPU；沙箱命令可能看不到 NVML。 |
 | Gemma 4 E2B-it Q8 | 官方已量化 Q8_0 model 和 mmproj 文件已在被 Git 忽略的 `models/` 存储里。 |
-| Gemma 4 E2B-it Q4 | 使用 `mradermacher/gemma-4-E2B-it-GGUF` 的现成 `Q4_K_M` GGUF；这台 WSL 不做本机量化。 |
+| Gemma 4 E2B-it Q4 | 使用 `mradermacher/gemma-4-E2B-it-GGUF` 的现成 `Q4_K_M` GGUF。WSL CUDA 文本、样例图 benchmark 和一帧 fake-stream 已通过，端口为 `VLM_SERVER_PORT=18083`。 |
 | Gemma Q8 WSL CUDA smoke | 文本和样例图 benchmark 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、`LLAMA_BATCH_SIZE=512`、`LLAMA_UBATCH_SIZE=512`、单 server slot、`VLM_SERVER_PORT=18081`。wrapper 默认参数真实运行写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` 和 `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`。 |
-| MiniCPM-V 4.6 | metadata inspection 和本地 artifact preparation 已在这个 workspace 跑过，但 runtime 还需要真实请求成功后才能算支持。 |
+| MiniCPM-V 4.6 | 已下载 `openbmb/MiniCPM-V-4.6-gguf` 的官方现成 `Q4_K_M` model 和 F16 mmproj 文件，存放在被 Git 忽略的 `models/` 目录。WSL CUDA 文本、样例图 benchmark 和一帧 fake-stream 已通过，端口为 `VLM_SERVER_PORT=18082`。 |
 | Jetson runtime | 脚本和文档已准备，但本仓库还没有实测 Jetson 推理。 |
 
-dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前 CUDA smoke 只验证了 WSL 上 Gemma Q8 文本和已提交样例图推理，不验证 Gemma Q4、MiniCPM-V 4.6、Jetson runtime 或泛化性能。
+dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前已观察到的 runtime 支持只覆盖 WSL CUDA 上的 Gemma Q8、Gemma Q4 和 MiniCPM-V 4.6 Q4；不验证 Jetson runtime 或泛化性能。
 
 ## 目录结构
 
@@ -64,11 +64,12 @@ cd /home/lawrence/code/pythonCurriculum/jetson/jetson-vlm-lab
 PYTHONPATH=src conda run -n transformers python -m unittest discover -s tests -v
 ```
 
-下载现成 Gemma artifacts。Q8 是已验证的 WSL CUDA baseline；Q4 用于内存/存储压力更大的情况：
+下载现成模型 artifacts。Gemma Q8 是已验证的 WSL CUDA baseline；Gemma Q4 用于内存/存储压力更大的情况；MiniCPM Q4 是已验证的较小 WSL CUDA VLM 路线：
 
 ```bash
 scripts/wsl/prepare_gemma4_e2b_q8.sh
 scripts/wsl/prepare_gemma4_e2b_q4.sh
+scripts/wsl/prepare_minicpmv46_q4.sh
 ```
 
 如果本地 build 目录不存在，先构建 llama.cpp：
@@ -199,27 +200,44 @@ N_GPU_LAYERS=99 scripts/wsl/run_gemma4_e2b_llama_cuda.sh
 
 ## MiniCPM-V 4.6
 
-先做 metadata inspection，不下载权重：
+先检查官方现成 GGUF repo metadata，不下载权重：
 
 ```bash
 scripts/wsl/inspect_minicpmv46_hf.sh
 ```
 
-完整本地准备流程仍然默认有保护，因为它会下载 HF checkpoint、生成 F16 GGUF、再量化到 Q4_K_M。除非明确接受资源开销，不要在这台内存受限的 WSL 上跑：
+下载官方现成 Q4_K_M model 和 F16 mmproj 文件：
 
 ```bash
-ALLOW_MINICPM_FULL_PREPARE=1 scripts/wsl/prepare_minicpmv46_q4.sh
+scripts/wsl/prepare_minicpmv46_q4.sh
 ```
 
-只有本地转换后的 model 和 mmproj 文件存在后再运行：
+下载文件：
+
+- `models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf`
+- `models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf`
+
+文件存在后运行 WSL CUDA 路线：
 
 ```bash
-MODEL_PATH=$PWD/models/MiniCPM-V-4_6/ggml-model-Q4_K_M.gguf \
-MMPROJ_PATH=$PWD/models/MiniCPM-V-4_6/mmproj-model-f16.gguf \
+VLM_SERVER_PORT=18082 \
 scripts/wsl/run_minicpmv46_llama_cuda.sh
 ```
 
-MiniCPM-V 4.6 仍是未验证路线；只有选定 llama.cpp 版本完成转换且真实请求成功后，才算可用。
+然后跑 benchmark：
+
+```bash
+VLM_SERVER_PORT=18082 scripts/common/check_server.sh
+PYTHONPATH=src VLM_SERVER_PORT=18082 conda run -n transformers python -m edge_vlm.benchmark \
+  --config configs/models/minicpmv46_q4.yaml \
+  --cases configs/benchmark/prompt_cases.jsonl \
+  --output outputs/benchmarks/minicpmv46-q4-wsl-cuda.jsonl \
+  --summary-output outputs/benchmarks/minicpmv46-q4-wsl-cuda.md \
+  --max-tokens 64 \
+  --temperature 0
+```
+
+WSL CUDA smoke 已通过文本、已提交样例图和一帧 fake-stream。Jetson runtime 仍未实测。
 
 ## Fake Stream
 

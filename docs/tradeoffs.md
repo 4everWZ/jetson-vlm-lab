@@ -8,13 +8,13 @@ Reason: the repository started empty and the user asked not to install dependenc
 
 Consequence: streaming support is minimal and only handles basic SSE `data:` chunks. If later work needs richer OpenAI API compatibility, add a project dependency file and document the target environment.
 
-## TRD-002: MiniCPM-V 4.6 Defaults To Local GGUF Plus MMPROJ
+## TRD-002: MiniCPM-V 4.6 Uses Official Pre-Built GGUF Plus MMPROJ
 
-Decision: Gemma uses a documented `-hf` GGUF repo default, while MiniCPM-V 4.6 defaults to local `MODEL_PATH` and `MMPROJ_PATH`.
+Decision: MiniCPM-V 4.6 uses the official `openbmb/MiniCPM-V-4.6-gguf` repository for the default Q4_K_M model and F16 mmproj artifacts.
 
-Reason: llama.cpp documents MiniCPM-V 4.6 conversion from the official HF checkpoint into separate language-model and mmproj GGUF files. Assuming a public prebuilt GGUF repo would be less defensible than requiring explicit local paths or a user-supplied `MODEL_REF`.
+Reason: a public official pre-built GGUF repository is available and avoids using this memory-constrained WSL host as a conversion or quantization machine.
 
-Consequence: the MiniCPM-V launcher needs model conversion or staged files before it runs.
+Consequence: `scripts/wsl/prepare_minicpmv46_q4.sh` downloads `MiniCPM-V-4_6-Q4_K_M.gguf` and `mmproj-model-f16.gguf`, while the WSL and Jetson launchers default to the same staged file layout.
 
 ## TRD-003: Docker-First Jetson Scripts
 
@@ -32,10 +32,10 @@ Reason: local BF16-to-Q4 quantization was observed to be killed on this WSL host
 
 Consequence: `scripts/wsl/prepare_gemma4_e2b_q8.sh` downloads `ggml-org/gemma-4-E2B-it-GGUF` Q8_0 artifacts, and `scripts/wsl/prepare_gemma4_e2b_q4.sh` downloads `mradermacher/gemma-4-E2B-it-GGUF` Q4_K_M artifacts. Gemma local quantization is not a WSL acceptance path on this machine.
 
-## TRD-005: MiniCPM Full Preparation Requires Explicit Opt-In
+## TRD-005: Local MiniCPM Conversion Is Not A Baseline Path
 
-Decision: keep MiniCPM-V 4.6 full HF download, F16 GGUF conversion, and Q4 quantization behind `ALLOW_MINICPM_FULL_PREPARE=1`.
+Decision: do not expose MiniCPM-V 4.6 HF checkpoint download, F16 GGUF conversion, or local Q4 quantization as the repository's default preparation path.
 
-Reason: the previous WSL OOM shows this host should not treat large model conversion or quantization as a safe default. Metadata inspection can still validate repository file sizes and llama.cpp conversion-script signals without downloading weights.
+Reason: local conversion/quantization is unnecessary now that official pre-built GGUF artifacts are available, and the user explicitly stopped local quantization because this WSL host is memory constrained.
 
-Consequence: `scripts/wsl/inspect_minicpmv46_hf.sh` is the default MiniCPM feasibility step. `scripts/wsl/prepare_minicpmv46_q4.sh` remains available only for a larger conversion machine or a deliberately accepted high-memory run.
+Consequence: old local-conversion artifacts are treated as residue and were removed from ignored `models/` storage. `scripts/wsl/inspect_minicpmv46_hf.sh` inspects the official pre-built GGUF repo, and `scripts/wsl/prepare_minicpmv46_q4.sh` downloads existing artifacts only.
