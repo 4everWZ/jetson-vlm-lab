@@ -52,7 +52,7 @@ optional Markdown summary
 - No performance claim is valid until a real model/server run completes.
 - No Jetson support claim is valid until the Jetson Docker/runtime path is observed.
 - MiniCPM-V 4.6 metadata-only inspection has observed HF file sizes and local llama.cpp conversion signals, but conversion and mmproj runtime compatibility must still be verified on the exact llama.cpp revision used for runtime.
-- Gemma BF16-to-Q4 local quantization is not a WSL acceptance path on this host; use the prepared Q8_0 artifacts or an externally prepared lower-bit artifact.
+- Gemma local quantization is not a WSL acceptance path on this host; use the prepared Q8_0 artifacts or download a pre-built lower-bit GGUF artifact.
 - Gemma Q8 WSL CUDA image requests require the observed `LLAMA_BATCH_SIZE=512` and `LLAMA_UBATCH_SIZE=512` setting on this llama.cpp build; the lower text-only `LLAMA_UBATCH_SIZE=32` setting triggered a non-causal attention assertion.
 
 ## Final Acceptance Status

@@ -1,8 +1,8 @@
 # Jetson VLM Lab
 
-WSL-first edge VLM experimentation workflow for Jetson Orin and Orin Nano class devices.
+WSL-first edge VLM workflow for validating GGUF vision-language models before moving the smallest runtime package to Jetson Orin / Orin Nano.
 
-The repository keeps development, reference inspection, client code, benchmark harnesses, and migration notes on WSL first. Jetson receives the smallest practical runtime package: source, configs, scripts, benchmark code, and model artifacts placed on NVMe or external storage.
+The default path is deliberately practical: download pre-built GGUF artifacts, start `llama-server`, run the shared benchmark, then copy only source/configs/scripts/docs and model files to Jetson storage. Local model quantization is not part of the normal WSL flow for this machine.
 
 ## What This Repo Provides
 
@@ -18,16 +18,16 @@ The repository keeps development, reference inspection, client code, benchmark h
 | Area | Status |
 |---|---|
 | Python environment | Uses local Conda env: `conda run -n transformers python`. |
-| llama.cpp CPU build | Present under `tmp/llama.cpp/build/bin`; Gemma Q8 text-only smoke previously passed with low-memory CPU settings. |
+| llama.cpp CPU build | Present under `tmp/llama.cpp/build/bin`; useful as fallback when GPU access is blocked. |
 | llama.cpp CUDA build | Verified locally under `tmp/llama.cpp/build-cuda` with `GGML_CUDA=ON`, `CMAKE_CUDA_ARCHITECTURES=86`, and `BUILD_JOBS=8`. |
 | WSL GPU visibility | `nvcc` is available. `nvidia-smi` works with full access and shows an RTX 3060 Laptop GPU; sandboxed commands may not see NVML. |
-| Gemma 4 E2B-it | Official pre-quantized Q8_0 model and mmproj files are present under ignored `models/` storage. |
+| Gemma 4 E2B-it Q8 | Official pre-quantized Q8_0 model and mmproj files are present under ignored `models/` storage. |
+| Gemma 4 E2B-it Q4 | Uses pre-built `Q4_K_M` GGUF from `mradermacher/gemma-4-E2B-it-GGUF`; do not quantize locally on this WSL host. |
 | Gemma Q8 WSL CUDA smoke | Text and sample-image benchmark passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, one server slot, and `VLM_SERVER_PORT=18081`. The wrapper-default real run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` and `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`. |
-| Gemma BF16 to Q4 | Not a WSL baseline here; local quantization was killed by memory pressure. Use pre-quantized GGUF or a larger conversion host. |
-| MiniCPM-V 4.6 | Metadata-only inspection passed; local conversion and runtime are still unverified. |
+| MiniCPM-V 4.6 | Metadata inspection and local artifact preparation have run in this workspace, but runtime still needs a real request before it is called supported. |
 | Jetson runtime | Scripted and documented, but not yet observed in this repository. |
 
-Do not treat dry runs or server startup as performance results. Performance claims need real benchmark JSONL from a running model/server. The current CUDA smoke validates Gemma Q8 text and committed sample-image inference on WSL only; it does not validate MiniCPM-V 4.6, Jetson runtime, or broad performance.
+Do not treat dry runs or server startup as performance results. Performance claims need real benchmark JSONL from a running model/server. The current CUDA smoke validates Gemma Q8 text and committed sample-image inference on WSL only; it does not validate Gemma Q4, MiniCPM-V 4.6, Jetson runtime, or broad performance.
 
 ## Repository Layout
 
@@ -57,20 +57,50 @@ Do not install dependencies into Conda `base`, system Python, or global Python f
 
 ## Quick Start On WSL
 
-Run tests first:
+Run the contract tests first:
 
 ```bash
 cd /home/lawrence/code/pythonCurriculum/jetson/jetson-vlm-lab
 PYTHONPATH=src conda run -n transformers python -m unittest discover -s tests -v
 ```
 
-Prepare Gemma Q8_0 artifacts if they are not already present:
+Download pre-built Gemma artifacts. Use Q8 for the already verified WSL CUDA baseline, or Q4 when memory/storage pressure matters:
 
 ```bash
 scripts/wsl/prepare_gemma4_e2b_q8.sh
+scripts/wsl/prepare_gemma4_e2b_q4.sh
 ```
 
-Run a dry benchmark to validate payloads and JSONL logging:
+Build llama.cpp if the local build directories are missing:
+
+```bash
+CLONE_LLAMA_CPP=1 scripts/wsl/build_llama_cpp.sh
+scripts/wsl/build_llama_cpp_cuda.sh
+```
+
+Start the verified Gemma Q8 CUDA baseline:
+
+```bash
+MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q8_0.gguf \
+MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf \
+VLM_SERVER_PORT=18081 \
+scripts/wsl/run_gemma4_e2b_llama_cuda.sh
+```
+
+In another terminal, run the real benchmark against that server:
+
+```bash
+VLM_SERVER_PORT=18081 scripts/common/check_server.sh
+PYTHONPATH=src VLM_SERVER_PORT=18081 conda run -n transformers python -m edge_vlm.benchmark \
+  --config configs/models/gemma4_e2b_q8.yaml \
+  --cases configs/benchmark/prompt_cases.jsonl \
+  --output outputs/benchmarks/gemma4-e2b-q8-wsl.jsonl \
+  --summary-output outputs/benchmarks/gemma4-e2b-q8-wsl.md \
+  --max-tokens 64 \
+  --temperature 0
+```
+
+Use dry-run only to validate payload construction and JSONL logging without a server:
 
 ```bash
 PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
@@ -83,7 +113,7 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
 
 ## llama.cpp Builds
 
-CPU fallback build:
+CPU fallback build, useful when GPU runtime access is blocked:
 
 ```bash
 CLONE_LLAMA_CPP=1 scripts/wsl/build_llama_cpp.sh
@@ -103,6 +133,32 @@ The CUDA wrapper defaults to:
 
 Keep `BUILD_JOBS=8` for this 12 GiB RAM + 6 GiB swap WSL setup unless you intentionally retune the machine. More build parallelism is not required for the current workflow.
 
+## Model Artifacts
+
+Q8 baseline:
+
+```bash
+scripts/wsl/prepare_gemma4_e2b_q8.sh
+```
+
+Downloads:
+
+- `models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q8_0.gguf`
+- `models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf`
+
+Q4 lower-memory option:
+
+```bash
+scripts/wsl/prepare_gemma4_e2b_q4.sh
+```
+
+Downloads:
+
+- `models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf`
+- `models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf`
+
+These scripts download existing GGUF artifacts. They do not run `llama-quantize`.
+
 ## Run Gemma 4 E2B-it
 
 CPU fallback, useful when GPU access is blocked:
@@ -121,6 +177,15 @@ MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf \
 scripts/wsl/run_gemma4_e2b_llama_cuda.sh
 ```
 
+Q4 uses the same launcher with different artifacts and alias:
+
+```bash
+MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf \
+MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf \
+MODEL_ALIAS=gemma4-e2b-it-q4 \
+scripts/wsl/run_gemma4_e2b_llama_cuda.sh
+```
+
 The CUDA launcher defaults to `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, two threads, one server slot, and no warmup. The 512 batch/ubatch setting is required for the observed Gemma Q8 image path on this llama.cpp build; the lower 32 ubatch text-only setting triggered a llama.cpp image assertion. On a memory-rich run, raise the offload explicitly:
 
 ```bash
@@ -130,16 +195,7 @@ N_GPU_LAYERS=99 scripts/wsl/run_gemma4_e2b_llama_cuda.sh
 
 Use `nvidia-smi` in another terminal to watch VRAM. Using 8-10 GiB of WSL host memory for build/runtime is acceptable here; avoid settings that push the process into OOM. `BUILD_JOBS` mostly spends host RAM and CPU, so the default is intentionally aggressive for this 12 GiB RAM + 6 GiB swap WSL setup. `N_GPU_LAYERS` spends GPU VRAM, so tune it against the 6 GiB RTX 3060 Laptop budget.
 
-In another terminal:
-
-```bash
-scripts/common/check_server.sh
-PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
-  --config configs/models/gemma4_e2b_q8.yaml \
-  --cases configs/benchmark/prompt_cases.jsonl \
-  --output outputs/benchmarks/gemma4-e2b-q8-wsl.jsonl \
-  --summary-output outputs/benchmarks/gemma4-e2b-q8-wsl.md
-```
+When running Q4, use `configs/models/gemma4_e2b_q4.yaml` for benchmark records.
 
 ## MiniCPM-V 4.6
 
@@ -149,7 +205,7 @@ Start with metadata inspection. This does not download weights:
 scripts/wsl/inspect_minicpmv46_hf.sh
 ```
 
-Full preparation is guarded because it downloads the HF checkpoint, creates F16 GGUF, and quantizes to Q4_K_M:
+Full local preparation remains guarded because it downloads the HF checkpoint, creates F16 GGUF, and quantizes to Q4_K_M. Do not run this on the memory-constrained WSL host unless you deliberately accept the resource cost:
 
 ```bash
 ALLOW_MINICPM_FULL_PREPARE=1 scripts/wsl/prepare_minicpmv46_q4.sh

@@ -2,7 +2,7 @@ model:
   name: gemma4-e2b-it-q4
   family: Gemma 4
   backend: llama.cpp
-  model_ref: ggml-org/gemma-4-E2B-it-GGUF
+  model_ref: mradermacher/gemma-4-E2B-it-GGUF
   quantization: Q4_K_M
 
 server:
@@ -11,8 +11,8 @@ server:
   port: 8080
 
 runtime:
-  launch_mode: external_or_high_memory_quantized_gguf
-  ctx_size: 1024
+  launch_mode: prequantized_gguf_with_mmproj
+  ctx_size: 512
   n_gpu_layers: 0
   model_path_env: MODEL_PATH
   mmproj_path_env: MMPROJ_PATH
@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: High-memory or externally prepared Q4 template. Local BF16-to-Q4 quantization was observed to exceed this WSL memory budget; use gemma4_e2b_q8.yaml as the WSL baseline.
+  status: Uses pre-quantized Q4_K_M GGUF artifacts downloaded from mradermacher/gemma-4-E2B-it-GGUF. Local BF16-to-Q4 and Q8-to-Q4 quantization are not part of the WSL baseline on this memory-constrained host.

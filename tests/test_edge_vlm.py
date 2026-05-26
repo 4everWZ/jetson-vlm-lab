@@ -31,6 +31,19 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn('llama_batch_size="${LLAMA_BATCH_SIZE:-128}"', launch_script)
         self.assertIn('llama_ubatch_size="${LLAMA_UBATCH_SIZE:-32}"', launch_script)
 
+    def test_gemma_q4_prepare_downloads_prequantized_artifacts(self):
+        prepare_script = Path("scripts/wsl/prepare_gemma4_e2b_q4.sh").read_text(encoding="utf-8")
+        config_text = Path("configs/models/gemma4_e2b_q4.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("mradermacher/gemma-4-E2B-it-GGUF", prepare_script)
+        self.assertIn("gemma-4-E2B-it.Q4_K_M.gguf", prepare_script)
+        self.assertIn("gemma-4-E2B-it.mmproj-Q8_0.gguf", prepare_script)
+        self.assertIn("hf_hub_download", prepare_script)
+        self.assertNotIn("llama-quantize", prepare_script)
+        self.assertNotIn("ALLOW_HIGH_MEMORY_QUANTIZE", prepare_script)
+        self.assertNotIn("ALLOW_Q8_REQUANTIZE", prepare_script)
+        self.assertIn("prequantized_gguf", config_text)
+
     def test_wsl_cuda_wrappers_use_separate_cuda_build_and_gpu_layers(self):
         cuda_build_script = Path("scripts/wsl/build_llama_cpp_cuda.sh").read_text(encoding="utf-8")
         gemma_cuda_script = Path("scripts/wsl/run_gemma4_e2b_llama_cuda.sh").read_text(encoding="utf-8")

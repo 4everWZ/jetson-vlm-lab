@@ -24,13 +24,13 @@ Reason: the Jetson should not be the primary development machine, and Docker kee
 
 Consequence: users without Docker/NVIDIA runtime configured must either fix that first or adapt scripts to a native llama.cpp build.
 
-## TRD-004: Gemma Low-Memory Baseline Uses Pre-Quantized Q8_0
+## TRD-004: Gemma Uses Pre-Quantized GGUF Artifacts
 
-Decision: use official pre-quantized Gemma 4 E2B-it Q8_0 GGUF artifacts as the WSL baseline instead of local BF16-to-Q4 quantization.
+Decision: use pre-quantized Gemma 4 E2B-it GGUF artifacts for both Q8 and Q4 paths instead of local quantization.
 
-Reason: local BF16-to-Q4 quantization was observed to be killed on this WSL host while processing a large embedding tensor. Reducing quantization threads limits CPU concurrency but does not remove that tensor-level peak memory requirement.
+Reason: local BF16-to-Q4 quantization was observed to be killed on this WSL host while processing a large embedding tensor, and later Q8-to-Q4 re-quantization was stopped at the user's request because memory was insufficient. Downloading known GGUF artifacts keeps the WSL workflow reproducible and avoids using this host as a conversion machine.
 
-Consequence: `configs/models/gemma4_e2b_q8.yaml` and `scripts/wsl/prepare_gemma4_e2b_q8.sh` are the default WSL path. `scripts/wsl/prepare_gemma4_e2b_q4.sh` remains available only with `ALLOW_HIGH_MEMORY_QUANTIZE=1` for larger machines or externally managed conversion hosts.
+Consequence: `scripts/wsl/prepare_gemma4_e2b_q8.sh` downloads `ggml-org/gemma-4-E2B-it-GGUF` Q8_0 artifacts, and `scripts/wsl/prepare_gemma4_e2b_q4.sh` downloads `mradermacher/gemma-4-E2B-it-GGUF` Q4_K_M artifacts. Gemma local quantization is not a WSL acceptance path on this machine.
 
 ## TRD-005: MiniCPM Full Preparation Requires Explicit Opt-In
 

@@ -1,7 +1,7 @@
 # Edge VLM Handoff Status
 
-Last updated: 2026-05-26T04:29:43+09:30
-Current code baseline: `df63290 fix: use image-safe gemma cuda batch defaults`
+Last updated: 2026-05-26T16:47:37+09:30
+Current code baseline: see current Git HEAD plus staged/committed phase notes below.
 
 ## Current Objective
 
@@ -29,7 +29,7 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
 - Using Jetson as the primary development or conversion machine.
 - Installing dependencies into Conda `base`, system Python, or a global Python environment.
 - Claiming image, MiniCPM-V 4.6, Jetson, or broad performance support without observed runs.
-- Re-running local BF16-to-Q4 Gemma quantization on this WSL host as a baseline.
+- Running local Gemma BF16-to-Q4 or Q8-to-Q4 quantization on this WSL host as a baseline.
 
 ## Current State
 
@@ -50,6 +50,12 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
   - `CMAKE_CUDA_ARCHITECTURES=86`
   - build directory `tmp/llama.cpp/build-cuda`
 - Gemma Q8 runtime config is present at `configs/models/gemma4_e2b_q8.yaml`.
+- Gemma Q4 runtime config is present at `configs/models/gemma4_e2b_q4.yaml`.
+- Gemma Q4 preparation downloads pre-built GGUF artifacts instead of running local quantization:
+  - `scripts/wsl/prepare_gemma4_e2b_q4.sh`
+  - repo: `mradermacher/gemma-4-E2B-it-GGUF`
+  - model file: `gemma-4-E2B-it.Q4_K_M.gguf`
+  - mmproj file: `gemma-4-E2B-it.mmproj-Q8_0.gguf`
 - Gemma Q8 WSL CUDA launcher defaults are image-safe for the observed local llama.cpp build:
   - `CTX_SIZE=512`
   - `N_GPU_LAYERS=32`
@@ -74,6 +80,7 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
 
 - Gemma 4 E2B-it:
   - Official pre-quantized Q8_0 model and mmproj files exist locally under ignored `models/` storage in this workspace.
+  - Pre-built Q4_K_M download support uses `mradermacher/gemma-4-E2B-it-GGUF`; the Q4 model and mmproj artifacts have downloaded successfully in ignored `models/` storage.
   - Text-only CPU fallback smoke has passed.
   - Text-only WSL CUDA smoke has passed.
   - WSL CUDA text, committed sample-image benchmark, and a real fake-stream frame have passed with the current wrapper defaults.
@@ -111,6 +118,11 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
   - 18 tests passed.
 - Diff whitespace check passed:
   - `git diff --check`
+- Gemma Q4 pre-built GGUF download passed:
+  - `scripts/wsl/prepare_gemma4_e2b_q4.sh`
+  - `models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf`: 3,427,878,336 bytes
+  - `models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf`: 557,367,808 bytes
+  - This was a Hugging Face download of existing GGUF files, not local quantization.
 - Benchmark dry-run with committed sample images and Markdown summary passed:
   - `env PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/edge-vlm-pycache conda run -n transformers python -m edge_vlm.benchmark --config configs/models/gemma4_e2b_q8.yaml --cases configs/benchmark/prompt_cases.jsonl --output outputs/benchmarks/final-handoff-dryrun.jsonl --summary-output outputs/benchmarks/final-handoff-dryrun.md --dry-run`
   - 6 records written; all dry-run cases succeeded.
@@ -240,7 +252,7 @@ PYTHONPATH=src VLM_SERVER_PORT=18081 conda run -n transformers python -m edge_vl
   - `TRD-001`: Standard-library client instead of OpenAI SDK.
   - `TRD-002`: MiniCPM-V 4.6 defaults to local GGUF plus mmproj.
   - `TRD-003`: Docker-first Jetson scripts.
-  - `TRD-004`: Gemma low-memory baseline uses pre-quantized Q8_0.
+  - `TRD-004`: Gemma uses pre-quantized GGUF artifacts.
   - `TRD-005`: MiniCPM full preparation requires explicit opt-in.
 - Reference notes:
   - `docs/reference_notes/orangepi_minicpmv46_notes.md`
@@ -256,6 +268,7 @@ PYTHONPATH=src VLM_SERVER_PORT=18081 conda run -n transformers python -m edge_vl
 - Do not conflate WSL host RAM with GPU VRAM. `BUILD_JOBS` spends CPU/RAM; `N_GPU_LAYERS` spends VRAM.
 - Image support for Gemma Q8 on WSL is backed by a real image prompt run; do not generalize that to MiniCPM-V 4.6, Jetson, or broad performance.
 - Do not claim MiniCPM-V 4.6 support until conversion and a real request are observed on the selected llama.cpp revision.
+- Do not restart Gemma local quantization on this WSL host unless the user explicitly re-authorizes it.
 - Do not commit local models, benchmark outputs, reference clones, or planning files.
 - If adding dependencies later, introduce repo dependency files and target the project environment. Do not install into Conda `base` or global Python.
 
