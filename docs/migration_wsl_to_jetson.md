@@ -41,6 +41,8 @@ Before moving to the device, you can validate Docker command construction from a
 JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
 
+The Jetson launchers use dusty-nv `llama_cpp` containers by default. On Jetson, install jetson-containers or otherwise provide `autotag`; the scripts use `autotag llama_cpp` to select a JetPack/L4T-compatible image. If `autotag` is unavailable, the fallback image is `dustynv/llama_cpp:r36.4.0`. Override the image with `LLAMA_CPP_DOCKER_IMAGE=...`, and override the server binary path inside the container with `LLAMA_SERVER_CMD=...` if a particular image places `llama-server` somewhere unusual.
+
 ## Model Storage
 
 Prefer NVMe or known external storage:
@@ -76,12 +78,13 @@ Do not use Jetson as the primary conversion or quantization machine. The current
 ## First-Run Checklist
 
 1. Confirm Jetson has Docker and NVIDIA container runtime configured.
-2. Confirm available storage under `/mnt/nvme/models` or set `MODEL_DIR`.
-3. Confirm model files or HF cache are present.
-4. Start Gemma with `CTX_SIZE=2048` and the Q8_0 config; lower context first if memory is tight.
-5. Start `tegrastats` logging before benchmark runs.
-6. Run a text-only case before image cases.
-7. Record server command, model ref, quantization, context size, and power mode with benchmark output.
+2. Confirm `autotag llama_cpp` resolves a dusty-nv `llama_cpp` image, or set `LLAMA_CPP_DOCKER_IMAGE` explicitly.
+3. Confirm available storage under `/mnt/nvme/models` or set `MODEL_DIR`.
+4. Confirm model files or HF cache are present.
+5. Start Gemma with `CTX_SIZE=2048` and the Q8_0 config; lower context first if memory is tight.
+6. Start `tegrastats` logging before benchmark runs.
+7. Run a text-only case before image cases.
+8. Record server command, container image, model ref, quantization, context size, and power mode with benchmark output.
 
 ## Gemma 4 E2B-it On Jetson
 
@@ -124,6 +127,8 @@ EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
 ## Common Failure Modes
 
 - `docker: unknown runtime nvidia`: NVIDIA container runtime is not configured. Fix Jetson Docker runtime before benchmarking.
+- `autotag: command not found`: install jetson-containers on Jetson or set `LLAMA_CPP_DOCKER_IMAGE` to a compatible `dustynv/llama_cpp` tag.
+- `llama-server not found in container`: set `LLAMA_SERVER_CMD` to the server binary path inside that dusty-nv image, or switch to a tag that includes the installed llama.cpp server binary.
 - `Model GGUF not found`: model files are missing or paths do not match `MODEL_DIR`.
 - Server starts but image cases fail: mmproj may be missing, incompatible, or not loaded. Check `/v1/models` capabilities and server logs.
 - Out-of-memory or process killed: lower `CTX_SIZE`, reduce parallelism, close other processes, or use externally prepared lower-bit quantization. Do not run BF16-to-Q4 conversion on a memory-constrained Jetson.

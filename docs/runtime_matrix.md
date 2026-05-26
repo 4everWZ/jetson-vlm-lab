@@ -4,7 +4,7 @@ This matrix records the WSL-first and Jetson-Orin-targeted backend strategy. Sta
 
 | Backend | Model Format | WSL Support | Jetson Support | Image Support | Expected Memory Pressure | Implementation Complexity | Current Status | Notes / Blockers |
 |---|---|---|---|---|---|---|---|---|
-| llama.cpp `llama-server` | GGUF plus optional `mmproj` | Supported by scripts under `scripts/wsl/`, with CPU fallback and CUDA build/run wrappers | Supported by Docker-oriented scripts under `scripts/jetson/` | Supported when model/mmproj exposes multimodal capability | Medium for Gemma E2B Q8_0/Q4_K_M with small context; medium-high for MiniCPM-V 4.6 with vision; context size drives KV memory and GPU offload drives VRAM | Low-medium | First supported path | Local CPU fallback build, WSL CUDA build, model download scripts, and shared sample images are present. Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 WSL CUDA text/sample-image benchmark plus one-frame fake-stream checks have passed. Jetson and broader performance remain unverified. |
+| llama.cpp `llama-server` | GGUF plus optional `mmproj` | Supported by scripts under `scripts/wsl/`, with CPU fallback and CUDA build/run wrappers | Supported by Docker-oriented scripts under `scripts/jetson/` using dusty-nv `llama_cpp` containers | Supported when model/mmproj exposes multimodal capability | Medium for Gemma E2B Q8_0/Q4_K_M with small context; medium-high for MiniCPM-V 4.6 with vision; context size drives KV memory and GPU offload drives VRAM | Low-medium | First supported path | Local CPU fallback build, WSL CUDA build, model download scripts, and shared sample images are present. Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 WSL CUDA text/sample-image benchmark plus one-frame fake-stream checks have passed. Jetson launchers default to `autotag llama_cpp` with a `dustynv/llama_cpp:r36.4.0` fallback; Jetson and broader performance remain unverified. |
 | llama.cpp `llama-mtmd-cli` | GGUF plus `mmproj` | Documented reference path | Possible if binary/container exists | Image-first CLI support | Similar to server path | Low | Documented only | Useful for manual backend smoke tests, but project client targets OpenAI-compatible server. |
 | Ollama | Ollama model bundle / GGUF-backed | Likely usable on WSL | Possible but not first target | Model-dependent | Medium | Low if model exists; opaque runtime packaging | Notes only | Not implemented because llama.cpp exposes the runtime details and OpenAI-compatible API directly. |
 | NanoLLM / Jetson AI Lab containers | Backend-specific model packaging | Not WSL-first | Potentially strong Jetson path | Model-dependent | Potentially lower operational overhead on Jetson | Medium | Notes only | Consider after llama.cpp baseline. Need current Jetson container verification before use. |
@@ -15,7 +15,7 @@ This matrix records the WSL-first and Jetson-Orin-targeted backend strategy. Sta
 ## Initial Priority
 
 1. llama.cpp GGUF on WSL with `llama-server`.
-2. llama.cpp GGUF on Jetson through Docker or a Jetson-compatible build.
+2. llama.cpp GGUF on Jetson through dusty-nv `llama_cpp` Docker containers or a Jetson-compatible build.
 3. Optional notes for Ollama/NanoLLM after baseline logs exist.
 4. No custom CUDA or TensorRT kernels in the first version.
 

@@ -456,8 +456,31 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("docker run", result.stdout)
+        self.assertIn("dustynv/llama_cpp", result.stdout)
+        self.assertIn("/bin/bash -lc", result.stdout)
         self.assertIn("ggml-org/gemma-4-E2B-it-GGUF:Q8_0", result.stdout)
         self.assertIn("-p 19090:8080", result.stdout)
+
+    def test_jetson_launcher_allows_explicit_llama_cpp_image_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {
+                **os.environ,
+                "JETSON_DRY_RUN": "1",
+                "MODEL_DIR": str(Path(tmp) / "models"),
+                "LLAMA_CPP_DOCKER_IMAGE": "dustynv/llama_cpp:b5283-r36.4-cu128-24.04",
+                "LLAMA_SERVER_CMD": "/usr/local/bin/llama-server",
+            }
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_gemma4_e2b_llama_docker.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("dustynv/llama_cpp:b5283-r36.4-cu128-24.04", result.stdout)
+        self.assertIn("/usr/local/bin/llama-server", result.stdout)
 
     def test_jetson_minicpm_launcher_can_dry_run_without_local_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -478,6 +501,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("docker run", result.stdout)
+        self.assertIn("dustynv/llama_cpp", result.stdout)
+        self.assertIn("/bin/bash -lc", result.stdout)
         self.assertIn("-m /models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf", result.stdout)
         self.assertIn("--mmproj /models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf", result.stdout)
 

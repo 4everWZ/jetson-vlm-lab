@@ -18,11 +18,11 @@ Consequence: `scripts/wsl/prepare_minicpmv46_q4.sh` downloads `MiniCPM-V-4_6-Q4_
 
 ## TRD-003: Docker-First Jetson Scripts
 
-Decision: Jetson scripts use Docker/NVIDIA runtime by default.
+Decision: Jetson scripts use Docker/NVIDIA runtime with dusty-nv `llama_cpp` containers by default.
 
-Reason: the Jetson should not be the primary development machine, and Docker keeps runtime setup more reproducible than Conda-heavy local installs.
+Reason: the Jetson should not be the primary development machine, Docker keeps runtime setup more reproducible than Conda-heavy local installs, and dusty-nv/jetson-containers publishes Jetson/L4T-oriented llama.cpp images.
 
-Consequence: users without Docker/NVIDIA runtime configured must either fix that first or adapt scripts to a native llama.cpp build.
+Consequence: users without Docker/NVIDIA runtime configured must either fix that first or adapt scripts to a native llama.cpp build. On Jetson, `autotag llama_cpp` should pick a compatible dusty-nv image; otherwise set `LLAMA_CPP_DOCKER_IMAGE` explicitly.
 
 ## TRD-004: Gemma Uses Pre-Quantized GGUF Artifacts
 

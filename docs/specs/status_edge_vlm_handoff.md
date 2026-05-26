@@ -1,7 +1,7 @@
 # Edge VLM Handoff Status
 
-Last updated: 2026-05-26T18:05:50+09:30
-Current code baseline: current Git HEAD plus the MiniCPM/Gemma pre-built-artifact phase ready for commit.
+Last updated: 2026-05-26T19:35:54+09:30
+Current code baseline: current Git HEAD plus the Jetson dusty-nv llama.cpp launcher correction ready for commit.
 
 ## Current Objective
 
@@ -66,6 +66,11 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
   - `scripts/jetson/run_gemma4_e2b_llama_docker.sh`
   - `scripts/jetson/run_minicpmv46_llama_docker.sh`
   - `scripts/jetson/monitor_tegrastats.sh`
+- Jetson launchers use dusty-nv `llama_cpp` containers by default:
+  - `LLAMA_CPP_DOCKER_IMAGE` pins an explicit image.
+  - `autotag llama_cpp` is used on Jetson when available.
+  - `dustynv/llama_cpp:r36.4.0` is the non-Jetson/dry-run fallback.
+  - `LLAMA_SERVER_CMD` can override the server binary path inside a specific image.
 - Jetson launchers support `JETSON_DRY_RUN=1` for command-construction checks without Docker, model files, or Jetson hardware.
 - Shared benchmark cases reference committed sample images:
   - `data/sample_images/image_caption_single.png`
@@ -144,7 +149,7 @@ models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf
 models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf
 ```
 
-### Fresh Verification Passed For This Phase
+### Fresh Verification Passed For Recent Phases
 
 The following checks passed after the MiniCPM/Gemma pre-built-artifact updates:
 
@@ -160,6 +165,20 @@ pgrep -af llama-server
 ```
 
 Unit tests: 21 tests passed. `pgrep -af llama-server` returned no running server.
+
+The following checks passed after the Jetson dusty-nv launcher correction:
+
+```bash
+bash -n scripts/common/*.sh scripts/wsl/*.sh scripts/jetson/*.sh
+env PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/edge-vlm-pycache conda run -n transformers python -m py_compile src/edge_vlm/*.py tests/test_edge_vlm.py
+env PYTHONPATH=src PYTHONPYCACHEPREFIX=/tmp/edge-vlm-pycache conda run -n transformers python -m unittest discover -s tests -v
+JETSON_DRY_RUN=1 MODEL_DIR=/tmp/edge-vlm-models VLM_SERVER_PORT=19090 bash scripts/jetson/run_gemma4_e2b_llama_docker.sh
+JETSON_DRY_RUN=1 MODEL_DIR=/tmp/edge-vlm-minicpm-models VLM_SERVER_PORT=19091 bash scripts/jetson/run_minicpmv46_llama_docker.sh
+JETSON_DRY_RUN=1 MODEL_DIR=/tmp/edge-vlm-models LLAMA_CPP_DOCKER_IMAGE=dustynv/llama_cpp:b5283-r36.4-cu128-24.04 LLAMA_SERVER_CMD=/usr/local/bin/llama-server bash scripts/jetson/run_gemma4_e2b_llama_docker.sh
+git diff --check
+```
+
+Unit tests: 22 tests passed. The two default Jetson dry-runs emitted `dustynv/llama_cpp:r36.4.0` fallback commands, and the explicit override dry-run emitted `dustynv/llama_cpp:b5283-r36.4-cu128-24.04` with `/usr/local/bin/llama-server`.
 
 ## Relevant Commands
 
@@ -229,9 +248,10 @@ PYTHONPATH=src VLM_SERVER_PORT=<port> conda run -n transformers python -m edge_v
 ## Recommended Next Steps
 
 1. Sync the minimal runtime package to Jetson, excluding `tmp/`, `outputs/`, Conda environments, and local WSL build artifacts.
-2. Place downloaded GGUF artifacts under Jetson storage using the paths documented in `docs/migration_wsl_to_jetson.md`.
-3. Start Jetson with Gemma Q8 or Gemma Q4 text-only benchmark first, while recording `tegrastats`.
-4. After Gemma text works on Jetson, try image cases and then MiniCPM-V 4.6 Q4.
+2. Confirm `autotag llama_cpp` resolves a dusty-nv image on Jetson, or set `LLAMA_CPP_DOCKER_IMAGE` to the desired tag.
+3. Place downloaded GGUF artifacts under Jetson storage using the paths documented in `docs/migration_wsl_to_jetson.md`.
+4. Start Jetson with Gemma Q8 or Gemma Q4 text-only benchmark first, while recording `tegrastats`.
+5. After Gemma text works on Jetson, try image cases and then MiniCPM-V 4.6 Q4.
 
 ## Key References
 
@@ -270,6 +290,7 @@ PYTHONPATH=src VLM_SERVER_PORT=<port> conda run -n transformers python -m edge_v
 - Do not conflate WSL host RAM with GPU VRAM. `BUILD_JOBS` spends CPU/RAM; `N_GPU_LAYERS` spends VRAM.
 - Image support for Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 on WSL is backed by real image prompt runs; do not generalize that to Jetson or broad performance.
 - Do not restart local conversion or quantization on this WSL host unless the user explicitly re-authorizes it.
+- Keep Jetson launchers on the dusty-nv/jetson-containers path unless a real Jetson run proves a different container is required.
 - Do not commit local models, benchmark outputs, reference clones, or planning files.
 - If adding dependencies later, introduce repo dependency files and target the project environment. Do not install into Conda `base` or global Python.
 

@@ -23,7 +23,7 @@ optional Markdown summary
 ## Integration Dependencies
 
 - WSL: Conda env `transformers` for Python validation, plus local llama.cpp CPU fallback and CUDA build paths.
-- Jetson: Docker and NVIDIA runtime for the provided Docker scripts, or an equivalent local llama.cpp build.
+- Jetson: Docker and NVIDIA runtime for the provided dusty-nv `llama_cpp` Docker scripts, or an equivalent local llama.cpp build.
 - Models: Gemma uses prepared Q8_0 or Q4_K_M GGUF plus `mmproj` artifacts on WSL; MiniCPM-V 4.6 uses official pre-built Q4_K_M GGUF plus F16 `mmproj` artifacts from `openbmb/MiniCPM-V-4.6-gguf`.
 
 ## Validation Checklist
@@ -46,6 +46,7 @@ optional Markdown summary
 - Fake stream: `python -m edge_vlm.fake_stream --dry-run ...`
 - Server health: `scripts/common/check_server.sh`
 - Jetson launcher self-check: `JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh`
+- Jetson container selection: `autotag llama_cpp` on-device, or `LLAMA_CPP_DOCKER_IMAGE=...` when pinning a dusty-nv `llama_cpp` tag.
 
 ## Known Hard Boundaries
 

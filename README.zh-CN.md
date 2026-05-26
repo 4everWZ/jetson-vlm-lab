@@ -25,7 +25,7 @@
 | Gemma 4 E2B-it Q4 | 使用 `mradermacher/gemma-4-E2B-it-GGUF` 的现成 `Q4_K_M` GGUF。WSL CUDA 文本、样例图 benchmark 和一帧 fake-stream 已通过，端口为 `VLM_SERVER_PORT=18083`。 |
 | Gemma Q8 WSL CUDA smoke | 文本和样例图 benchmark 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、`LLAMA_BATCH_SIZE=512`、`LLAMA_UBATCH_SIZE=512`、单 server slot、`VLM_SERVER_PORT=18081`。wrapper 默认参数真实运行写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` 和 `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`。 |
 | MiniCPM-V 4.6 | 已下载 `openbmb/MiniCPM-V-4.6-gguf` 的官方现成 `Q4_K_M` model 和 F16 mmproj 文件，存放在被 Git 忽略的 `models/` 目录。WSL CUDA 文本、样例图 benchmark 和一帧 fake-stream 已通过，端口为 `VLM_SERVER_PORT=18082`。 |
-| Jetson runtime | 脚本和文档已准备，但本仓库还没有实测 Jetson 推理。 |
+| Jetson runtime | 已按 dusty-nv `llama_cpp` container 路线写好 Jetson Docker launcher，但本仓库还没有在 Jetson 硬件上实测推理。 |
 
 dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前已观察到的 runtime 支持只覆盖 WSL CUDA 上的 Gemma Q8、Gemma Q4 和 MiniCPM-V 4.6 Q4；不验证 Jetson runtime 或泛化性能。
 
@@ -283,6 +283,8 @@ CTX_SIZE=2048 \
 N_GPU_LAYERS=99 \
 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
+
+Jetson 脚本默认使用 dusty-nv `llama_cpp` 镜像。Jetson 上如果装了 jetson-containers 的 `autotag`，脚本会用 `autotag llama_cpp` 选择匹配当前 JetPack/L4T 的镜像；没有 `autotag` 时，dry-run 和 fallback 命令使用 `dustynv/llama_cpp:r36.4.0`。如果你的 JetPack 需要别的 tag，用 `LLAMA_CPP_DOCKER_IMAGE=...` 覆盖。
 
 用 `JETSON_DRY_RUN=1` 可以只打印 Docker 命令，不要求当前机器有 Docker 或 Jetson 硬件：
 

@@ -25,7 +25,7 @@ The default path is deliberately practical: download pre-built GGUF artifacts, s
 | Gemma 4 E2B-it Q4 | Uses pre-built `Q4_K_M` GGUF from `mradermacher/gemma-4-E2B-it-GGUF`. WSL CUDA text, sample-image benchmark, and one-frame fake-stream checks passed with `VLM_SERVER_PORT=18083`. |
 | Gemma Q8 WSL CUDA smoke | Text and sample-image benchmark passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, one server slot, and `VLM_SERVER_PORT=18081`. The wrapper-default real run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` and `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`. |
 | MiniCPM-V 4.6 | Official pre-built `Q4_K_M` model and F16 mmproj files from `openbmb/MiniCPM-V-4.6-gguf` are downloaded under ignored `models/` storage. WSL CUDA text, sample-image benchmark, and one-frame fake-stream checks passed with `VLM_SERVER_PORT=18082`. |
-| Jetson runtime | Scripted and documented, but not yet observed in this repository. |
+| Jetson runtime | Scripted and documented with dusty-nv `llama_cpp` containers through Jetson Docker launchers, but not yet observed on Jetson hardware in this repository. |
 
 Do not treat dry runs or server startup as performance results. Performance claims need real benchmark JSONL from a running model/server. The current observed runtime support covers Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 on WSL CUDA only; it does not validate Jetson runtime or broad performance.
 
@@ -283,6 +283,8 @@ CTX_SIZE=2048 \
 N_GPU_LAYERS=99 \
 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
+
+The Jetson scripts default to a dusty-nv `llama_cpp` image. On a Jetson with `autotag` from jetson-containers installed, they use `autotag llama_cpp` to select a JetPack/L4T-compatible image. Without `autotag`, dry-run and fallback commands use `dustynv/llama_cpp:r36.4.0`. Override with `LLAMA_CPP_DOCKER_IMAGE=...` if your JetPack requires a different tag.
 
 Use `JETSON_DRY_RUN=1` to print the Docker command without requiring Docker or Jetson hardware:
 

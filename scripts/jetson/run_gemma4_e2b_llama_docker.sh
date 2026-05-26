@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-image="${LLAMA_CPP_DOCKER_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=resolve_llama_cpp_image.sh
+source "${script_dir}/resolve_llama_cpp_image.sh"
+
+image="$(resolve_llama_cpp_image)"
 model_dir="${MODEL_DIR:-/mnt/nvme/models}"
 hf_home_on_host="${HF_HOME:-${model_dir}/hf-cache}"
 host="${VLM_SERVER_HOST:-0.0.0.0}"
@@ -14,9 +18,17 @@ model_path="${MODEL_PATH:-}"
 mmproj_path="${MMPROJ_PATH:-}"
 docker_gpu_args="${DOCKER_GPU_ARGS:---runtime nvidia}"
 dry_run="${JETSON_DRY_RUN:-0}"
+llama_server_cmd="${LLAMA_SERVER_CMD:-}"
 
 mkdir -p "${model_dir}" "${hf_home_on_host}"
 read -r -a gpu_args <<< "${docker_gpu_args}"
+
+server_cmd=()
+if [[ -n "${llama_server_cmd}" ]]; then
+  read -r -a server_cmd <<< "${llama_server_cmd}"
+else
+  server_cmd=(/bin/bash -lc 'if command -v llama-server >/dev/null 2>&1; then server="$(command -v llama-server)"; elif [[ -x /usr/local/bin/llama-server ]]; then server=/usr/local/bin/llama-server; elif [[ -x /opt/llama.cpp/build/bin/llama-server ]]; then server=/opt/llama.cpp/build/bin/llama-server; elif command -v server >/dev/null 2>&1; then server="$(command -v server)"; else echo "llama-server not found in container; set LLAMA_SERVER_CMD" >&2; exit 127; fi; exec "${server}" "$@"' --)
+fi
 
 model_args=()
 if [[ -n "${model_path}" || -n "${mmproj_path}" ]]; then
@@ -43,6 +55,7 @@ docker_cmd=(docker run --rm -it \
   -v "${hf_home_on_host}:/hf-cache" \
   -e HF_HOME=/hf-cache \
   "${image}" \
+  "${server_cmd[@]}" \
   "${model_args[@]}" \
   --alias "${model_alias}" \
   --host "${host}" \

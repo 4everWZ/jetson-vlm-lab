@@ -32,6 +32,7 @@ Not implemented in the current version:
 - `scripts/wsl/prepare_minicpmv46_q4.sh`: Downloads official MiniCPM-V 4.6 Q4_K_M model and F16 mmproj GGUF files without local conversion or quantization.
 - `scripts/wsl/run_gemma4_e2b_llama.sh`: Launches Gemma 4 E2B-it through local GGUF plus `mmproj`, or through `llama-server -hf`.
 - `scripts/wsl/run_minicpmv46_llama.sh`: Launches MiniCPM-V 4.6 through local GGUF plus `mmproj`, or through an explicitly supplied `MODEL_REF`.
+- `scripts/jetson/resolve_llama_cpp_image.sh`: Resolves the Jetson llama.cpp container image from `LLAMA_CPP_DOCKER_IMAGE`, `autotag llama_cpp`, or the dusty-nv fallback image.
 - `scripts/jetson/*.sh`: Docker-oriented Jetson launchers and `tegrastats` monitor.
 - `configs/models/*.yaml`: Editable runtime model facts and capabilities.
 - `configs/benchmark/prompt_cases.jsonl`: Shared WSL/Jetson benchmark cases.
@@ -50,7 +51,7 @@ Not implemented in the current version:
 6. Run `scripts/common/check_server.sh`.
 7. Run a dry-run benchmark first, then a real benchmark once server health is confirmed.
 8. Copy only source/config/script/docs files to Jetson, not reference repos or WSL build output.
-9. Start the Jetson Docker runtime and collect `tegrastats` during the benchmark.
+9. Start the Jetson Docker runtime with a dusty-nv `llama_cpp` image and collect `tegrastats` during the benchmark.
 
 ## Verification Strategy
 
