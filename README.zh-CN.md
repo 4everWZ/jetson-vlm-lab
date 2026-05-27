@@ -22,12 +22,24 @@
 | llama.cpp CUDA build | 已在本地 `tmp/llama.cpp/build-cuda` 验证，使用 `GGML_CUDA=ON`、`CMAKE_CUDA_ARCHITECTURES=86` 和 `BUILD_JOBS=8`。 |
 | WSL GPU 可见性 | `nvcc` 可用。full access 下 `nvidia-smi` 能看到 RTX 3060 Laptop GPU；沙箱命令可能看不到 NVML。 |
 | Gemma 4 E2B-it Q8 | 官方已量化 Q8_0 model 和 mmproj 文件已在被 Git 忽略的 `models/` 存储里。 |
-| Gemma 4 E2B-it Q4 | 使用 `mradermacher/gemma-4-E2B-it-GGUF` 的现成 `Q4_K_M` GGUF。WSL CUDA 文本、样例图 benchmark 和一帧 fake-stream 已通过，端口为 `VLM_SERVER_PORT=18083`。 |
+| Gemma 4 E2B-it Q4 | 使用 `mradermacher/gemma-4-E2B-it-GGUF` 的现成 `Q4_K_M` GGUF。WSL CUDA 和 Jetson 文本、样例图 benchmark、一帧 fake-stream 已通过。 |
 | Gemma Q8 WSL CUDA smoke | 文本和样例图 benchmark 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、`LLAMA_BATCH_SIZE=512`、`LLAMA_UBATCH_SIZE=512`、单 server slot、`VLM_SERVER_PORT=18081`。wrapper 默认参数真实运行写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` 和 `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`。 |
-| MiniCPM-V 4.6 | 已下载 `openbmb/MiniCPM-V-4.6-gguf` 的官方现成 `Q4_K_M` model 和 F16 mmproj 文件，存放在被 Git 忽略的 `models/` 目录。WSL CUDA 文本、样例图 benchmark 和一帧 fake-stream 已通过，端口为 `VLM_SERVER_PORT=18082`。 |
-| Jetson runtime | 已按 dusty-nv `llama_cpp` container 路线写好 Jetson Docker launcher，但本仓库还没有在 Jetson 硬件上实测推理。 |
+| MiniCPM-V 4.6 | 已下载 `openbmb/MiniCPM-V-4.6-gguf` 的官方现成 `Q4_K_M` model 和 F16 mmproj 文件，存放在被 Git 忽略的 `models/` 目录。WSL CUDA 和 Jetson 文本、样例图 benchmark、一帧 fake-stream 已通过。 |
+| Jetson runtime | MiniCPM-V 4.6 Q4 和 Gemma 4 E2B-it Q4 已通过 Jetson Docker launcher 产出 smoke 日志，镜像固定为 `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`。 |
 
-dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前已观察到的 runtime 支持只覆盖 WSL CUDA 上的 Gemma Q8、Gemma Q4 和 MiniCPM-V 4.6 Q4；不验证 Jetson runtime 或泛化性能。
+dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前已观察到的 runtime 支持覆盖 WSL CUDA 上的 Gemma Q8、Gemma Q4、MiniCPM-V 4.6 Q4，以及 Jetson 上的 MiniCPM-V 4.6 Q4 和 Gemma Q4 smoke；不验证 Jetson Q8、camera input、长时间运行、电源/温度行为或泛化性能。
+
+## Jetson 已观察 Smoke
+
+被 Git 忽略的 `outputs/` 目录里有 2026-05-27 拷贝回来的 Jetson 日志。这些是 64-token 的短 smoke，覆盖已提交的文本/图片 cases，不是正式性能套件。
+
+| 模型 | Jetson 命令形态 | Benchmark 输出 | 结果 |
+|---|---|---|---|
+| MiniCPM-V 4.6 Q4 | `CTX_SIZE=512`、`N_GPU_LAYERS=32`、batch `128`、ubatch `32`、KV cache `q8_0`、关闭 warmup | `outputs/benchmarks/minicpmv46-q4-jetson.jsonl` | benchmark 6/6 通过。文本平均 41.49 tok/s；图像平均 34.10 tok/s。一帧 fake-stream 3.27 s 通过。 |
+| Gemma 4 E2B-it Q4 | `CTX_SIZE=512`、`N_GPU_LAYERS=12`、batch `512`、ubatch `512`、KV cache `q8_0`、关闭 warmup、mmproj 保持在 GPU | `outputs/benchmarks/gemma4-e2b-q4-jetson-gpu12-mmproj-gpu.jsonl` | benchmark 6/6 通过。文本平均 6.84 tok/s；图像平均 5.91 tok/s。一帧 fake-stream 18.79 s 通过。 |
+| Gemma 4 E2B-it Q4，对照 | `CTX_SIZE=512`、`N_GPU_LAYERS=12`、batch `256`、ubatch `256`、`--no-mmproj-offload`、关闭 warmup | `outputs/benchmarks/gemma4-e2b-q4-jetson-gpu.jsonl` | benchmark 6/6 通过，但图像平均降到 2.87 tok/s。这个 smoke 路线默认保留 mmproj 在 GPU，除非重新测试。 |
+
+更早的 `outputs/benchmarks/gemma4-e2b-q4-jetson.jsonl` 是失败的启动/连接尝试：1 个 marker 成功、5 个 benchmark case connection refused。不要把它当作 runtime 成功引用。
 
 ## 目录结构
 
@@ -237,7 +249,7 @@ PYTHONPATH=src VLM_SERVER_PORT=18082 conda run -n transformers python -m edge_vl
   --temperature 0
 ```
 
-WSL CUDA smoke 已通过文本、已提交样例图和一帧 fake-stream。Jetson runtime 仍未实测。
+WSL CUDA 和 Jetson smoke 已通过文本、已提交样例图和一帧 fake-stream。Jetson 结果只覆盖 [Jetson 已观察 Smoke](#jetson-已观察-smoke) 里的 Q4 文件和参数。
 
 ## Fake Stream
 
@@ -275,13 +287,40 @@ sudo mkdir -p /mnt/nvme/models
 sudo chown "$USER:$USER" /mnt/nvme/models
 ```
 
-Jetson 上用 Docker 跑 Gemma：
+Jetson 上运行已观察的 MiniCPM-V 4.6 Q4 smoke 路线：
 
 ```bash
-MODEL_DIR=/mnt/nvme/models \
-CTX_SIZE=2048 \
-N_GPU_LAYERS=99 \
-scripts/jetson/run_gemma4_e2b_llama_docker.sh
+MODEL_DIR=$PWD/models \
+LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87 \
+CTX_SIZE=512 \
+N_GPU_LAYERS=32 \
+scripts/jetson/run_minicpmv46_llama_docker.sh \
+  --parallel 1 \
+  --batch-size 128 \
+  --ubatch-size 32 \
+  --cache-type-k q8_0 \
+  --cache-type-v q8_0 \
+  --no-warmup
+```
+
+Jetson 上运行已观察的 Gemma Q4 smoke 路线：
+
+```bash
+MODEL_DIR=$PWD/models \
+LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87 \
+MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf \
+MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf \
+MODEL_ALIAS=gemma4-e2b-it-q4 \
+CTX_SIZE=512 \
+N_GPU_LAYERS=12 \
+scripts/jetson/run_gemma4_e2b_llama_docker.sh \
+  -fit off \
+  --parallel 1 \
+  --batch-size 512 \
+  --ubatch-size 512 \
+  --cache-type-k q8_0 \
+  --cache-type-v q8_0 \
+  --no-warmup
 ```
 
 Jetson 脚本默认使用 dusty-nv `llama_cpp` 镜像。Jetson 上如果装了 jetson-containers 的 `autotag`，脚本会用 `autotag llama_cpp` 选择匹配当前 JetPack/L4T 的镜像；没有 `autotag` 时，dry-run 和 fallback 命令使用 `dustynv/llama_cpp:r36.4.0`。如果你的 JetPack 需要别的 tag，用 `LLAMA_CPP_DOCKER_IMAGE=...` 覆盖。

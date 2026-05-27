@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: Uses pre-built Q4_K_M GGUF model and F16 mmproj artifacts from openbmb/MiniCPM-V-4.6-gguf. WSL CUDA text and sample-image benchmark passed with ctx_size 512, N_GPU_LAYERS 32, LLAMA_BATCH_SIZE 128, LLAMA_UBATCH_SIZE 32, and one server slot after using the official pre-built files. Jetson runtime remains unverified.
+  status: Uses pre-built Q4_K_M GGUF model and F16 mmproj artifacts from openbmb/MiniCPM-V-4.6-gguf. WSL CUDA text and sample-image benchmark passed with ctx_size 512, N_GPU_LAYERS 32, LLAMA_BATCH_SIZE 128, LLAMA_UBATCH_SIZE 32, and one server slot after using the official pre-built files. Jetson smoke passed with ctx_size 512, N_GPU_LAYERS 32, LLAMA_BATCH_SIZE 128, LLAMA_UBATCH_SIZE 32, q8_0 KV cache, and the pinned Jetson llama.cpp image.

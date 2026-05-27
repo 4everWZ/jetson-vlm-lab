@@ -482,6 +482,50 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("dustynv/llama_cpp:b5283-r36.4-cu128-24.04", result.stdout)
         self.assertIn("/usr/local/bin/llama-server", result.stdout)
 
+    def test_jetson_gemma_launcher_dry_run_allows_explicit_missing_model_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model_dir = Path(tmp) / "models"
+            env = {
+                **os.environ,
+                "JETSON_DRY_RUN": "1",
+                "MODEL_DIR": str(model_dir),
+                "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87",
+                "MODEL_PATH": str(model_dir / "gemma-4-E2B-it-GGUF" / "gemma-4-E2B-it.Q4_K_M.gguf"),
+                "MMPROJ_PATH": str(model_dir / "gemma-4-E2B-it-GGUF" / "gemma-4-E2B-it.mmproj-Q8_0.gguf"),
+                "MODEL_ALIAS": "gemma4-e2b-it-q4",
+                "CTX_SIZE": "512",
+                "N_GPU_LAYERS": "12",
+            }
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_gemma4_e2b_llama_docker.sh",
+                    "-fit",
+                    "off",
+                    "--parallel",
+                    "1",
+                    "--batch-size",
+                    "512",
+                    "--ubatch-size",
+                    "512",
+                    "--cache-type-k",
+                    "q8_0",
+                    "--cache-type-v",
+                    "q8_0",
+                    "--no-warmup",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87", result.stdout)
+        self.assertIn("-m /models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf", result.stdout)
+        self.assertIn("--mmproj /models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf", result.stdout)
+        self.assertIn("--batch-size 512", result.stdout)
+
     def test_jetson_minicpm_launcher_can_dry_run_without_local_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:
             model_dir = Path(tmp) / "models"

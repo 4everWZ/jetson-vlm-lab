@@ -47,7 +47,7 @@ Jetson runtime work should start with llama.cpp CUDA or a Jetson-compatible llam
 ## Risks And Limitations
 
 - The OrangePi numbers are not Jetson numbers. They measure Ascend 310B behavior and custom kernels.
-- MiniCPM-V 4.6 image behavior depends on processor slicing, image token placement, and mmproj support. This project has observed a WSL CUDA llama.cpp request path with official pre-built GGUF artifacts, but Jetson behavior still needs device-side verification.
+- MiniCPM-V 4.6 image behavior depends on processor slicing, image token placement, and mmproj support. This project has observed both WSL CUDA and Jetson Q4 smoke paths with official pre-built GGUF artifacts; Jetson Q8, camera input, and formal performance still need separate verification.
 - The reference repo hardcodes model-shape knowledge in native code. That is useful for edge optimization, but this project should avoid model-shape assumptions until a backend exposes stable contracts.
 - Multi-slice and high-resolution image handling can affect both correctness and latency. First-version benchmarks should mark image cases as single-image tests, not exhaustive VLM evaluation.
 
@@ -56,5 +56,5 @@ Jetson runtime work should start with llama.cpp CUDA or a Jetson-compatible llam
 1. Build WSL tools first, then move only scripts, configs, client package, and benchmarks to Jetson.
 2. Use llama.cpp as the first runtime boundary so custom CUDA/TensorRT work is deferred until there is a measured reason.
 3. Keep benchmark output raw JSONL, with explicit success/failure and error text per case.
-4. Do not claim Jetson performance or image correctness until a Jetson `llama-server` run has produced observed logs.
+4. Limit Jetson claims to observed logs. Current Jetson evidence covers MiniCPM-V 4.6 Q4 and Gemma Q4 smoke runs, not Q8, camera input, or formal performance.
 5. Keep model configs editable. MiniCPM-V 4.6 currently uses official pre-built GGUF plus mmproj artifacts; do not reintroduce local conversion as the default path without a measured reason.

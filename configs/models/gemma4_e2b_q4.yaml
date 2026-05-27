@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: Uses pre-quantized Q4_K_M GGUF artifacts downloaded from mradermacher/gemma-4-E2B-it-GGUF. WSL CUDA text, sample-image benchmark, and one-frame fake-stream checks passed with ctx_size 512, N_GPU_LAYERS 32, LLAMA_BATCH_SIZE 512, LLAMA_UBATCH_SIZE 512, and one server slot. Local BF16-to-Q4 and Q8-to-Q4 quantization are not part of the WSL baseline on this memory-constrained host. Jetson runtime remains unverified.
+  status: Uses pre-quantized Q4_K_M GGUF artifacts downloaded from mradermacher/gemma-4-E2B-it-GGUF. WSL CUDA text, sample-image benchmark, and one-frame fake-stream checks passed with ctx_size 512, N_GPU_LAYERS 32, LLAMA_BATCH_SIZE 512, LLAMA_UBATCH_SIZE 512, and one server slot. Jetson smoke passed with ctx_size 512, N_GPU_LAYERS 12, LLAMA_BATCH_SIZE 512, LLAMA_UBATCH_SIZE 512, q8_0 KV cache, mmproj on GPU, and the pinned Jetson llama.cpp image. Local BF16-to-Q4 and Q8-to-Q4 quantization are not part of the WSL baseline on this memory-constrained host.

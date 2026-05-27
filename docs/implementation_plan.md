@@ -13,13 +13,15 @@ Implemented in this iteration:
 - A metadata-only MiniCPM-V 4.6 inspection path plus a download path for official pre-built Q4_K_M GGUF and F16 mmproj artifacts.
 - A small Python package for OpenAI-compatible chat requests, image payload construction, benchmark runs, and fake image stream runs.
 - Benchmark prompt cases and JSONL logging.
+- Observed Jetson Q4 smoke paths for MiniCPM-V 4.6 and Gemma 4 E2B-it through dusty-nv-style llama.cpp Docker launchers.
 - Migration, benchmark, runtime, reference, design, and matrix documentation.
 
 Not implemented in the current version:
 
 - Gemma local BF16-to-Q4 or Q8-to-Q4 quantization on this constrained WSL host.
 - A MiniCPM-V 4.6 local HF checkpoint conversion or local quantization path.
-- Real Jetson runtime execution.
+- Jetson Q8 runtime execution.
+- Formal Jetson performance reporting with paired `tegrastats`, power mode, long-run behavior, and repeated trials.
 - TensorRT, TensorRT-LLM, NanoLLM, Ollama, vLLM, or custom kernels.
 - Camera access or live video stream capture.
 
@@ -51,7 +53,7 @@ Not implemented in the current version:
 6. Run `scripts/common/check_server.sh`.
 7. Run a dry-run benchmark first, then a real benchmark once server health is confirmed.
 8. Copy only source/config/script/docs files to Jetson, not reference repos or WSL build output.
-9. Start the Jetson Docker runtime with a dusty-nv `llama_cpp` image and collect `tegrastats` during the benchmark.
+9. Start the observed Jetson Q4 Docker runtime with a dusty-nv-style `llama_cpp` image and collect `tegrastats` during formal benchmark runs.
 
 ## Verification Strategy
 
@@ -64,4 +66,4 @@ Minimum verification for this scaffold:
 - Config JSONL/YAML parse checks.
 - Git ignore check confirming reference repos are ignored.
 
-Real inference verification is intentionally separate and requires a running `llama-server` plus model files. In this workspace, WSL CUDA real inference has passed for Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 text/sample-image benchmarks plus one-frame fake-stream runs. Jetson execution remains a hardware-bound verification step.
+Real inference verification is intentionally separate and requires a running `llama-server` plus model files. In this workspace, WSL CUDA real inference has passed for Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 text/sample-image benchmarks plus one-frame fake-stream runs. Copied Jetson logs show MiniCPM-V 4.6 Q4 and Gemma Q4 smoke runs passing text/sample-image benchmarks plus one-frame fake-stream checks. Jetson Q8, `tegrastats`-paired reporting, camera input, long-run behavior, and broad performance remain open.

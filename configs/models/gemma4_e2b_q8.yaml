@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: WSL baseline using official pre-quantized Q8_0 GGUF artifacts. Text-only CPU fallback smoke passed with ctx_size 512, N_GPU_LAYERS 0, and one server slot. WSL CUDA text and sample-image benchmark passed with ctx_size 512, N_GPU_LAYERS 32, LLAMA_BATCH_SIZE 512, LLAMA_UBATCH_SIZE 512, and one server slot. Jetson runtime remains unverified.
+  status: WSL baseline using official pre-quantized Q8_0 GGUF artifacts. Text-only CPU fallback smoke passed with ctx_size 512, N_GPU_LAYERS 0, and one server slot. WSL CUDA text and sample-image benchmark passed with ctx_size 512, N_GPU_LAYERS 32, LLAMA_BATCH_SIZE 512, LLAMA_UBATCH_SIZE 512, and one server slot. Jetson Q8 runtime remains unverified; the observed Jetson Gemma path is the Q4 config.

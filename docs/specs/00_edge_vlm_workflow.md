@@ -18,7 +18,7 @@ In scope:
 Out of scope for the current version:
 
 - Downloading large models.
-- Proving performance on WSL or Jetson.
+- Proving formal performance on WSL or Jetson beyond the observed smoke runs.
 - TensorRT, TensorRT-LLM, vLLM, NanoLLM, Ollama implementation, or custom kernels.
 - Real camera integration.
 - Porting Ascend-specific OrangePi code.
@@ -29,7 +29,7 @@ Out of scope for the current version:
 - Developers can launch script templates for Gemma and MiniCPM-V.
 - The Python client can build text and image OpenAI-compatible payloads.
 - The benchmark harness logs each case as JSONL with success/failure.
-- Jetson migration docs clearly state what to copy, what not to copy, and what remains unverified.
+- Jetson migration docs clearly state what to copy, what not to copy, which Q4 smoke paths are observed, and what remains unverified.
 
 ## Decomposition
 

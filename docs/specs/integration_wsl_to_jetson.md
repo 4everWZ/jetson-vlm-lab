@@ -37,7 +37,9 @@ optional Markdown summary
 - Shared image and fake-stream sample assets are present for out-of-box payload checks.
 - Real Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 WSL CUDA benchmark records observed text and sample-image server output.
 - Real Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 WSL CUDA fake-stream runs record observed frame output.
-- Jetson run records `tegrastats` alongside benchmark JSONL.
+- Real MiniCPM-V 4.6 Q4 and Gemma Q4 Jetson smoke logs record observed text and sample-image server output.
+- Real MiniCPM-V 4.6 Q4 and Gemma Q4 Jetson fake-stream logs record observed frame output.
+- Formal Jetson performance reporting still needs `tegrastats` alongside benchmark JSONL.
 
 ## Benchmark / Regression Entry Points
 
@@ -51,11 +53,12 @@ optional Markdown summary
 ## Known Hard Boundaries
 
 - No performance claim is valid until a real model/server run completes.
-- No Jetson support claim is valid until the Jetson Docker/runtime path is observed.
+- Jetson support claims are limited to the observed MiniCPM-V 4.6 Q4 and Gemma Q4 smoke paths until additional Jetson logs exist.
 - MiniCPM-V 4.6 local HF checkpoint conversion and local quantization are not WSL acceptance paths on this memory-constrained host; use the official pre-built GGUF artifacts.
 - Gemma local quantization is not a WSL acceptance path on this host; use the prepared Q8_0 artifacts or the downloaded pre-built Q4_K_M artifact.
 - Gemma Q8 WSL CUDA image requests require the observed `LLAMA_BATCH_SIZE=512` and `LLAMA_UBATCH_SIZE=512` setting on this llama.cpp build; the lower text-only `LLAMA_UBATCH_SIZE=32` setting triggered a non-causal attention assertion.
+- Jetson Q8, camera input, long-run behavior, thermal/power behavior, and broad performance remain unverified.
 
 ## Final Acceptance Status
 
-Partially implemented. The scaffold, scripts, configs, tests, docs, shared sample assets, optional benchmark Markdown summaries, and ignored local model artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU fallback llama.cpp build with low-memory settings. WSL CUDA build/run wrappers exist; the CUDA build is verified with `CMAKE_CUDA_ARCHITECTURES=86`, `BUILD_JOBS=8`, and `GGML_CUDA=ON`. Gemma Q8_0, Gemma Q4_K_M, and MiniCPM-V 4.6 Q4_K_M WSL CUDA text/sample-image benchmarks passed with one server slot; real fake-stream runs against one committed sample frame also passed. Jetson inference and broader performance remain unverified.
+Partially implemented. The scaffold, scripts, configs, tests, docs, shared sample assets, optional benchmark Markdown summaries, and ignored local model artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU fallback llama.cpp build with low-memory settings. WSL CUDA build/run wrappers exist; the CUDA build is verified with `CMAKE_CUDA_ARCHITECTURES=86`, `BUILD_JOBS=8`, and `GGML_CUDA=ON`. Gemma Q8_0, Gemma Q4_K_M, and MiniCPM-V 4.6 Q4_K_M WSL CUDA text/sample-image benchmarks passed with one server slot; real fake-stream runs against one committed sample frame also passed. MiniCPM-V 4.6 Q4 and Gemma Q4 Jetson smoke runs also passed with copied benchmark/fake-stream logs. Jetson Q8, `tegrastats`-paired performance reporting, camera input, long-run behavior, and broad performance remain unverified.

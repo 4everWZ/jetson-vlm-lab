@@ -43,6 +43,12 @@ JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 
 The Jetson launchers use dusty-nv `llama_cpp` containers by default. On Jetson, install jetson-containers or otherwise provide `autotag`; the scripts use `autotag llama_cpp` to select a JetPack/L4T-compatible image. If `autotag` is unavailable, the fallback image is `dustynv/llama_cpp:r36.4.0`. Override the image with `LLAMA_CPP_DOCKER_IMAGE=...`, and override the server binary path inside the container with `LLAMA_SERVER_CMD=...` if a particular image places `llama-server` somewhere unusual.
 
+The observed Jetson smoke runs used:
+
+```bash
+LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87
+```
+
 ## Model Storage
 
 Prefer NVMe or known external storage:
@@ -52,18 +58,18 @@ sudo mkdir -p /mnt/nvme/models
 sudo chown "$USER:$USER" /mnt/nvme/models
 ```
 
-For Gemma 4 E2B-it, use the Q8_0 GGUF model and mmproj files as the first migration artifact. You can either let the Jetson Docker script fetch `MODEL_REF=ggml-org/gemma-4-E2B-it-GGUF:Q8_0` into the HF cache under the model directory, or pre-place these files under `MODEL_DIR`:
-
-```text
-/mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q8_0.gguf
-/mnt/nvme/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf
-```
-
-If Jetson memory is tighter, use the pre-built Gemma Q4 files instead:
+For Gemma 4 E2B-it, use the pre-built Q4 files for the observed Jetson smoke path:
 
 ```text
 /mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf
 /mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf
+```
+
+The Q8_0 GGUF model and mmproj files remain the verified WSL CUDA baseline and can be staged for a future Jetson Q8 check, but Jetson Q8 is not yet observed:
+
+```text
+/mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it-Q8_0.gguf
+/mnt/nvme/models/gemma-4-E2B-it-GGUF/mmproj-gemma-4-E2B-it-Q8_0.gguf
 ```
 
 For MiniCPM-V 4.6, pre-place the official pre-built GGUF files downloaded by `scripts/wsl/prepare_minicpmv46_q4.sh`:
@@ -81,7 +87,7 @@ Do not use Jetson as the primary conversion or quantization machine. The current
 2. Confirm `autotag llama_cpp` resolves a dusty-nv `llama_cpp` image, or set `LLAMA_CPP_DOCKER_IMAGE` explicitly.
 3. Confirm available storage under `/mnt/nvme/models` or set `MODEL_DIR`.
 4. Confirm model files or HF cache are present.
-5. Start Gemma with `CTX_SIZE=2048` and the Q8_0 config; lower context first if memory is tight.
+5. Start the observed Q4 smoke paths first: MiniCPM-V 4.6 Q4 with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, batch 128, ubatch 32; or Gemma Q4 with `CTX_SIZE=512`, `N_GPU_LAYERS=12`, batch 512, ubatch 512.
 6. Start `tegrastats` logging before benchmark runs.
 7. Run a text-only case before image cases.
 8. Record server command, container image, model ref, quantization, context size, and power mode with benchmark output.
@@ -89,10 +95,21 @@ Do not use Jetson as the primary conversion or quantization machine. The current
 ## Gemma 4 E2B-it On Jetson
 
 ```bash
-MODEL_DIR=/mnt/nvme/models \
-CTX_SIZE=2048 \
-N_GPU_LAYERS=99 \
-scripts/jetson/run_gemma4_e2b_llama_docker.sh
+MODEL_DIR=$PWD/models \
+LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87 \
+MODEL_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf \
+MMPROJ_PATH=$PWD/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf \
+MODEL_ALIAS=gemma4-e2b-it-q4 \
+CTX_SIZE=512 \
+N_GPU_LAYERS=12 \
+scripts/jetson/run_gemma4_e2b_llama_docker.sh \
+  -fit off \
+  --parallel 1 \
+  --batch-size 512 \
+  --ubatch-size 512 \
+  --cache-type-k q8_0 \
+  --cache-type-v q8_0 \
+  --no-warmup
 ```
 
 In another terminal:
@@ -100,18 +117,29 @@ In another terminal:
 ```bash
 scripts/common/check_server.sh
 EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
-  --config configs/models/gemma4_e2b_q8.yaml \
-  --output outputs/benchmarks/gemma4-e2b-q8-jetson.jsonl \
-  --summary-output outputs/benchmarks/gemma4-e2b-q8-jetson.md
+  --config configs/models/gemma4_e2b_q4.yaml \
+  --output outputs/benchmarks/gemma4-e2b-q4-jetson.jsonl \
+  --summary-output outputs/benchmarks/gemma4-e2b-q4-jetson.md \
+  --max-tokens 64 \
+  --temperature 0
 ```
+
+For the observed Gemma Q4 smoke, keep mmproj on GPU. The comparison run with `--no-mmproj-offload` also completed, but image throughput was lower.
 
 ## MiniCPM-V 4.6 On Jetson
 
 ```bash
-MODEL_DIR=/mnt/nvme/models \
-CTX_SIZE=2048 \
-N_GPU_LAYERS=99 \
-scripts/jetson/run_minicpmv46_llama_docker.sh
+MODEL_DIR=$PWD/models \
+LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87 \
+CTX_SIZE=512 \
+N_GPU_LAYERS=32 \
+scripts/jetson/run_minicpmv46_llama_docker.sh \
+  --parallel 1 \
+  --batch-size 128 \
+  --ubatch-size 32 \
+  --cache-type-k q8_0 \
+  --cache-type-v q8_0 \
+  --no-warmup
 ```
 
 In another terminal:
@@ -120,8 +148,10 @@ In another terminal:
 scripts/common/check_server.sh
 EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
   --config configs/models/minicpmv46_q4.yaml \
-  --output outputs/benchmarks/minicpmv46-jetson.jsonl \
-  --summary-output outputs/benchmarks/minicpmv46-jetson.md
+  --output outputs/benchmarks/minicpmv46-q4-jetson.jsonl \
+  --summary-output outputs/benchmarks/minicpmv46-q4-jetson.md \
+  --max-tokens 64 \
+  --temperature 0
 ```
 
 ## Common Failure Modes

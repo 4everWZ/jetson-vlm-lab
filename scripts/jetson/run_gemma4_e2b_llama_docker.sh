@@ -36,8 +36,6 @@ if [[ -n "${model_path}" || -n "${mmproj_path}" ]]; then
     echo "Set both MODEL_PATH and MMPROJ_PATH for local Gemma GGUF runtime." >&2
     exit 2
   fi
-  [[ -f "${model_path}" ]] || { echo "MODEL_PATH not found on host: ${model_path}" >&2; exit 2; }
-  [[ -f "${mmproj_path}" ]] || { echo "MMPROJ_PATH not found on host: ${mmproj_path}" >&2; exit 2; }
   if [[ "${model_path}" != "${model_dir}/"* || "${mmproj_path}" != "${model_dir}/"* ]]; then
     echo "MODEL_PATH and MMPROJ_PATH must be under MODEL_DIR so Docker can mount them." >&2
     echo "MODEL_DIR=${model_dir}" >&2
@@ -68,6 +66,11 @@ if [[ "${dry_run}" == "1" ]]; then
   printf '%q ' "${docker_cmd[@]}"
   printf '\n'
   exit 0
+fi
+
+if [[ -n "${model_path}" || -n "${mmproj_path}" ]]; then
+  [[ -f "${model_path}" ]] || { echo "MODEL_PATH not found on host: ${model_path}" >&2; exit 2; }
+  [[ -f "${mmproj_path}" ]] || { echo "MMPROJ_PATH not found on host: ${mmproj_path}" >&2; exit 2; }
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
