@@ -107,3 +107,10 @@ This confirms two constraints for the next optimization pass:
 The next promotion sweep should pass `--min-lfb-blocks 150` or higher so
 fragmented-memory runs are skipped and labeled instead of being mixed into
 parameter comparisons.
+
+Commit `f730cea` added the opt-in `--min-lfb-blocks` gate. A Jetson validation
+run with an intentionally unreachable threshold confirmed the skip path:
+
+| Run prefix | Variant | Threshold | Observed `lfb` | Result |
+|---|---|---:|---|---|
+| `min-lfb-skip-20260530` | `minicpm-q4-b512-u128-kvq8` | 9999 | `89x4MB` | wrote manifest/preflight only, `preflight_passed=false`, no Docker container launched |
