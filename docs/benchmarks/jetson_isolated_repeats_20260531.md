@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, and `7cee0f2` for prompt-cache variants |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, and `ee8b604` for host/repack variants |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, and `7cee0f2` for prompt-cache variants |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, and `ee8b604` for host/repack variants |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -63,10 +63,13 @@ flags include:
 --cont-batching, --no-cont-batching
 --cache-ram N
 --cache-prompt, --no-cache-prompt
+--repack, --no-repack
+--no-host
+--direct-io, --no-direct-io
 ```
 
-Flash Attention candidates were added only after this help output confirmed the
-flag exists in the pinned Jetson image.
+Flash Attention and later infra candidates were added only after this help
+output confirmed the relevant flags exist in the pinned Jetson image.
 
 ## Quality Canary Guard
 
@@ -236,9 +239,53 @@ than the image-path slowdown from disabling prompt cache RAM, and
 `--no-cache-prompt` is not the right knob for disabling the observed cache
 updates in this server build.
 
+## Host Buffer and Repack Candidates
+
+These runs tested the next confirmed pinned-image infra flags after
+prompt-cache controls were negative. `--no-host` bypasses the host buffer, and
+`--no-repack` disables llama.cpp weight repacking.
+
+| Model | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Note |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-nohost` | `minicpm-nohost-3-20260531f` | 268x4MB | 3 | yes | 18/18 | 1/1 | 44.181 | 41.416 | 1.452 | 1.567 | 1.794 | host buffer bypass |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-norepack` | `minicpm-norepack-3-20260531f` | 248x4MB | 3 | yes | 18/18 | 1/1 | 44.125 | 41.629 | 1.454 | 1.561 | 1.745 | weight repacking disabled |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-nohost` | `gemma-nohost-3-20260531f` | 246x4MB | 3 | no | 6/18 | 0/1 | n/a | n/a | n/a | n/a | n/a | CUDA OOM during request; partial report metrics are not comparable |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-norepack` | `gemma-norepack-3-20260531f` | 250x4MB | 3 | yes | 18/18 | 1/1 | 6.947 | 7.016 | 9.219 | 9.262 | 9.683 | single-frame fake latency looked better, then failed to repeat |
+
+Delta versus each model's current default:
+
+| Model | Variant | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---|---|---:|---:|---:|---:|---:|
+| MiniCPM | `nohost` | -0.99% | -3.79% | +1.04% | +4.26% | +2.40% |
+| MiniCPM | `norepack` | -1.12% | -3.29% | +1.18% | +3.86% | -0.40% |
+| Gemma | `nohost` | guard failed | guard failed | guard failed | guard failed | guard failed |
+| Gemma | `norepack` 3-trial | -2.69% | -1.11% | +2.78% | +1.57% | -5.03% |
+
+Because the Gemma `--no-repack` 3-trial run only improved the single-frame
+fake-stream metric, a focused 5-trial repeat compared the baseline and
+`--no-repack`. The command requested `--fake-stream-max-frames 3`, but both the
+local and Jetson `data/sample_stream` directories currently contain only
+`frame_001.png`, so fake-stream evidence is still one frame per variant.
+
+| Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8` | `gemma-baseline-5fake3-20260531f` | 246x4MB | 5 | yes | 30/30 | 1/1 | 6.960 | 7.024 | 9.201 | 9.180 | 9.955 |
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8-norepack` | `gemma-norepack-5fake3-20260531f` | 243x4MB | 5 | yes | 30/30 | 1/1 | 6.926 | 7.045 | 9.248 | 9.168 | 10.236 |
+
+5-trial delta for `--no-repack` versus the same-run baseline:
+
+| Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---:|---:|---:|---:|---:|
+| -0.49% | +0.30% | +0.51% | -0.13% | +2.82% |
+
+Decision: do not promote `--no-host` or `--no-repack`. MiniCPM regresses on
+formal throughput and latency. Gemma `--no-host` fails the quality guard after a
+CUDA OOM during request processing. Gemma `--no-repack` is at best an image-only
+micro-tradeoff in the 5-trial repeat and no longer improves fake-stream latency.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
 | MiniCPM-V 4.6 Q4 | `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial repeat did not show a `b512/u128` throughput win |
-| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads | Batch and Flash Attention variants are tradeoffs; memory mapping, locking, cache precision, no-continuous-batching, and prompt-cache variants are not promotion candidates |
+| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads | Batch and Flash Attention variants are tradeoffs; memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not promotion candidates |

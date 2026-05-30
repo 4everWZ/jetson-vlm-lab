@@ -93,21 +93,29 @@ The prompt-cache repeats are negative too: `--cache-ram 0` disables the prompt
 cache but sharply regresses image throughput and image latency, while
 `--no-cache-prompt` still leaves prompt-cache RAM updates in the server logs and
 is slower than the defaults.
+The host-buffer and repack repeats are not promotion candidates: MiniCPM
+`--no-host` and `--no-repack` regress formal metrics, Gemma `--no-host` fails
+the guard after CUDA OOM during request processing, and Gemma `--no-repack`
+does not preserve its initial single-frame fake-stream latency signal in a
+5-trial repeat.
 
 ## Next Optimization Work
 
-1. Continue only with flags already confirmed in pinned `llama-server --help`,
-   focusing next on host/repack paths such as `--no-host` and `--no-repack`.
-   `--direct-io` / `--no-direct-io` can be tested separately if load-path
-   behavior becomes part of the question, but it is less likely to improve
-   steady-state decode. `--mlock`, `--no-mmap`, lower KV cache precision,
-   `--no-cont-batching`, `--cache-ram 0`, and `--no-cache-prompt` now have
-   negative evidence on the current pinned image.
+1. Before spending more runs on load-path flags, add or use explicit
+   server-ready/startup timing. `--direct-io` / `--no-direct-io` can then be
+   tested for load behavior, but it should not be interpreted as steady-state
+   decode acceleration without a decode metric win.
 2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
    `lfb` is recorded before each variant and failed starts can be labeled as
    memory-state-sensitive or parameter-incompatible.
-3. For Gemma, next useful variants are still within `N_GPU_LAYERS=12`; test
-   host/repack behavior before raising GPU layers again.
+3. Strengthen fake-stream evidence before accepting small streaming-latency
+   wins. `data/sample_stream` currently has one frame, so
+   `--fake-stream-max-frames 3` still produced `Fake success` 1/1.
+4. `--mlock`, `--no-mmap`, lower KV cache precision, `--no-cont-batching`,
+   `--cache-ram 0`, `--no-cache-prompt`, `--no-host`, and `--no-repack` now have
+   negative evidence on the current pinned image. For steady-state speed, the
+   next high-leverage path is likely lightweight model expansion unless a new
+   confirmed llama.cpp flag changes decode behavior.
 
 ## Follow-Up Validation
 
