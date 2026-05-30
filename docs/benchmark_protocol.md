@@ -274,6 +274,25 @@ available and otherwise falls back to `SSH_ASKPASS` with `setsid`. Set
 force one mode. Dry-run output never prints the password. Do not commit
 `.env.jetson`.
 
+For optimization sweeps, prefer the remote sweep wrapper so the Jetson worktree
+is updated and the pinned llama.cpp image is applied consistently:
+
+```bash
+scripts/jetson/run_remote_optimization_sweep.sh \
+  --run-prefix minicpm-promo-iso-001 \
+  --variant minicpm-q4-baseline-b128-u32-kvq8 \
+  --variant minicpm-q4-b512-u128-kvq8 \
+  --trial-count 5 \
+  --max-tokens 64 \
+  --temperature 0 \
+  --min-lfb-blocks 150 \
+  --pre-variant-command "sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'" \
+  --wait-timeout-s 180
+```
+
+Set `JETSON_REMOTE_SYNC=0` to skip the initial `git pull --ff-only`, or set
+`JETSON_REMOTE_LLAMA_CPP_IMAGE` to test another pinned llama.cpp image.
+
 ## Reporting Rules
 
 - Report dry-run logs as payload/logging validation only.

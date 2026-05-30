@@ -1450,6 +1450,106 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertNotIn("secret-password", result.stderr)
         self.assertNotIn("secret-password", log_text)
 
+    def test_remote_optimization_sweep_syncs_branch_and_forwards_pinned_sweep_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                        "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_remote, 0o755)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--run-prefix",
+                    "unit-remote",
+                    "--variant",
+                    "minicpm-q4-baseline-b128-u32-kvq8",
+                    "--min-lfb-blocks",
+                    "150",
+                    "--pre-variant-command",
+                    "sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                    "FAKE_REMOTE_LOG": str(log_file),
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 2)
+        self.assertIn("ARG=git\nARG=pull\nARG=--ff-only\n", log_text)
+        self.assertIn("ARG=env\n", log_text)
+        self.assertIn("ARG=LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87\n", log_text)
+        self.assertIn("ARG=PYTHONPATH=src\n", log_text)
+        self.assertIn("ARG=bash\nARG=scripts/jetson/run_optimization_sweep.sh\n", log_text)
+        self.assertIn("ARG=--run-prefix\nARG=unit-remote\n", log_text)
+        self.assertIn("ARG=--variant\nARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
+        self.assertIn("ARG=--min-lfb-blocks\nARG=150\n", log_text)
+        self.assertIn("ARG=--pre-variant-command\nARG=sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'\n", log_text)
+
+    def test_remote_optimization_sweep_can_skip_git_sync(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                        "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_remote, 0o755)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--dry-run",
+                    "--variant",
+                    "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                    "JETSON_REMOTE_SYNC": "0",
+                    "FAKE_REMOTE_LOG": str(log_file),
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 1)
+        self.assertNotIn("ARG=pull\n", log_text)
+        self.assertIn("ARG=--dry-run\n", log_text)
+        self.assertIn("ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
+
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
 
