@@ -191,6 +191,34 @@ scripts/jetson/run_formal_benchmark.sh
 
 Use `EDGE_VLM_FORMAL_DRY_RUN=1 EDGE_VLM_SKIP_TEGRASTATS=1` to validate the wrapper without a running server or Jetson hardware.
 
+## Jetson Optimization Sweep
+
+Use the sweep wrapper when comparing server parameter variants. It starts each
+variant, runs the formal benchmark, optionally runs one fake-stream frame, and
+builds an optimization report that excludes sanity-failed output from ranking.
+
+```bash
+PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
+  --run-prefix minicpm-opt-001 \
+  --model minicpmv46-q4 \
+  --trial-count 3 \
+  --max-tokens 64 \
+  --temperature 0
+```
+
+Validate planned commands first with:
+
+```bash
+PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
+  --dry-run \
+  --plan-output outputs/optimization_sweeps/plan.json \
+  --run-prefix opt-plan \
+  --model minicpmv46-q4
+```
+
+Variants are defined in `configs/benchmark/jetson_optimization_variants.jsonl`;
+the promotion rules are documented in `docs/specs/jetson_optimization_loop.md`.
+
 ## Reporting Rules
 
 - Report dry-run logs as payload/logging validation only.

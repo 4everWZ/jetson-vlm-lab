@@ -13,6 +13,7 @@ ctx_size="${CTX_SIZE:-2048}"
 n_gpu_layers="${N_GPU_LAYERS:-99}"
 model_alias="${MODEL_ALIAS:-minicpmv46-q4}"
 docker_gpu_args="${DOCKER_GPU_ARGS:---runtime nvidia}"
+docker_tty="${DOCKER_TTY:-1}"
 dry_run="${JETSON_DRY_RUN:-0}"
 llama_server_cmd="${LLAMA_SERVER_CMD:-}"
 
@@ -22,6 +23,13 @@ container_model_path="${MODEL_PATH:-/models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_
 container_mmproj_path="${MMPROJ_PATH:-/models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf}"
 
 read -r -a gpu_args <<< "${docker_gpu_args}"
+tty_args=()
+if [[ "${docker_tty}" == "1" ]]; then
+  tty_args=(-it)
+elif [[ "${docker_tty}" != "0" ]]; then
+  echo "DOCKER_TTY must be 0 or 1." >&2
+  exit 2
+fi
 
 server_cmd=()
 if [[ -n "${llama_server_cmd}" ]]; then
@@ -30,7 +38,8 @@ else
   server_cmd=(/bin/bash -lc 'if command -v llama-server >/dev/null 2>&1; then server="$(command -v llama-server)"; elif [[ -x /usr/local/bin/llama-server ]]; then server=/usr/local/bin/llama-server; elif [[ -x /opt/llama.cpp/build/bin/llama-server ]]; then server=/opt/llama.cpp/build/bin/llama-server; elif command -v server >/dev/null 2>&1; then server="$(command -v server)"; else echo "llama-server not found in container; set LLAMA_SERVER_CMD" >&2; exit 127; fi; exec "${server}" "$@"' --)
 fi
 
-docker_cmd=(docker run --rm -it \
+docker_cmd=(docker run --rm \
+  "${tty_args[@]}" \
   "${gpu_args[@]}" \
   -p "${port}:8080" \
   -v "${model_dir}:/models" \

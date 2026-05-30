@@ -17,11 +17,19 @@ model_alias="${MODEL_ALIAS:-gemma4-e2b-it-q8}"
 model_path="${MODEL_PATH:-}"
 mmproj_path="${MMPROJ_PATH:-}"
 docker_gpu_args="${DOCKER_GPU_ARGS:---runtime nvidia}"
+docker_tty="${DOCKER_TTY:-1}"
 dry_run="${JETSON_DRY_RUN:-0}"
 llama_server_cmd="${LLAMA_SERVER_CMD:-}"
 
 mkdir -p "${model_dir}" "${hf_home_on_host}"
 read -r -a gpu_args <<< "${docker_gpu_args}"
+tty_args=()
+if [[ "${docker_tty}" == "1" ]]; then
+  tty_args=(-it)
+elif [[ "${docker_tty}" != "0" ]]; then
+  echo "DOCKER_TTY must be 0 or 1." >&2
+  exit 2
+fi
 
 server_cmd=()
 if [[ -n "${llama_server_cmd}" ]]; then
@@ -46,7 +54,8 @@ else
   model_args=(-hf "${model_ref}")
 fi
 
-docker_cmd=(docker run --rm -it \
+docker_cmd=(docker run --rm \
+  "${tty_args[@]}" \
   "${gpu_args[@]}" \
   -p "${port}:8080" \
   -v "${model_dir}:/models" \

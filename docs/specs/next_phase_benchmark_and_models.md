@@ -49,6 +49,8 @@ Model-specific scripts should be added one family at a time. Do not broaden runt
 
 Run parameter sweeps only after Phase 1 has at least one formal MiniCPM-V 4.6 Q4 baseline and one formal Gemma Q4 baseline.
 
+Use `docs/specs/jetson_optimization_loop.md` and `scripts/jetson/run_optimization_sweep.sh` for reproducible sweeps. A faster candidate is not promotable unless the optimization report marks its sanity guard as passing.
+
 Sweep variables:
 
 - `N_GPU_LAYERS`
@@ -73,4 +75,3 @@ TensorRT, TensorRT-LLM, NanoLLM, Ollama, vLLM, and custom kernels stay deferred 
 - InternVL3 1B GGUF: https://hf.co/ggml-org/InternVL3-1B-Instruct-GGUF
 - InternVL3 2B GGUF: https://hf.co/ggml-org/InternVL3-2B-Instruct-GGUF
 - Moondream2 GGUF: https://hf.co/ggml-org/moondream2-20250414-GGUF
-

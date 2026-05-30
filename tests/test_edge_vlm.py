@@ -528,6 +528,185 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(manifest["jetson"]["tegrastats_log"], None)
         self.assertEqual(manifest["jetson"]["tegrastats_status"], "skipped")
 
+    def test_optimization_report_ranks_only_sanity_passing_runs(self):
+        from edge_vlm.optimization import build_optimization_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            fast_but_bad = tmp_path / "fast_bad.jsonl"
+            steady_good = tmp_path / "steady_good.jsonl"
+            report = tmp_path / "report.md"
+            fast_but_bad.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "model": "local-fast",
+                                "run_id": "fast-bad",
+                                "prompt_case_id": "text_case",
+                                "input_type": "text",
+                                "success": True,
+                                "latency_s": 0.5,
+                                "tokens": 64,
+                                "tokens_per_sec": 128.0,
+                                "output_excerpt": "ok ok ok ok ok ok ok ok ok ok ok ok",
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "model": "local-fast",
+                                "run_id": "fast-bad",
+                                "prompt_case_id": "image_case",
+                                "input_type": "image",
+                                "success": True,
+                                "latency_s": 0.5,
+                                "tokens": 64,
+                                "tokens_per_sec": 128.0,
+                                "output_excerpt": "",
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            steady_good.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "model": "local-steady",
+                                "run_id": "steady-good",
+                                "prompt_case_id": "text_case",
+                                "input_type": "text",
+                                "success": True,
+                                "latency_s": 2.0,
+                                "tokens": 64,
+                                "tokens_per_sec": 32.0,
+                                "output_excerpt": "A concise answer that mentions memory, bandwidth, and thermal limits.",
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "model": "local-steady",
+                                "run_id": "steady-good",
+                                "prompt_case_id": "image_case",
+                                "input_type": "image",
+                                "success": True,
+                                "latency_s": 2.5,
+                                "tokens": 64,
+                                "tokens_per_sec": 25.6,
+                                "output_excerpt": "The image contains two high-contrast squares on a simple background.",
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summaries = build_optimization_report(
+                input_paths=[fast_but_bad, steady_good],
+                output_path=report,
+                min_output_chars=24,
+                max_repeat_ratio=0.6,
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual([summary.run_id for summary in summaries], ["steady-good", "fast-bad"])
+        self.assertTrue(summaries[0].guard_passed)
+        self.assertFalse(summaries[1].guard_passed)
+        self.assertIn("| 1 | steady-good | local-steady | yes |", report_text)
+        self.assertIn("| - | fast-bad | local-fast | no |", report_text)
+        self.assertIn("repetitive_output", report_text)
+        self.assertIn("empty_output", report_text)
+
+    def test_jetson_sweep_dry_run_writes_reproducible_variant_plan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            plan = tmp_path / "plan.json"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "minicpm-unit",
+                        "model": "minicpmv46-q4",
+                        "config": "configs/models/minicpmv46_q4.yaml",
+                        "launcher": "scripts/jetson/run_minicpmv46_llama_docker.sh",
+                        "env": {
+                            "MODEL_DIR": str(tmp_path / "models"),
+                            "MODEL_PATH": "${MODEL_DIR}/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf",
+                            "MODEL_ALIAS": "minicpmv46-q4",
+                            "CTX_SIZE": 512,
+                            "N_GPU_LAYERS": 32,
+                            "LLAMA_BATCH_SIZE": 128,
+                            "LLAMA_UBATCH_SIZE": 32,
+                        },
+                        "args": [
+                            "--parallel",
+                            "1",
+                            "--batch-size",
+                            "128",
+                            "--ubatch-size",
+                            "32",
+                            "--cache-type-k",
+                            "q8_0",
+                            "--cache-type-v",
+                            "q8_0",
+                            "--no-warmup",
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    "-m",
+                    "edge_vlm.jetson_sweep",
+                    "--variants",
+                    str(variants),
+                    "--model",
+                    "minicpmv46-q4",
+                    "--run-prefix",
+                    "unit-sweep",
+                    "--output-root",
+                    str(tmp_path / "outputs"),
+                    "--server-log-dir",
+                    str(tmp_path / "logs"),
+                    "--trial-count",
+                    "1",
+                    "--max-tokens",
+                    "16",
+                    "--temperature",
+                    "0",
+                    "--dry-run",
+                    "--plan-output",
+                    str(plan),
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={**os.environ, "PYTHONPATH": "src"},
+            )
+            plan_data = json.loads(plan.read_text(encoding="utf-8"))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(plan_data["variants"]), 1)
+        variant_plan = plan_data["variants"][0]
+        self.assertEqual(variant_plan["run_id"], "unit-sweep-minicpm-unit")
+        self.assertEqual(variant_plan["server_env"]["DOCKER_TTY"], "0")
+        self.assertEqual(
+            variant_plan["server_env"]["MODEL_PATH"],
+            str(tmp_path / "models" / "MiniCPM-V-4.6-gguf" / "MiniCPM-V-4_6-Q4_K_M.gguf"),
+        )
+        self.assertEqual(variant_plan["benchmark_env"]["EDGE_VLM_TRIAL_COUNT"], "1")
+        self.assertEqual(variant_plan["benchmark_env"]["EDGE_VLM_MAX_TOKENS"], "16")
+        self.assertIn("scripts/jetson/run_minicpmv46_llama_docker.sh", variant_plan["server_command"])
+        self.assertIn("--cache-type-k", variant_plan["server_command"])
+        self.assertTrue(variant_plan["paths"]["benchmark_jsonl"].endswith("unit-sweep-minicpm-unit.jsonl"))
+
     def test_next_phase_spec_orders_infra_before_model_expansion_and_lists_tencent_youtu_vl(self):
         spec = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
 
@@ -677,6 +856,26 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("/bin/bash -lc", result.stdout)
         self.assertIn("-m /models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf", result.stdout)
         self.assertIn("--mmproj /models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf", result.stdout)
+
+    def test_jetson_launchers_can_disable_docker_tty_for_automation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {
+                **os.environ,
+                "JETSON_DRY_RUN": "1",
+                "DOCKER_TTY": "0",
+                "MODEL_DIR": str(Path(tmp) / "models"),
+            }
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_minicpmv46_llama_docker.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("docker run", result.stdout)
+        self.assertNotIn("-it", result.stdout)
 
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
