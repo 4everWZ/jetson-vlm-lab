@@ -32,8 +32,10 @@ Current sweep knobs are deliberately narrow:
 - `N_GPU_LAYERS`
 - `LLAMA_BATCH_SIZE`
 - `LLAMA_UBATCH_SIZE`
-- llama.cpp server args already observed in the repo: `--parallel`,
+- llama.cpp server args observed in the repo or verified in the pinned
+  Jetson container help: `--parallel`,
   `--batch-size`, `--ubatch-size`, `--cache-type-k`, `--cache-type-v`,
+  `--flash-attn`, `--mlock`, `--mmap`/`--no-mmap`, `--cont-batching`,
   `--no-warmup`, and Gemma `-fit off`
 
 Do not add speculative llama.cpp flags until the container help or a dry-run
