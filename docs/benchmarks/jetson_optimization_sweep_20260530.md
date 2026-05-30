@@ -102,15 +102,16 @@ The DirectIO repeats also keep MiniCPM unchanged. Gemma `--direct-io` is a
 long-lived-server streaming candidate rather than a default: a 5-trial repeat
 kept formal text/image throughput effectively flat and improved the current
 single-frame fake-stream latency by 4.43%, but startup time increased by about
-one second.
+one second. A follow-up three-frame fake-stream confirmation on commit
+`e189965` reduced that fake-stream gain to about 2.00%, while text and image
+throughput were slightly lower and startup stayed about one second slower.
+DirectIO remains optional for long-lived streaming workloads, not a default.
 
 ## Next Optimization Work
 
-1. Strengthen fake-stream evidence before accepting Gemma `--direct-io` as a
-   runtime default. The default `data/sample_stream` fixture now has three
-   tracked frames; rerun the Gemma baseline versus `--direct-io` with
-   `--fake-stream-max-frames 3` before treating the 4.43% single-frame fake
-   latency win as stable streaming evidence.
+1. Treat Gemma `--direct-io` as an optional long-lived-server streaming flag
+   only. The three-frame confirmation no longer supports promoting it to the
+   default runtime.
 2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
    `lfb` is recorded before each variant and failed starts can be labeled as
    memory-state-sensitive or parameter-incompatible.

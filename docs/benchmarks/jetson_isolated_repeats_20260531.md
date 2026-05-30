@@ -354,9 +354,38 @@ still one frame because that run used the old one-frame `data/sample_stream`
 fixture. The next confirmation run should use the tracked three-frame fixture
 with `--fake-stream-max-frames 3`.
 
+The three-frame confirmation used commit `e189965`, which added
+`data/sample_stream/frame_002.png` and `frame_003.png`. Each variant was run
+separately after dropping page cache, with `--fake-stream-max-frames 3` and
+`--min-lfb-blocks 150`.
+
+| Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8` | `gemma-baseline-fake3-20260531i` | 250x4MB | 5 | yes | 30/30 | 3/3 | 7.035 | 6.975 | 7.142 | 9.183 | 9.060 | 9.889 |
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | `gemma-directio-fake3-20260531i` | 242x4MB | 5 | yes | 30/30 | 3/3 | 8.038 | 6.968 | 7.090 | 9.198 | 9.064 | 9.691 |
+
+Three-frame delta for Gemma `--direct-io` versus the same-fixture baseline:
+
+| Startup | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---:|---:|---:|---:|---:|---:|
+| +14.26% | -0.10% | -0.72% | +0.16% | +0.04% | -2.00% |
+
+Per-frame fake-stream latencies:
+
+| Variant | `frame_001.png` | `frame_002.png` | `frame_003.png` |
+|---|---:|---:|---:|
+| Baseline | 9.790 | 9.736 | 10.142 |
+| DirectIO | 9.774 | 9.776 | 9.525 |
+
+Decision: the multi-frame check weakens the DirectIO case. It still passes the
+guard and improves average fake-stream latency by about 2%, but formal
+throughput is slightly lower and startup remains about one second slower. Keep
+Gemma `--direct-io` as an optional long-lived-server streaming candidate only;
+do not promote it to the default runtime.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
 | MiniCPM-V 4.6 Q4 | `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial repeat did not show a `b512/u128` throughput win |
-| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads; DirectIO for long-lived streaming workloads | Batch, Flash Attention, and DirectIO variants are tradeoffs; memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |
+| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads; DirectIO only as an optional long-lived streaming workload flag | Batch, Flash Attention, and DirectIO variants are tradeoffs; memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |
