@@ -160,6 +160,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
                         "id": "text_en_reasoning_short",
                         "input_type": "text",
                         "prompt": "Give one reason edge devices are memory constrained.",
+                        "quality_terms_any": ["memory", "bandwidth"],
                     }
                 )
                 + "\n",
@@ -192,6 +193,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(record["success"], True)
         self.assertEqual(record["device"], "wsl")
         self.assertIsInstance(record["latency_s"], float)
+        self.assertEqual(record["quality_terms_any"], ["memory", "bandwidth"])
 
     def test_benchmark_end_time_follows_monotonic_latency_when_wall_clock_moves_backward(self):
         from edge_vlm.benchmark import run_benchmark
@@ -620,6 +622,63 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("| - | fast-bad | local-fast | no |", report_text)
         self.assertIn("repetitive_output", report_text)
         self.assertIn("empty_output", report_text)
+
+    def test_optimization_report_rejects_quality_term_miss(self):
+        from edge_vlm.optimization import build_optimization_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            fast_off_topic = tmp_path / "fast_off_topic.jsonl"
+            steady_relevant = tmp_path / "steady_relevant.jsonl"
+            report = tmp_path / "report.md"
+            fast_off_topic.write_text(
+                json.dumps(
+                    {
+                        "model": "local-fast",
+                        "run_id": "fast-off-topic",
+                        "prompt_case_id": "text_case",
+                        "input_type": "text",
+                        "success": True,
+                        "latency_s": 0.5,
+                        "tokens": 64,
+                        "tokens_per_sec": 128.0,
+                        "output_excerpt": "A fluent answer that is long enough but avoids the required subject.",
+                        "quality_terms_any": ["memory", "bandwidth"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            steady_relevant.write_text(
+                json.dumps(
+                    {
+                        "model": "local-steady",
+                        "run_id": "steady-relevant",
+                        "prompt_case_id": "text_case",
+                        "input_type": "text",
+                        "success": True,
+                        "latency_s": 2.0,
+                        "tokens": 64,
+                        "tokens_per_sec": 32.0,
+                        "output_excerpt": "A useful answer that names memory pressure and bandwidth limits.",
+                        "quality_terms_any": ["memory", "bandwidth"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summaries = build_optimization_report(
+                input_paths=[fast_off_topic, steady_relevant],
+                output_path=report,
+                min_output_chars=24,
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual([summary.run_id for summary in summaries], ["steady-relevant", "fast-off-topic"])
+        self.assertTrue(summaries[0].guard_passed)
+        self.assertFalse(summaries[1].guard_passed)
+        self.assertIn("quality_terms_miss", report_text)
 
     def test_optimization_report_includes_fake_stream_guard_and_latency(self):
         from edge_vlm.optimization import build_optimization_report

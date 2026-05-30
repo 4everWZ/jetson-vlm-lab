@@ -78,6 +78,16 @@ def _usage_tokens(response: dict[str, Any] | None) -> int | None:
     return None
 
 
+def _quality_terms_any(case: dict[str, Any]) -> list[str]:
+    value = case.get("quality_terms_any", [])
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(term, str) or not term.strip() for term in value):
+        case_id = case.get("id") or "unknown"
+        raise ValueError(f"prompt case {case_id} quality_terms_any must be a list of non-empty strings")
+    return [term.strip() for term in value]
+
+
 def _wall_time_pair_from_latency(started_wall: datetime, latency_s: float) -> tuple[str, str]:
     ended_wall = started_wall + timedelta(seconds=latency_s)
     return started_wall.isoformat(), ended_wall.isoformat()
@@ -130,6 +140,7 @@ def _build_record(
         "success": result_ok,
         "error": error,
         "output_excerpt": output_text[:500],
+        "quality_terms_any": _quality_terms_any(case),
     }
 
 

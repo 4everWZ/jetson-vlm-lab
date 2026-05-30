@@ -16,11 +16,16 @@ also read matching fake-stream JSONL files, only after checking:
 - output excerpts are not empty
 - output excerpts meet a minimum length
 - output excerpts are not dominated by obvious repetition
+- output excerpts include at least one case-specific `quality_terms_any` canary
+  term when the prompt case defines one
 - fake-stream frame outputs pass the same lightweight output checks when
   provided
 
-This is a sanity guard, not a full quality evaluation. A high-speed candidate
-that fails the guard is kept in the report but excluded from ranked candidates.
+This is a sanity guard, not a full quality evaluation. The canary terms catch
+obvious off-topic or collapsed answers before speed ranking, but a promotion
+still needs review against the raw excerpts when a speedup comes from precision
+or cache changes. A high-speed candidate that fails the guard is kept in the
+report but excluded from ranked candidates.
 
 ## Variant Source
 

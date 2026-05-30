@@ -84,6 +84,17 @@ def _char_repeat_ratio(text: str) -> float:
     return counts.most_common(1)[0][1] / len(chars)
 
 
+def _quality_terms_miss(record: dict[str, Any], output: str) -> bool:
+    terms = record.get("quality_terms_any")
+    if not isinstance(terms, list):
+        return False
+    normalized_terms = [str(term).strip().casefold() for term in terms if str(term).strip()]
+    if not normalized_terms:
+        return False
+    normalized_output = output.casefold()
+    return not any(term in normalized_output for term in normalized_terms)
+
+
 def _sanity_failures(
     records: Iterable[dict[str, Any]],
     *,
@@ -107,6 +118,8 @@ def _sanity_failures(
             failures.append(f"{case_id}:short_output")
         if max(_word_repeat_ratio(output), _char_repeat_ratio(output)) > max_repeat_ratio:
             failures.append(f"{case_id}:repetitive_output")
+        if _quality_terms_miss(record, output):
+            failures.append(f"{case_id}:quality_terms_miss")
     return tuple(failures)
 
 
