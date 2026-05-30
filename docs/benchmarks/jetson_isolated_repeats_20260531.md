@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `c7c6ce3` |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384` |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `c7c6ce3` |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384` |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -48,7 +48,7 @@ Decision: keep `batch=128`, `ubatch=32` as the MiniCPM default. The
 `batch=512`, `ubatch=128` candidate did not beat the baseline on formal text or
 image throughput in the isolated 5-trial repeat.
 
-## Gemma 4 E2B-it Q4
+## Gemma 4 E2B-it Q4 - 3-Trial Repeat
 
 | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
 |---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
@@ -72,9 +72,32 @@ the margin is under 1% on throughput and earlier sweep evidence showed a larger
 fake-stream latency regression. Promote only after a longer isolated repeat
 confirms the gain and fake-stream latency remains effectively flat.
 
+## Gemma 4 E2B-it Q4 - 5-Trial Batch Search
+
+The longer repeat tested the baseline, the faster formal-latency candidate, and
+a midpoint candidate added in commit `3ea75f5`.
+
+| Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8` | `gemma-iso5-20260531a` | 247x4MB | 5 | yes | 30/30 | 1/1 | 7.139 | 7.095 | 8.970 | 9.119 | 10.196 |
+| `gemma-q4-gpu12-b384-u384-kvq8` | `gemma-iso5-20260531c` | 258x4MB | 5 | yes | 30/30 | 1/1 | 7.108 | 7.052 | 9.010 | 9.148 | 10.094 |
+| `gemma-q4-gpu12-b256-u256-kvq8` | `gemma-iso5-20260531b` | 255x4MB | 5 | yes | 30/30 | 1/1 | 7.155 | 7.193 | 8.952 | 8.973 | 10.465 |
+
+Delta versus baseline:
+
+| Variant | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---|---:|---:|---:|---:|---:|
+| `b384/u384` | -0.43% | -0.61% | +0.45% | +0.32% | -1.00% |
+| `b256/u256` | +0.22% | +1.38% | -0.20% | -1.60% | +2.64% |
+
+Decision: keep `batch=512`, `ubatch=512` as the Gemma default. The lower
+`b256/u256` setting is best for formal text/image throughput but hurts
+fake-stream latency. The midpoint `b384/u384` improves fake-stream latency but
+regresses formal text/image throughput. Neither is a clean promotion candidate.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
 | MiniCPM-V 4.6 Q4 | `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial repeat did not show a `b512/u128` throughput win |
-| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256`, `N_GPU_LAYERS=12` | isolated repeat slightly favors lower batch/ubatch, but margin is small and needs a longer fake-stream-stable repeat |
+| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency | 5-trial search shows a tradeoff rather than a clear win |
