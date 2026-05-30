@@ -1504,16 +1504,22 @@ class EdgeVlmContractsTest(unittest.TestCase):
             "smolvlm2-256m-q8": {
                 "config": "configs/models/smolvlm2_256m_q8.yaml",
                 "model_ref": "ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0",
+                "model_file": "SmolVLM2-256M-Video-Instruct-Q8_0.gguf",
+                "mmproj_file": "mmproj-SmolVLM2-256M-Video-Instruct-Q8_0.gguf",
                 "ctx_size": 512,
             },
             "qwen3-vl-2b-thinking-q4": {
                 "config": "configs/models/qwen3_vl_2b_thinking_q4.yaml",
                 "model_ref": "Qwen/Qwen3-VL-2B-Thinking-GGUF:Q4_K_M",
+                "model_file": "Qwen3VL-2B-Thinking-Q4_K_M.gguf",
+                "mmproj_file": "mmproj-Qwen3VL-2B-Thinking-Q8_0.gguf",
                 "ctx_size": 1024,
             },
             "youtu-vl-4b-q8": {
                 "config": "configs/models/youtu_vl_4b_q8.yaml",
                 "model_ref": "tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0",
+                "model_file": "Youtu-VL-4B-Instruct-Q8_0.gguf",
+                "mmproj_file": "mmproj-Youtu-VL-4b-Instruct-BF16.gguf",
                 "ctx_size": 2048,
             },
         }
@@ -1530,6 +1536,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 self.assertEqual(config["model"]["name"], model_name)
                 self.assertEqual(config["model"]["model_ref"], expected_values["model_ref"])
                 self.assertTrue(config_supports_images(config))
+                self.assertEqual(config["runtime"]["model_file"], expected_values["model_file"])
+                self.assertEqual(config["runtime"]["mmproj_file"], expected_values["mmproj_file"])
                 self.assertEqual(
                     config["runtime"]["jetson_script"],
                     "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
@@ -1541,6 +1549,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 self.assertEqual(variant["config"], expected_values["config"])
                 self.assertEqual(variant["launcher"], "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh")
                 self.assertEqual(variant["env"]["MODEL_REF"], expected_values["model_ref"])
+                self.assertEqual(variant["env"]["MODEL_FILE"], expected_values["model_file"])
+                self.assertEqual(variant["env"]["MMPROJ_FILE"], expected_values["mmproj_file"])
                 self.assertEqual(variant["env"]["CTX_SIZE"], expected_values["ctx_size"])
                 self.assertEqual(variant["env"]["MODEL_ALIAS"], model_name)
                 self.assertIn("--parallel", variant["args"])
@@ -1554,6 +1564,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 "DOCKER_TTY": "0",
                 "MODEL_DIR": str(Path(tmp) / "models"),
                 "MODEL_REF": "ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0",
+                "MODEL_FILE": "SmolVLM2-256M-Video-Instruct-Q8_0.gguf",
+                "MMPROJ_FILE": "mmproj-SmolVLM2-256M-Video-Instruct-Q8_0.gguf",
                 "MODEL_ALIAS": "smolvlm2-256m-q8",
                 "CTX_SIZE": "512",
                 "N_GPU_LAYERS": "99",
@@ -1579,7 +1591,9 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("docker run", result.stdout)
-        self.assertIn("-hf ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0", result.stdout)
+        self.assertIn("-m /models/ggml-org/SmolVLM2-256M-Video-Instruct-GGUF/SmolVLM2-256M-Video-Instruct-Q8_0.gguf", result.stdout)
+        self.assertIn("--mmproj /models/ggml-org/SmolVLM2-256M-Video-Instruct-GGUF/mmproj-SmolVLM2-256M-Video-Instruct-Q8_0.gguf", result.stdout)
+        self.assertNotIn("-hf ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0", result.stdout)
         self.assertIn("--alias smolvlm2-256m-q8", result.stdout)
         self.assertIn("-p 19101:8080", result.stdout)
         self.assertIn("-c 512", result.stdout)

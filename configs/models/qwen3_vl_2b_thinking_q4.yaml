@@ -15,6 +15,8 @@ runtime:
   ctx_size: 1024
   n_gpu_layers: 99
   model_ref_env: MODEL_REF
+  model_file: Qwen3VL-2B-Thinking-Q4_K_M.gguf
+  mmproj_file: mmproj-Qwen3VL-2B-Thinking-Q8_0.gguf
   wsl_script: null
   jetson_script: scripts/jetson/run_hf_gguf_vlm_llama_docker.sh
 
@@ -24,4 +26,4 @@ capabilities:
   audio: false
 
 notes:
-  status: Candidate only. Uses Qwen/Qwen3-VL-2B-Thinking-GGUF Q4_K_M through llama.cpp -hf, with mmproj resolved from the Hub. Not yet observed on this repo's Jetson; compare only after SmolVLM2 establishes the generic HF GGUF launcher path.
+  status: Candidate only. Uses Qwen/Qwen3-VL-2B-Thinking-GGUF Q4_K_M with the Q8_0 mmproj downloaded to MODEL_DIR, then loaded as local -m/--mmproj files because the pinned Jetson llama.cpp container lacks HTTPS support for direct -hf downloads. Not yet observed on this repo's Jetson; compare only after SmolVLM2 establishes the generic HF GGUF launcher path.

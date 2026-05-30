@@ -47,10 +47,12 @@ Initial candidate order:
 | Tencent HY-Embodied-0.5-X | Latest Tencent edge-oriented VLM watchlist item | `tencent/HY-Embodied-0.5-X` | Deferred: current release is Transformers/Safetensors/custom-code, not a low-friction llama.cpp GGUF candidate |
 
 Use the generic `scripts/jetson/run_hf_gguf_vlm_llama_docker.sh` launcher for
-Hub-hosted GGUF candidates that llama.cpp can load with `-hf`. Add
-model-specific launchers only when a candidate needs local model/mmproj files
-or confirmed nonstandard server flags. Do not broaden runtime claims from one
-candidate to another.
+Hub-hosted GGUF candidates. The launcher downloads the named GGUF and mmproj
+files to `MODEL_DIR`, then starts the pinned container with local
+`-m`/`--mmproj` paths. This avoids direct `llama-server -hf` downloads because
+the pinned Jetson llama.cpp container currently reports no HTTPS support. Add
+model-specific launchers only when a candidate needs confirmed nonstandard
+server flags. Do not broaden runtime claims from one candidate to another.
 
 First smoke order:
 
