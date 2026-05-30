@@ -1217,6 +1217,29 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("--cache-type-k", candidate["args"])
         self.assertIn("q8_0", candidate["args"])
 
+    def test_jetson_optimization_variants_include_flash_attention_candidates(self):
+        variants = [
+            json.loads(line)
+            for line in Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        by_id = {variant["id"]: variant for variant in variants}
+
+        minicpm = by_id["minicpm-q4-baseline-b128-u32-kvq8-faon"]
+        gemma = by_id["gemma-q4-baseline-gpu12-b512-u512-kvq8-faon"]
+
+        for candidate in (minicpm, gemma):
+            self.assertIn("--flash-attn", candidate["args"])
+            flag_index = candidate["args"].index("--flash-attn")
+            self.assertEqual(candidate["args"][flag_index + 1], "on")
+            self.assertIn("--cache-type-k", candidate["args"])
+            self.assertIn("--cache-type-v", candidate["args"])
+
+        self.assertEqual(minicpm["env"]["LLAMA_BATCH_SIZE"], 128)
+        self.assertEqual(minicpm["env"]["LLAMA_UBATCH_SIZE"], 32)
+        self.assertEqual(gemma["env"]["LLAMA_BATCH_SIZE"], 512)
+        self.assertEqual(gemma["env"]["LLAMA_UBATCH_SIZE"], 512)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [
