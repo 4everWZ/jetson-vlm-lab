@@ -85,12 +85,17 @@ The follow-up memory-mapping repeats also keep the promotion state unchanged:
 plain `--mlock` hits `RLIMIT_MEMLOCK`, `mlock` with Docker memlock ulimit still
 does not beat the defaults, MiniCPM `--no-mmap` regresses formal throughput, and
 Gemma `--no-mmap` fails startup with CUDA OOM despite high preflight `lfb`.
+The cache and continuous-batching repeats are also negative for default
+promotion: `kq4/vq8` fails startup, `kvq4` regresses MiniCPM and only gives
+Gemma an image-throughput tradeoff with worse fake-stream latency, and
+`--no-cont-batching` is not useful.
 
 ## Next Optimization Work
 
 1. Continue only with flags already confirmed in pinned `llama-server --help`,
-   focusing next on cache settings and continuous batching. `--mlock` and
-   `--no-mmap` now have negative evidence on the current pinned image.
+   focusing next on prompt-cache controls such as `--cache-ram 0` and
+   `--no-cache-prompt`. `--mlock`, `--no-mmap`, lower KV cache precision, and
+   `--no-cont-batching` now have negative evidence on the current pinned image.
 2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
    `lfb` is recorded before each variant and failed starts can be labeled as
    memory-state-sensitive or parameter-incompatible.

@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, and `433c718` for `mlock` plus Docker memlock ulimit variants |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, and `f1c219e` for cache/continuous-batching variants |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, and `433c718` for `mlock` plus Docker memlock ulimit variants |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, and `f1c219e` for cache/continuous-batching variants |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -61,10 +61,21 @@ flags include:
 --cache-type-k TYPE
 --cache-type-v TYPE
 --cont-batching, --no-cont-batching
+--cache-ram N
+--cache-prompt, --no-cache-prompt
 ```
 
 Flash Attention candidates were added only after this help output confirmed the
 flag exists in the pinned Jetson image.
+
+## Quality Canary Guard
+
+Commit `643d63c` added optional `quality_terms_any` terms to prompt cases and
+to the optimization report guard. Commit `316f999` broadened the Chinese prompt
+case with English resource terms after Gemma's visible excerpt started with an
+English thinking trace. The canary is intentionally weak: it rejects obviously
+off-topic or collapsed answers before speed ranking, but it is not a full
+quality evaluation.
 
 ## Gemma 4 E2B-it Q4 - 3-Trial Repeat
 
@@ -167,9 +178,39 @@ the Docker ulimit was raised; with the ulimit raised it still failed to improve
 formal throughput. Gemma `--no-mmap` fails startup under high `lfb`, so keep it
 out of promotion sweeps unless a future memory/layout change makes it relevant.
 
+## Cache Precision and Continuous Batching Candidates
+
+These runs tested lower-precision KV cache and disabling continuous batching.
+The `kq4-vq8` variants failed during server startup on both models with the
+pinned image reporting that a quantized V cache requires Flash Attention.
+
+| Model | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Note |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kq4-vq8` | `minicpm-kq4vq8-3-20260531c` | 314x4MB | 0 | n/a | n/a | n/a |  |  |  |  |  | server rc 139 |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq4` | `minicpm-kvq4-3-20260531c` | 304x4MB | 3 | yes | 18/18 | 1/1 | 44.153 | 41.330 | 1.452 | 1.571 | 1.781 | lower K/V cache precision |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-nocb` | `minicpm-nocb-3-20260531c` | 298x4MB | 3 | yes | 18/18 | 1/1 | 44.258 | 41.637 | 1.450 | 1.560 | 1.754 | continuous batching disabled |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kq4-vq8` | `gemma-kq4vq8-3-20260531c` | 295x4MB | 0 | n/a | n/a | n/a |  |  |  |  |  | server rc 139 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq4` | `gemma-kvq4-3-20260531d` | 294x4MB | 3 | yes | 18/18 | 1/1 | 7.120 | 7.174 | 8.997 | 9.055 | 10.611 | lower K/V cache precision |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-nocb` | `gemma-nocb-3-20260531d` | 298x4MB | 3 | yes | 18/18 | 1/1 | 6.930 | 6.743 | 9.239 | 9.629 | 11.080 | continuous batching disabled |
+
+Delta versus each model's current default:
+
+| Model | Variant | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---|---|---:|---:|---:|---:|---:|
+| MiniCPM | `kvq4` | -1.06% | -3.99% | +1.04% | +4.52% | +1.66% |
+| MiniCPM | `nocb` | -0.82% | -3.28% | +0.90% | +3.79% | +0.11% |
+| Gemma | `kvq4` | -0.27% | +1.11% | +0.30% | -0.70% | +4.07% |
+| Gemma | `nocb` | -2.93% | -4.96% | +3.00% | +5.59% | +8.67% |
+
+Decision: do not promote lower-precision KV cache or `--no-cont-batching` as
+defaults. MiniCPM regresses across formal metrics. Gemma `kvq4` improves image
+throughput in a 3-trial repeat but slows fake-stream latency more than the
+existing Flash Attention image-only tradeoff, so it is not a better candidate.
+Disabling continuous batching is negative for Gemma and not useful for MiniCPM.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
 | MiniCPM-V 4.6 Q4 | `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial repeat did not show a `b512/u128` throughput win |
-| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads | Batch and Flash Attention variants are tradeoffs; memory mapping and locking variants are not promotion candidates |
+| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads | Batch and Flash Attention variants are tradeoffs; memory mapping, locking, cache precision, and no-continuous-batching variants are not promotion candidates |
