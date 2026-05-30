@@ -38,7 +38,7 @@ Initial candidate order:
 
 | Candidate | Purpose | Source | Initial status |
 |---|---|---|---|
-| SmolVLM2 256M | Lowest-resource image baseline and latency floor | `ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0` | Added as generic HF GGUF smoke candidate; Jetson runtime not yet observed |
+| SmolVLM2 256M | Lowest-resource image baseline and latency floor | `ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0` | Jetson 1-trial smoke passed in `smolvlm2-256m-smoke64-20260531c`; latency floor only, not a quality/default replacement |
 | Qwen3-VL-2B Thinking | New small Qwen VLM quality/speed comparison | `Qwen/Qwen3-VL-2B-Thinking-GGUF:Q4_K_M` | Added as generic HF GGUF smoke candidate; run after SmolVLM2 validates the path |
 | Tencent Youtu-VL-4B | Tencent small VLM candidate for Chinese/image reasoning comparison | `tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0` | Added as generic HF GGUF smoke candidate; start with conservative GPU offload |
 | SmolVLM2 500M | Slightly larger latency/quality point if 256M is too weak | `ggml-org/SmolVLM2-500M-Video-Instruct-GGUF` | Watchlist; add after 256M establishes the path |
