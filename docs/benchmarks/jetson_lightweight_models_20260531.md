@@ -70,9 +70,35 @@ it as a latency floor, not as a replacement default.
 
 ## Next Model Checks
 
-1. Run `qwen3-vl-2b-thinking-q4-smoke` with the same 1-trial, 64-token,
-   three-frame fake-stream protocol.
-2. Run `youtu-vl-4b-q8-smoke` only after confirming enough contiguous memory,
+## Qwen3-VL 2B Thinking Q4 Smoke
+
+Variant: `qwen3-vl-2b-thinking-q4-smoke`
+
+The first Qwen run with the default 180s server wait timed out while downloading
+the 1.056GB model file; no server startup had happened yet. Rerunning with
+`--wait-timeout-s 900` resumed the partial download and completed the smoke. A
+third run used the cached files to measure startup without download time.
+
+Downloaded Qwen artifacts:
+
+| File | Size |
+|---|---:|
+| `models/Qwen/Qwen3-VL-2B-Thinking-GGUF/Qwen3VL-2B-Thinking-Q4_K_M.gguf` | 1,130,724,320 bytes |
+| `models/Qwen/Qwen3-VL-2B-Thinking-GGUF/mmproj-Qwen3VL-2B-Thinking-Q8_0.gguf` | 445,053,216 bytes |
+
+| Run prefix | Preflight `lfb` | Startup s | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| `qwen3vl-2b-thinking-smoke64-20260531b` | 231x4MB | 201.450 | yes | 6/6 | 3/3 | 33.057 | 30.774 | 1.940 | 2.081 | 1.983 |
+| `qwen3vl-2b-thinking-smoke64-cached-20260531c` | 239x4MB | 5.067 | yes | 6/6 | 3/3 | 32.947 | 30.837 | 1.947 | 2.077 | 1.978 |
+
+Decision: Qwen3-VL 2B Thinking Q4 is a valid Jetson smoke candidate. It is much
+slower than SmolVLM2 256M but still substantially faster than the current
+Gemma Q4 baseline, and its sample outputs are more deliberate than SmolVLM2.
+Do not promote it without a repeated formal run and output review.
+
+## Next Model Checks
+
+1. Run `youtu-vl-4b-q8-smoke` only after confirming enough contiguous memory,
    because the Q8 model is much larger than SmolVLM2 256M.
-3. Promote none of these candidates until a 3- or 5-trial formal repeat passes
+2. Promote none of these candidates until a 3- or 5-trial formal repeat passes
    the guard and preserves acceptable output quality.
