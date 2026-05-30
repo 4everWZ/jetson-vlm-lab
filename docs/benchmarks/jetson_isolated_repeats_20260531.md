@@ -264,7 +264,7 @@ Delta versus each model's current default:
 Because the Gemma `--no-repack` 3-trial run only improved the single-frame
 fake-stream metric, a focused 5-trial repeat compared the baseline and
 `--no-repack`. The command requested `--fake-stream-max-frames 3`, but both the
-local and Jetson `data/sample_stream` directories currently contain only
+local and Jetson `data/sample_stream` directories then contained only
 `frame_001.png`, so fake-stream evidence is still one frame per variant.
 
 | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
@@ -350,7 +350,9 @@ Decision: do not change MiniCPM; DirectIO is noise-level there. Keep Gemma
 `--direct-io` as a long-lived-server streaming candidate, not a default yet. It
 passes the guard and does not hurt formal throughput in the 5-trial repeat, but
 it increases startup time by about one second and the fake-stream evidence is
-still one frame because `data/sample_stream` only contains `frame_001.png`.
+still one frame because that run used the old one-frame `data/sample_stream`
+fixture. The next confirmation run should use the tracked three-frame fixture
+with `--fake-stream-max-frames 3`.
 
 ## Current Promotion State
 

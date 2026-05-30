@@ -80,6 +80,8 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
   - `data/sample_images/image_caption_single.png`
   - `data/sample_images/image_safety_scene_single.png`
   - `data/sample_stream/frame_001.png`
+  - `data/sample_stream/frame_002.png`
+  - `data/sample_stream/frame_003.png`
 - Benchmark runs can optionally write a Markdown summary with `--summary-output`.
 - Benchmark records can include `run_id`, `trial_index`, and `case_index`, and formal runs can write a JSON manifest with `--metadata-output`.
 - The Jetson formal benchmark wrapper can dry-run without hardware, or capture profile files and `tegrastats` beside a real benchmark run when available.

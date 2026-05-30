@@ -141,7 +141,8 @@ and the manifest records `pre_variant_command_passed=false` plus
 A candidate can become the new baseline only when:
 
 1. the formal benchmark completes successfully
-2. the one-frame fake-stream check completes successfully
+2. the fake-stream check completes successfully; use the default multi-frame
+   `data/sample_stream` set for streaming-sensitive candidates
 3. the optimization report marks the candidate guard as `yes`
 4. its throughput or latency improves over the prior baseline
 5. the fake-stream latency is not worse enough to invalidate the use case

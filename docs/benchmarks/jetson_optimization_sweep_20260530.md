@@ -107,8 +107,9 @@ one second.
 ## Next Optimization Work
 
 1. Strengthen fake-stream evidence before accepting Gemma `--direct-io` as a
-   runtime default. `data/sample_stream` currently has one frame, so add or use
-   a small multi-frame stream before treating the 4.43% single-frame fake
+   runtime default. The default `data/sample_stream` fixture now has three
+   tracked frames; rerun the Gemma baseline versus `--direct-io` with
+   `--fake-stream-max-frames 3` before treating the 4.43% single-frame fake
    latency win as stable streaming evidence.
 2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
    `lfb` is recorded before each variant and failed starts can be labeled as

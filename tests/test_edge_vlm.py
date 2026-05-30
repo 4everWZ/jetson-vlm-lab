@@ -1518,7 +1518,11 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 image_dir = Path(case["image_dir"])
                 self.assertTrue(image_dir.is_dir(), f"missing fake-stream directory: {image_dir}")
                 frames = sorted(path for path in image_dir.iterdir() if path.suffix.lower() in image_suffixes)
-                self.assertGreater(len(frames), 0, f"no sample stream frames in: {image_dir}")
+                self.assertGreaterEqual(
+                    len(frames),
+                    3,
+                    f"fake-stream sample should include at least three frames: {image_dir}",
+                )
 
     def test_jetson_gemma_launcher_can_dry_run_without_docker_or_hardware(self):
         with tempfile.TemporaryDirectory() as tmp:
