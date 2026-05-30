@@ -194,10 +194,10 @@ Use `EDGE_VLM_FORMAL_DRY_RUN=1 EDGE_VLM_SKIP_TEGRASTATS=1` to validate the wrapp
 ## Jetson Optimization Sweep
 
 Use the sweep wrapper when comparing server parameter variants. It starts each
-variant, runs the formal benchmark, optionally runs one fake-stream frame, and
-builds an optimization report that excludes sanity-failed output from ranking.
-The report includes fake-stream latency and fake-stream guard failures when the
-fake-stream sidecar exists.
+variant, runs the formal benchmark, optionally runs the default three-frame
+fake-stream check, and builds an optimization report that excludes
+sanity-failed output from ranking. The report includes fake-stream latency and
+fake-stream guard failures when the fake-stream sidecar exists.
 
 ```bash
 PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \

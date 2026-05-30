@@ -1,0 +1,27 @@
+model:
+  name: youtu-vl-4b-q8
+  family: Youtu-VL
+  backend: llama.cpp
+  model_ref: tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0
+  quantization: Q8_0
+
+server:
+  base_url: http://127.0.0.1:8080/v1
+  host: 127.0.0.1
+  port: 8080
+
+runtime:
+  launch_mode: hf_gguf_with_mmproj
+  ctx_size: 2048
+  n_gpu_layers: 12
+  model_ref_env: MODEL_REF
+  wsl_script: null
+  jetson_script: scripts/jetson/run_hf_gguf_vlm_llama_docker.sh
+
+capabilities:
+  text: true
+  image: true
+  audio: false
+
+notes:
+  status: Candidate only. Uses Tencent's official Youtu-VL-4B-Instruct GGUF repository through llama.cpp -hf with Q8_0 weights and the bundled mmproj. Not yet observed on this repo's Jetson; keep HY-Embodied models deferred until a GGUF or separate Transformers backend is selected.

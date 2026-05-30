@@ -308,7 +308,7 @@ PYTHONPATH=src VLM_SERVER_PORT=<port> conda run -n transformers python -m edge_v
   --output <output.jsonl> \
   --prompt "Describe this frame." \
   --interval-s 0 \
-  --max-frames 1
+  --max-frames 3
 ```
 
 ## Active Blockers Or Open Questions

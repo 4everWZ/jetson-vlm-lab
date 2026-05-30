@@ -38,13 +38,28 @@ Initial candidate order:
 
 | Candidate | Purpose | Source | Initial status |
 |---|---|---|---|
-| SmolVLM2 256M / 500M | Lowest-resource image baseline and latency floor | `ggml-org/SmolVLM2-256M-Video-Instruct-GGUF`, `ggml-org/SmolVLM2-500M-Video-Instruct-GGUF` | Candidate, not observed in this repo |
-| Qwen3-VL-2B | New small Qwen VLM quality/speed comparison | `ggml-org/Qwen3-VL-2B-Instruct-GGUF`, `Qwen/Qwen3-VL-2B-Thinking-GGUF` | Candidate, not observed in this repo |
-| Tencent Youtu-VL-4B | Tencent small VLM candidate for Chinese/image reasoning comparison | `tencent/Youtu-VL-4B-Instruct-GGUF` | Candidate, not observed in this repo |
+| SmolVLM2 256M | Lowest-resource image baseline and latency floor | `ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0` | Added as generic HF GGUF smoke candidate; Jetson runtime not yet observed |
+| Qwen3-VL-2B Thinking | New small Qwen VLM quality/speed comparison | `Qwen/Qwen3-VL-2B-Thinking-GGUF:Q4_K_M` | Added as generic HF GGUF smoke candidate; run after SmolVLM2 validates the path |
+| Tencent Youtu-VL-4B | Tencent small VLM candidate for Chinese/image reasoning comparison | `tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0` | Added as generic HF GGUF smoke candidate; start with conservative GPU offload |
+| SmolVLM2 500M | Slightly larger latency/quality point if 256M is too weak | `ggml-org/SmolVLM2-500M-Video-Instruct-GGUF` | Watchlist; add after 256M establishes the path |
 | InternVL3 1B / 2B | Compact OpenGVLab comparison point | `ggml-org/InternVL3-1B-Instruct-GGUF`, `ggml-org/InternVL3-2B-Instruct-GGUF` | Candidate, not observed in this repo |
 | Moondream2 | Very small VLM behavior/latency check | `ggml-org/moondream2-20250414-GGUF` | Candidate, not observed in this repo |
+| Tencent HY-Embodied-0.5-X | Latest Tencent edge-oriented VLM watchlist item | `tencent/HY-Embodied-0.5-X` | Deferred: current release is Transformers/Safetensors/custom-code, not a low-friction llama.cpp GGUF candidate |
 
-Model-specific scripts should be added one family at a time. Do not broaden runtime claims from one candidate to another.
+Use the generic `scripts/jetson/run_hf_gguf_vlm_llama_docker.sh` launcher for
+Hub-hosted GGUF candidates that llama.cpp can load with `-hf`. Add
+model-specific launchers only when a candidate needs local model/mmproj files
+or confirmed nonstandard server flags. Do not broaden runtime claims from one
+candidate to another.
+
+First smoke order:
+
+1. `smolvlm2-256m-q8-smoke`
+2. `qwen3-vl-2b-thinking-q4-smoke`
+3. `youtu-vl-4b-q8-smoke`
+
+Each smoke must pass the same preflight, startup timing, formal benchmark, and
+three-frame fake-stream path before any tuning sweep is added.
 
 ## Phase 3: llama.cpp Acceleration Sweep
 
@@ -73,6 +88,7 @@ TensorRT, TensorRT-LLM, NanoLLM, Ollama, vLLM, and custom kernels stay deferred 
 - Qwen3-VL 2B Instruct GGUF: https://hf.co/ggml-org/Qwen3-VL-2B-Instruct-GGUF
 - Qwen3-VL 2B Thinking GGUF: https://hf.co/Qwen/Qwen3-VL-2B-Thinking-GGUF
 - Tencent Youtu-VL-4B Instruct GGUF: https://hf.co/tencent/Youtu-VL-4B-Instruct-GGUF
+- Tencent HY-Embodied-0.5-X: https://hf.co/tencent/HY-Embodied-0.5-X
 - InternVL3 1B GGUF: https://hf.co/ggml-org/InternVL3-1B-Instruct-GGUF
 - InternVL3 2B GGUF: https://hf.co/ggml-org/InternVL3-2B-Instruct-GGUF
 - Moondream2 GGUF: https://hf.co/ggml-org/moondream2-20250414-GGUF

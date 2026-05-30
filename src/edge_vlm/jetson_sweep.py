@@ -175,7 +175,7 @@ def build_sweep_plan(
     include_fake_stream: bool = True,
     fake_stream_image_dir: str = "data/sample_stream",
     fake_stream_prompt: str = "Describe this frame.",
-    fake_stream_max_frames: int = 1,
+    fake_stream_max_frames: int = 3,
     pre_variant_command: str | None = None,
     base_env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
@@ -523,7 +523,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-fake-stream", action="store_true")
     parser.add_argument("--fake-stream-image-dir", default="data/sample_stream")
     parser.add_argument("--fake-stream-prompt", default="Describe this frame.")
-    parser.add_argument("--fake-stream-max-frames", type=int, default=1)
+    parser.add_argument("--fake-stream-max-frames", type=int, default=3)
     parser.add_argument("--wait-timeout-s", type=float, default=180.0)
     parser.add_argument(
         "--min-lfb-blocks",

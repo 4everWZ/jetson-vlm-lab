@@ -845,6 +845,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("--cache-type-k", variant_plan["server_command"])
         self.assertTrue(variant_plan["paths"]["benchmark_jsonl"].endswith("unit-sweep-minicpm-unit.jsonl"))
         self.assertTrue(variant_plan["paths"]["preflight_json"].endswith("unit-sweep-minicpm-unit.preflight.json"))
+        fake_command = variant_plan["fake_stream_command"]
+        self.assertEqual(fake_command[fake_command.index("--max-frames") + 1], "3")
 
     def test_jetson_sweep_plan_records_inherited_launcher_environment(self):
         from edge_vlm.jetson_sweep import build_sweep_plan
@@ -1494,6 +1496,96 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 self.assertIn(flag, args)
                 self.assertIn("--cache-type-k", args)
                 self.assertIn("--cache-type-v", args)
+
+    def test_lightweight_hf_gguf_vlm_configs_and_variants_exist(self):
+        from edge_vlm.config import config_supports_images, load_model_config
+
+        expected = {
+            "smolvlm2-256m-q8": {
+                "config": "configs/models/smolvlm2_256m_q8.yaml",
+                "model_ref": "ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0",
+                "ctx_size": 512,
+            },
+            "qwen3-vl-2b-thinking-q4": {
+                "config": "configs/models/qwen3_vl_2b_thinking_q4.yaml",
+                "model_ref": "Qwen/Qwen3-VL-2B-Thinking-GGUF:Q4_K_M",
+                "ctx_size": 1024,
+            },
+            "youtu-vl-4b-q8": {
+                "config": "configs/models/youtu_vl_4b_q8.yaml",
+                "model_ref": "tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0",
+                "ctx_size": 2048,
+            },
+        }
+        variants = [
+            json.loads(line)
+            for line in Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        by_id = {variant["id"]: variant for variant in variants}
+
+        for model_name, expected_values in expected.items():
+            with self.subTest(model_name=model_name):
+                config = load_model_config(expected_values["config"])
+                self.assertEqual(config["model"]["name"], model_name)
+                self.assertEqual(config["model"]["model_ref"], expected_values["model_ref"])
+                self.assertTrue(config_supports_images(config))
+                self.assertEqual(
+                    config["runtime"]["jetson_script"],
+                    "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
+                )
+
+                variant_id = f"{model_name}-smoke"
+                variant = by_id[variant_id]
+                self.assertEqual(variant["model"], model_name)
+                self.assertEqual(variant["config"], expected_values["config"])
+                self.assertEqual(variant["launcher"], "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh")
+                self.assertEqual(variant["env"]["MODEL_REF"], expected_values["model_ref"])
+                self.assertEqual(variant["env"]["CTX_SIZE"], expected_values["ctx_size"])
+                self.assertEqual(variant["env"]["MODEL_ALIAS"], model_name)
+                self.assertIn("--parallel", variant["args"])
+                self.assertIn("--no-warmup", variant["args"])
+
+    def test_jetson_hf_gguf_vlm_launcher_can_dry_run_model_ref(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {
+                **os.environ,
+                "JETSON_DRY_RUN": "1",
+                "DOCKER_TTY": "0",
+                "MODEL_DIR": str(Path(tmp) / "models"),
+                "MODEL_REF": "ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0",
+                "MODEL_ALIAS": "smolvlm2-256m-q8",
+                "CTX_SIZE": "512",
+                "N_GPU_LAYERS": "99",
+                "VLM_SERVER_PORT": "19101",
+            }
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
+                    "--parallel",
+                    "1",
+                    "--batch-size",
+                    "128",
+                    "--ubatch-size",
+                    "32",
+                    "--no-warmup",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("docker run", result.stdout)
+        self.assertIn("-hf ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0", result.stdout)
+        self.assertIn("--alias smolvlm2-256m-q8", result.stdout)
+        self.assertIn("-p 19101:8080", result.stdout)
+        self.assertIn("-c 512", result.stdout)
+        self.assertIn("--n-gpu-layers 99", result.stdout)
+        self.assertIn("--batch-size 128", result.stdout)
+        self.assertNotIn("-it", result.stdout)
 
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
