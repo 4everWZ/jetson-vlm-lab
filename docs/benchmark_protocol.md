@@ -268,8 +268,11 @@ scripts/jetson/remote_exec.sh \
 ```
 
 The helper supports SSH keys by default. If `JETSON_SSH_PASSWORD` or
-`JETSON_SSH_PASSWORD_FILE` is set in `.env.jetson`, it uses `sshpass` without
-printing the password in dry-run output. Do not commit `.env.jetson`.
+`JETSON_SSH_PASSWORD_FILE` is set in `.env.jetson`, it uses `sshpass` when
+available and otherwise falls back to `SSH_ASKPASS` with `setsid`. Set
+`JETSON_SSH_PASSWORD_HELPER=sshpass` or `JETSON_SSH_PASSWORD_HELPER=askpass` to
+force one mode. Dry-run output never prints the password. Do not commit
+`.env.jetson`.
 
 ## Reporting Rules
 

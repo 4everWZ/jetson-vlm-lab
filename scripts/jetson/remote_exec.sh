@@ -3,6 +3,15 @@ set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 env_file="${JETSON_ENV_FILE:-${repo_root}/.env.jetson}"
+temp_files=()
+
+cleanup() {
+  local path
+  for path in "${temp_files[@]}"; do
+    rm -f "${path}"
+  done
+}
+trap cleanup EXIT
 
 trim() {
   local value="$1"
@@ -85,18 +94,49 @@ fi
 
 password_file="${JETSON_SSH_PASSWORD_FILE:-}"
 if [[ -n "${password_file}" || -n "${JETSON_SSH_PASSWORD:-}" ]]; then
-  if ! command -v sshpass >/dev/null 2>&1; then
-    echo "sshpass is required when JETSON_SSH_PASSWORD or JETSON_SSH_PASSWORD_FILE is set." >&2
+  password_helper="${JETSON_SSH_PASSWORD_HELPER:-auto}"
+  if [[ "${password_helper}" != "auto" && "${password_helper}" != "sshpass" && "${password_helper}" != "askpass" ]]; then
+    echo "JETSON_SSH_PASSWORD_HELPER must be auto, sshpass, or askpass." >&2
     exit 2
   fi
-  if [[ -n "${password_file}" ]]; then
-    exec sshpass -f "${password_file}" "${ssh_cmd[@]}"
+  if [[ "${password_helper}" != "askpass" ]] && command -v sshpass >/dev/null 2>&1; then
+    if [[ -n "${password_file}" ]]; then
+      exec sshpass -f "${password_file}" "${ssh_cmd[@]}"
+    fi
+    temp_password_file="$(mktemp)"
+    temp_files+=("${temp_password_file}")
+    chmod 600 "${temp_password_file}"
+    printf '%s\n' "${JETSON_SSH_PASSWORD}" > "${temp_password_file}"
+    sshpass -f "${temp_password_file}" "${ssh_cmd[@]}"
+    exit $?
   fi
-  temp_password_file="$(mktemp)"
-  chmod 600 "${temp_password_file}"
-  trap 'rm -f "${temp_password_file}"' EXIT
-  printf '%s\n' "${JETSON_SSH_PASSWORD}" > "${temp_password_file}"
-  sshpass -f "${temp_password_file}" "${ssh_cmd[@]}"
+  if [[ "${password_helper}" == "sshpass" ]]; then
+    echo "sshpass is required when JETSON_SSH_PASSWORD_HELPER=sshpass." >&2
+    exit 2
+  fi
+  if ! command -v setsid >/dev/null 2>&1; then
+    echo "setsid is required for SSH_ASKPASS password mode when sshpass is unavailable." >&2
+    exit 2
+  fi
+  if [[ -z "${password_file}" ]]; then
+    password_file="$(mktemp)"
+    temp_files+=("${password_file}")
+    chmod 600 "${password_file}"
+    printf '%s\n' "${JETSON_SSH_PASSWORD}" > "${password_file}"
+  fi
+  askpass_script="$(mktemp)"
+  temp_files+=("${askpass_script}")
+  chmod 700 "${askpass_script}"
+  cat > "${askpass_script}" <<'ASKPASS'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+cat "${JETSON_SSH_ASKPASS_PASSWORD_FILE:?}"
+ASKPASS
+  SSH_ASKPASS="${askpass_script}" \
+    SSH_ASKPASS_REQUIRE=force \
+    DISPLAY="${DISPLAY:-edge-vlm-askpass}" \
+    JETSON_SSH_ASKPASS_PASSWORD_FILE="${password_file}" \
+    setsid -w "${ssh_cmd[@]}"
   exit $?
 fi
 

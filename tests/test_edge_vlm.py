@@ -1367,6 +1367,89 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("JETSON_SSH_HOST and JETSON_SSH_USER are required", result.stderr)
 
+    def test_jetson_remote_exec_can_use_askpass_without_sshpass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            env_file = tmp_path / ".env.jetson"
+            log_file = tmp_path / "ssh.log"
+            fake_bin = tmp_path / "bin"
+            fake_bin.mkdir()
+            (fake_bin / "setsid").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "if [[ \"${1:-}\" == \"-w\" ]]; then shift; fi",
+                        "exec \"$@\"",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (fake_bin / "ssh").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "password=\"$(${SSH_ASKPASS:?})\"",
+                        "if [[ \"${password}\" != \"${EXPECTED_JETSON_PASSWORD:?}\" ]]; then",
+                        "  echo 'askpass password mismatch' >&2",
+                        "  exit 3",
+                        "fi",
+                        "printf 'ASKPASS_OK\\n' > \"${FAKE_SSH_LOG:?}\"",
+                        "printf 'SSH_ASKPASS_REQUIRE=%s\\n' \"${SSH_ASKPASS_REQUIRE:-}\" >> \"${FAKE_SSH_LOG}\"",
+                        "printf 'ARGS=%s\\n' \"$*\" >> \"${FAKE_SSH_LOG}\"",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_bin / "setsid", 0o755)
+            os.chmod(fake_bin / "ssh", 0o755)
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=192.168.1.12",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_REPO_DIR=~/code/jetson-vlm-lab",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                        "JETSON_SSH_PASSWORD_HELPER=askpass",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/remote_exec.sh",
+                    "git",
+                    "pull",
+                    "--ff-only",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "EXPECTED_JETSON_PASSWORD": "secret-password",
+                    "FAKE_SSH_LOG": str(log_file),
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertIn("ASKPASS_OK", log_text)
+        self.assertIn("SSH_ASKPASS_REQUIRE=force", log_text)
+        self.assertIn("weizheng@192.168.1.12", log_text)
+        self.assertIn("cd ~/code/jetson-vlm-lab && git pull --ff-only", log_text)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+        self.assertNotIn("secret-password", log_text)
+
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
 
