@@ -242,6 +242,35 @@ PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
 A non-zero preparation command skips that variant before preflight and records
 the failure in the sweep manifest.
 
+## Remote Jetson Execution
+
+For repeatable remote runs, keep SSH settings in ignored `.env.jetson`:
+
+```bash
+cp docs/examples/jetson_remote.env.example .env.jetson
+```
+
+Then check command construction without connecting:
+
+```bash
+JETSON_REMOTE_DRY_RUN=1 scripts/jetson/remote_exec.sh \
+  git status --short --branch
+```
+
+Run a command on the Jetson worktree:
+
+```bash
+scripts/jetson/remote_exec.sh \
+  bash scripts/jetson/run_optimization_sweep.sh \
+    --dry-run \
+    --run-prefix remote-plan \
+    --variant minicpm-q4-baseline-b128-u32-kvq8
+```
+
+The helper supports SSH keys by default. If `JETSON_SSH_PASSWORD` or
+`JETSON_SSH_PASSWORD_FILE` is set in `.env.jetson`, it uses `sshpass` without
+printing the password in dry-run output. Do not commit `.env.jetson`.
+
 ## Reporting Rules
 
 - Report dry-run logs as payload/logging validation only.

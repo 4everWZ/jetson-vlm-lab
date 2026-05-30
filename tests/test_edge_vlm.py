@@ -1308,6 +1308,65 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("docker run", result.stdout)
         self.assertNotIn("-it", result.stdout)
 
+    def test_jetson_remote_exec_dry_run_sources_ignored_env_without_exposing_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / ".env.jetson"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=192.168.1.12",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_REPO_DIR=~/code/jetson-vlm-lab",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/remote_exec.sh",
+                    "git",
+                    "status",
+                    "--short",
+                    "--branch",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "JETSON_REMOTE_DRY_RUN": "1",
+                },
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("weizheng@192.168.1.12", result.stdout)
+        self.assertIn("cd ~/code/jetson-vlm-lab", result.stdout)
+        self.assertIn("git status --short --branch", result.stdout)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+
+    def test_jetson_remote_exec_requires_host_and_user(self):
+        result = subprocess.run(
+            ["bash", "scripts/jetson/remote_exec.sh", "git", "status"],
+            check=False,
+            capture_output=True,
+            encoding="utf-8",
+            env={
+                **os.environ,
+                "JETSON_ENV_FILE": "/tmp/edge-vlm-missing-env-file",
+                "JETSON_REMOTE_DRY_RUN": "1",
+                "JETSON_SSH_HOST": "",
+                "JETSON_SSH_USER": "",
+            },
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("JETSON_SSH_HOST and JETSON_SSH_USER are required", result.stderr)
+
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
 
