@@ -292,6 +292,8 @@ scripts/jetson/run_remote_optimization_sweep.sh \
 
 Set `JETSON_REMOTE_SYNC=0` to skip the initial `git pull --ff-only`, or set
 `JETSON_REMOTE_LLAMA_CPP_IMAGE` to test another pinned llama.cpp image.
+The generated sweep plan records inherited launcher environment, including the
+pinned llama.cpp image, so the plan itself contains the server image evidence.
 
 ## Reporting Rules
 

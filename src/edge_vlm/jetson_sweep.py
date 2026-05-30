@@ -20,6 +20,12 @@ from .optimization import build_optimization_report
 
 
 LFB_RE = re.compile(r"\blfb\s+(?P<free_blocks>\d+)x(?P<block_mb>\d+)MB\b")
+SERVER_ENV_PASSTHROUGH_KEYS = (
+    "LLAMA_CPP_DOCKER_IMAGE",
+    "LLAMA_CPP_DOCKER_IMAGE_FALLBACK",
+    "LLAMA_SERVER_CMD",
+    "DOCKER_GPU_ARGS",
+)
 
 
 def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
@@ -185,7 +191,13 @@ def build_sweep_plan(
         variant_id = str(variant["id"])
         run_id = f"{run_prefix}-{variant_id}"
         variant_env = _string_env(dict(variant.get("env", {})), source_env)
+        inherited_server_env = {
+            key: source_env[key]
+            for key in SERVER_ENV_PASSTHROUGH_KEYS
+            if key in source_env and key not in variant_env
+        }
         server_env = {
+            **inherited_server_env,
             **variant_env,
             "VLM_SERVER_PORT": str(port),
             "DOCKER_TTY": variant_env.get("DOCKER_TTY", "0"),

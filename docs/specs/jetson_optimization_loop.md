@@ -55,6 +55,10 @@ The plan records server commands, benchmark output paths, preflight output
 paths, environment overrides, and fake-stream commands. The sweep sets
 `DOCKER_TTY=0` so Docker can run under background automation instead of
 requiring an interactive terminal.
+Launcher-affecting inherited environment variables such as
+`LLAMA_CPP_DOCKER_IMAGE`, `LLAMA_CPP_DOCKER_IMAGE_FALLBACK`,
+`LLAMA_SERVER_CMD`, and `DOCKER_GPU_ARGS` are copied into each variant
+`server_env` so dry-run plans remain reproducible.
 
 ## Real Sweep
 

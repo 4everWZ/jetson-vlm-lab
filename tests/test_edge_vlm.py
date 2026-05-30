@@ -787,6 +787,53 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertTrue(variant_plan["paths"]["benchmark_jsonl"].endswith("unit-sweep-minicpm-unit.jsonl"))
         self.assertTrue(variant_plan["paths"]["preflight_json"].endswith("unit-sweep-minicpm-unit.preflight.json"))
 
+    def test_jetson_sweep_plan_records_inherited_launcher_environment(self):
+        from edge_vlm.jetson_sweep import build_sweep_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "minicpm-unit",
+                        "model": "minicpmv46-q4",
+                        "config": "configs/models/minicpmv46_q4.yaml",
+                        "launcher": "scripts/jetson/run_minicpmv46_llama_docker.sh",
+                        "env": {
+                            "MODEL_DIR": str(tmp_path / "models"),
+                            "MODEL_ALIAS": "minicpmv46-q4",
+                            "CTX_SIZE": 512,
+                            "N_GPU_LAYERS": 32,
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            plan = build_sweep_plan(
+                variants_path=variants,
+                run_prefix="unit",
+                output_root=tmp_path / "outputs",
+                server_log_dir=tmp_path / "logs",
+                port=18080,
+                trial_count=1,
+                max_tokens=16,
+                temperature=0,
+                python_bin="python3",
+                base_env={
+                    "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                    "LLAMA_SERVER_CMD": "/usr/local/bin/llama-server",
+                    "DOCKER_GPU_ARGS": "--runtime nvidia",
+                },
+            )
+
+        server_env = plan["variants"][0]["server_env"]
+        self.assertEqual(server_env["LLAMA_CPP_DOCKER_IMAGE"], "ghcr.io/4everwz/jetson-llama-cpp:test")
+        self.assertEqual(server_env["LLAMA_SERVER_CMD"], "/usr/local/bin/llama-server")
+        self.assertEqual(server_env["DOCKER_GPU_ARGS"], "--runtime nvidia")
+
     def test_jetson_sweep_run_records_preflight_and_reports_fake_stream(self):
         from edge_vlm.jetson_sweep import run_sweep
 
