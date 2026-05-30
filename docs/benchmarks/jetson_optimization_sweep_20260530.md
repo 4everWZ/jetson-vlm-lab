@@ -103,3 +103,7 @@ This confirms two constraints for the next optimization pass:
 2. Too-small `max_tokens` can inflate throughput while producing unusably short
    answers, so 64 tokens remains the minimum current benchmark setting for
    promotion candidates.
+
+The next promotion sweep should pass `--min-lfb-blocks 150` or higher so
+fragmented-memory runs are skipped and labeled instead of being mixed into
+parameter comparisons.

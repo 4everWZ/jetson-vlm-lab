@@ -755,6 +755,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
                     "16",
                     "--temperature",
                     "0",
+                    "--min-lfb-blocks",
+                    "150",
                     "--dry-run",
                     "--plan-output",
                     str(plan),
@@ -907,6 +909,67 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result["results"][0]["fake_stream_returncode"], 0)
         self.assertIn("1.500", report_text)
         self.assertIn("Fake latency s", report_text)
+
+    def test_jetson_sweep_skips_variant_when_lfb_is_below_minimum(self):
+        from edge_vlm.jetson_sweep import run_sweep
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            preflight_json = tmp_path / "preflight" / "unit-run.preflight.json"
+            report = tmp_path / "report.md"
+            plan = {
+                "run_prefix": "unit",
+                "port": 18080,
+                "variants": [
+                    {
+                        "variant": {"id": "unit-variant"},
+                        "run_id": "unit-run",
+                        "server_command": ["bash", "server.sh"],
+                        "server_env": {},
+                        "benchmark_command": ["bash", "bench.sh"],
+                        "benchmark_env": {},
+                        "fake_stream_command": None,
+                        "fake_stream_env": {},
+                        "paths": {
+                            "benchmark_jsonl": str(tmp_path / "benchmarks" / "unit-run.jsonl"),
+                            "fake_stream_jsonl": str(tmp_path / "fake_stream" / "unit-run.jsonl"),
+                            "server_log": str(tmp_path / "logs" / "server.log"),
+                            "preflight_json": str(preflight_json),
+                        },
+                    }
+                ],
+            }
+
+            def fake_preflight(path):
+                sample = {
+                    "captured_at": "2026-05-30T00:00:00+00:00",
+                    "tegrastats": {
+                        "available": True,
+                        "raw": "RAM 716/7620MB (lfb 71x4MB)",
+                        "lfb": {"free_blocks": 71, "block_mb": 4},
+                    },
+                }
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                Path(path).write_text(json.dumps(sample), encoding="utf-8")
+                return sample
+
+            with patch("edge_vlm.jetson_sweep.capture_preflight_sample", side_effect=fake_preflight):
+                with patch("edge_vlm.jetson_sweep.subprocess.Popen") as popen:
+                    result = run_sweep(
+                        plan,
+                        wait_timeout_s=1.0,
+                        report_output=report,
+                        min_lfb_blocks=150,
+                    )
+
+        self.assertEqual(result["report_output"], None)
+        self.assertFalse(report.exists())
+        self.assertFalse(popen.called)
+        skipped = result["results"][0]
+        self.assertFalse(skipped["preflight_passed"])
+        self.assertEqual(skipped["preflight_reason"], "lfb_free_blocks 71 < required 150")
+        self.assertEqual(skipped["server_ready"], False)
+        self.assertEqual(skipped["benchmark_returncode"], None)
 
     def test_jetson_sweep_parses_tegrastats_lfb(self):
         from edge_vlm.jetson_sweep import parse_tegrastats_lfb

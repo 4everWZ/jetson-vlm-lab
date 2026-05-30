@@ -294,13 +294,49 @@ def _terminate_process(process: subprocess.Popen[Any]) -> None:
         process.wait(timeout=20)
 
 
-def run_sweep(plan: dict[str, Any], *, wait_timeout_s: float, report_output: str | Path) -> dict[str, Any]:
+def _preflight_block_reason(preflight: dict[str, Any], min_lfb_blocks: int | None) -> str | None:
+    if min_lfb_blocks is None:
+        return None
+    tegrastats = preflight.get("tegrastats")
+    lfb = tegrastats.get("lfb") if isinstance(tegrastats, dict) else None
+    if not isinstance(lfb, dict) or not isinstance(lfb.get("free_blocks"), int):
+        return f"lfb_free_blocks unavailable; required {min_lfb_blocks}"
+    free_blocks = int(lfb["free_blocks"])
+    if free_blocks < min_lfb_blocks:
+        return f"lfb_free_blocks {free_blocks} < required {min_lfb_blocks}"
+    return None
+
+
+def run_sweep(
+    plan: dict[str, Any],
+    *,
+    wait_timeout_s: float,
+    report_output: str | Path,
+    min_lfb_blocks: int | None = None,
+) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     benchmark_paths: list[str] = []
     fake_stream_paths: list[str] = []
     for variant_plan in plan["variants"]:
         paths = variant_plan["paths"]
         preflight = capture_preflight_sample(paths["preflight_json"])
+        preflight_reason = _preflight_block_reason(preflight, min_lfb_blocks)
+        if preflight_reason is not None:
+            results.append(
+                {
+                    "run_id": variant_plan["run_id"],
+                    "variant_id": variant_plan["variant"]["id"],
+                    "server_ready": False,
+                    "server_returncode": None,
+                    "benchmark_returncode": None,
+                    "fake_stream_returncode": None,
+                    "preflight_path": paths["preflight_json"],
+                    "preflight": preflight,
+                    "preflight_passed": False,
+                    "preflight_reason": preflight_reason,
+                }
+            )
+            continue
         Path(paths["server_log"]).parent.mkdir(parents=True, exist_ok=True)
         server_log = open(paths["server_log"], "w", encoding="utf-8")
         server = subprocess.Popen(
@@ -323,6 +359,8 @@ def run_sweep(plan: dict[str, Any], *, wait_timeout_s: float, report_output: str
                         "fake_stream_returncode": None,
                         "preflight_path": paths["preflight_json"],
                         "preflight": preflight,
+                        "preflight_passed": True,
+                        "preflight_reason": None,
                     }
                 )
                 continue
@@ -355,6 +393,8 @@ def run_sweep(plan: dict[str, Any], *, wait_timeout_s: float, report_output: str
                     "fake_stream_returncode": fake_stream_returncode,
                     "preflight_path": paths["preflight_json"],
                     "preflight": preflight,
+                    "preflight_passed": True,
+                    "preflight_reason": None,
                 }
             )
         finally:
@@ -391,6 +431,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fake-stream-prompt", default="Describe this frame.")
     parser.add_argument("--fake-stream-max-frames", type=int, default=1)
     parser.add_argument("--wait-timeout-s", type=float, default=180.0)
+    parser.add_argument(
+        "--min-lfb-blocks",
+        type=int,
+        default=None,
+        help="Skip a variant before server startup when tegrastats lfb free blocks are below this threshold",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--plan-output", default=None)
     parser.add_argument("--report-output", default=None)
@@ -427,7 +473,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print(json.dumps({"dry_run": True, "variants": len(plan["variants"]), "plan_output": args.plan_output}, ensure_ascii=False))
         return 0
-    result = run_sweep(plan, wait_timeout_s=args.wait_timeout_s, report_output=report_output)
+    result = run_sweep(
+        plan,
+        wait_timeout_s=args.wait_timeout_s,
+        report_output=report_output,
+        min_lfb_blocks=args.min_lfb_blocks,
+    )
     manifest = Path(output_root) / f"{run_prefix}.manifest.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)
     manifest.write_text(json.dumps({"plan": plan, "result": result}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

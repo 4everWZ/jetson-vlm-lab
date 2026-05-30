@@ -85,6 +85,12 @@ this includes `/proc/meminfo` and a short `tegrastats` sample with parsed
 `lfb` when available. Use this to distinguish memory-state-sensitive startup
 failures from parameter-incompatible failures.
 
+Use `--min-lfb-blocks <N>` for promotion or repeatability sweeps. When set, the
+sweep skips a variant before server startup if parsed `lfb` free blocks are
+below the threshold and records `preflight_passed=false` plus a
+`preflight_reason` in the sweep manifest. The default is unset, so exploratory
+runs still execute and gather evidence.
+
 ## Promotion Rule
 
 A candidate can become the new baseline only when:

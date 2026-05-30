@@ -222,6 +222,9 @@ Variants are defined in `configs/benchmark/jetson_optimization_variants.jsonl`;
 the promotion rules are documented in `docs/specs/jetson_optimization_loop.md`.
 Each variant also writes `preflight/*.preflight.json` under the sweep output
 root so Jetson `lfb` and memory state are visible before server startup.
+For promotion sweeps, add `--min-lfb-blocks 150` or a stricter threshold learned
+from prior runs so memory-fragmented starts are skipped and labeled before
+Docker launches.
 
 ## Reporting Rules
 
