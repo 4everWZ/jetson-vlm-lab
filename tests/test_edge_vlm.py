@@ -1394,6 +1394,40 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 self.assertIn("--cache-type-k", candidate["args"])
                 self.assertIn("--cache-type-v", candidate["args"])
 
+    def test_jetson_optimization_variants_include_prompt_cache_candidates(self):
+        variants = [
+            json.loads(line)
+            for line in Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        by_id = {variant["id"]: variant for variant in variants}
+
+        expected = {
+            "minicpm-q4-baseline-b128-u32-kvq8-cache-ram0": ("minicpmv46-q4", 128, 32, "--cache-ram", "0"),
+            "minicpm-q4-baseline-b128-u32-kvq8-nocacheprompt": ("minicpmv46-q4", 128, 32, "--no-cache-prompt", None),
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8-cache-ram0": ("gemma4-e2b-it-q4", 512, 512, "--cache-ram", "0"),
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8-nocacheprompt": (
+                "gemma4-e2b-it-q4",
+                512,
+                512,
+                "--no-cache-prompt",
+                None,
+            ),
+        }
+
+        for variant_id, (model, batch_size, ubatch_size, flag, value) in expected.items():
+            with self.subTest(variant_id=variant_id):
+                candidate = by_id[variant_id]
+                args = candidate["args"]
+                self.assertEqual(candidate["model"], model)
+                self.assertEqual(candidate["env"]["LLAMA_BATCH_SIZE"], batch_size)
+                self.assertEqual(candidate["env"]["LLAMA_UBATCH_SIZE"], ubatch_size)
+                self.assertIn(flag, args)
+                if value is not None:
+                    self.assertEqual(args[args.index(flag) + 1], value)
+                self.assertIn("--cache-type-k", args)
+                self.assertIn("--cache-type-v", args)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [
