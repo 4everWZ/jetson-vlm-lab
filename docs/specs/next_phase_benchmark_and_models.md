@@ -13,6 +13,7 @@ Required fields:
 - `run_id` on every JSONL record.
 - `trial_index` and `case_index` on every JSONL record.
 - JSON manifest sidecar with model/config paths, benchmark arguments, device label, runtime environment, success/failure counts, and Jetson profile pointers.
+- Optimization sweep manifest with per-variant preflight memory state and server startup timing.
 - Optional Markdown summary remains a readable sidecar; JSONL plus manifest remain the raw source of truth.
 - Jetson wrapper script captures `tegrastats` when available and records `nvpmodel`, `jetson_clocks`, `uname`, and Docker version outputs under a profile directory.
 

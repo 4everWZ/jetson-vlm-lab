@@ -98,6 +98,19 @@ this includes `/proc/meminfo` and a short `tegrastats` sample with parsed
 `lfb` when available. Use this to distinguish memory-state-sensitive startup
 failures from parameter-incompatible failures.
 
+The sweep manifest also records server startup timing for variants that reach
+Docker startup:
+
+- `server_started_at`
+- `server_ready_at`
+- `server_wait_seconds`
+- `server_startup_seconds`
+
+Skipped variants keep these fields as `null`. A variant that starts Docker but
+does not become ready records `server_wait_seconds` and keeps
+`server_startup_seconds=null`, so load-path experiments can separate startup
+behavior from steady-state benchmark throughput.
+
 Use `--min-lfb-blocks <N>` for promotion or repeatability sweeps. When set, the
 sweep skips a variant before server startup if parsed `lfb` free blocks are
 below the threshold and records `preflight_passed=false` plus a

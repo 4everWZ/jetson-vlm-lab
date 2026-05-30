@@ -352,6 +352,15 @@ def _run_pre_variant_command(command: str | None) -> dict[str, Any]:
     }
 
 
+def _not_started_server_timing() -> dict[str, Any]:
+    return {
+        "server_started_at": None,
+        "server_ready_at": None,
+        "server_wait_seconds": None,
+        "server_startup_seconds": None,
+    }
+
+
 def run_sweep(
     plan: dict[str, Any],
     *,
@@ -383,6 +392,7 @@ def run_sweep(
                         "pre_variant_command_failed "
                         f"returncode {pre_variant_result['pre_variant_command_returncode']}"
                     ),
+                    **_not_started_server_timing(),
                     **pre_variant_result,
                 }
             )
@@ -402,12 +412,15 @@ def run_sweep(
                     "preflight": preflight,
                     "preflight_passed": False,
                     "preflight_reason": preflight_reason,
+                    **_not_started_server_timing(),
                     **pre_variant_result,
                 }
             )
             continue
         Path(paths["server_log"]).parent.mkdir(parents=True, exist_ok=True)
         server_log = open(paths["server_log"], "w", encoding="utf-8")
+        server_started_at = datetime.now(timezone.utc).isoformat()
+        server_wait_start = time.monotonic()
         server = subprocess.Popen(
             variant_plan["server_command"],
             stdout=server_log,
@@ -417,6 +430,14 @@ def run_sweep(
         )
         try:
             ready = _wait_for_server(plan["port"], server, wait_timeout_s)
+            server_wait_seconds = time.monotonic() - server_wait_start
+            server_ready_at = datetime.now(timezone.utc).isoformat() if ready else None
+            server_timing = {
+                "server_started_at": server_started_at,
+                "server_ready_at": server_ready_at,
+                "server_wait_seconds": server_wait_seconds,
+                "server_startup_seconds": server_wait_seconds if ready else None,
+            }
             if not ready:
                 results.append(
                     {
@@ -430,6 +451,7 @@ def run_sweep(
                         "preflight": preflight,
                         "preflight_passed": True,
                         "preflight_reason": None,
+                        **server_timing,
                         **pre_variant_result,
                     }
                 )
@@ -465,6 +487,7 @@ def run_sweep(
                     "preflight": preflight,
                     "preflight_passed": True,
                     "preflight_reason": None,
+                    **server_timing,
                     **pre_variant_result,
                 }
             )

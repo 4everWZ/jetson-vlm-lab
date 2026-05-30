@@ -1009,13 +1009,18 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 with patch("edge_vlm.jetson_sweep._wait_for_server", return_value=True):
                     with patch("edge_vlm.jetson_sweep.subprocess.Popen", return_value=FakeProcess()):
                         with patch("edge_vlm.jetson_sweep.subprocess.run", side_effect=fake_run):
-                            result = run_sweep(plan, wait_timeout_s=1.0, report_output=report)
+                            with patch("edge_vlm.jetson_sweep.time.monotonic", side_effect=[10.0, 12.5]):
+                                result = run_sweep(plan, wait_timeout_s=1.0, report_output=report)
 
             report_text = report.read_text(encoding="utf-8")
 
         self.assertEqual(result["results"][0]["preflight"]["tegrastats"]["lfb"]["free_blocks"], 150)
         self.assertEqual(result["results"][0]["preflight_path"], str(preflight_json))
         self.assertEqual(result["results"][0]["fake_stream_returncode"], 0)
+        self.assertEqual(result["results"][0]["server_wait_seconds"], 2.5)
+        self.assertEqual(result["results"][0]["server_startup_seconds"], 2.5)
+        self.assertIsInstance(result["results"][0]["server_started_at"], str)
+        self.assertIsInstance(result["results"][0]["server_ready_at"], str)
         self.assertIn("1.500", report_text)
         self.assertIn("Fake latency s", report_text)
 
