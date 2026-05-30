@@ -83,3 +83,23 @@ This is not a promotable Gemma path on the pinned container image.
    speculative acceleration flags such as flash attention or mmap/mlock changes.
 4. For Gemma, next useful variants are still within `N_GPU_LAYERS=12`; test
    prompt/cache/batch behavior before raising GPU layers again.
+
+## Follow-Up Validation
+
+Commit `eaed9e6` added per-variant preflight JSON and fake-stream-aware
+optimization reports. A focused MiniCPM validation on the Jetson worktree showed
+why this matters:
+
+| Run prefix | Variant | Max tokens | Preflight `lfb` | Server ready | Report guard | Evidence |
+|---|---|---:|---|---|---|---|
+| `preflight-validate-20260530` | `minicpm-q4-b512-u128-kvq8` | 16 | `71x4MB` | no | no report | server log shows CUDA allocation failure while loading 1057.36 MiB mmproj buffer |
+| `preflight-validate-20260530b` | `minicpm-q4-b512-u128-kvq8` | 16 | `197x4MB` | yes | no | quality guard rejected `text_cn_short:short_output` |
+| `preflight-validate-20260530c` | `minicpm-q4-b512-u128-kvq8` | 64 | `216x4MB` | yes | yes | report includes text/image throughput, fake-stream latency 1.773s, and `Fake success` 1/1 |
+
+This confirms two constraints for the next optimization pass:
+
+1. Low `lfb` can make even MiniCPM fail startup, so preflight memory state must
+   be recorded for every promoted run.
+2. Too-small `max_tokens` can inflate throughput while producing unusably short
+   answers, so 64 tokens remains the minimum current benchmark setting for
+   promotion candidates.
