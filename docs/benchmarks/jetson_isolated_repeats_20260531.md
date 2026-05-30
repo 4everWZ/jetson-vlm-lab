@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, and `ee8b604` for host/repack variants |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, and `9a8b4e8` for startup timing capture |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, and `ee8b604` for host/repack variants |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, and `9a8b4e8` for startup timing capture |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -282,6 +282,28 @@ Decision: do not promote `--no-host` or `--no-repack`. MiniCPM regresses on
 formal throughput and latency. Gemma `--no-host` fails the quality guard after a
 CUDA OOM during request processing. Gemma `--no-repack` is at best an image-only
 micro-tradeoff in the 5-trial repeat and no longer improves fake-stream latency.
+
+## Startup Timing Capture Validation
+
+Commit `9a8b4e8` added per-variant server startup timing fields to the sweep
+manifest:
+
+- `server_started_at`
+- `server_ready_at`
+- `server_wait_seconds`
+- `server_startup_seconds`
+
+The validation run below only checks that the manifest records real timing on
+the Jetson. It used one formal trial and is not a promotion-performance sample.
+
+| Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Server startup s | Text tok/s | Image tok/s | Fake latency s |
+|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|
+| `minicpm-q4-baseline-b128-u32-kvq8` | `timing-validate-minicpm-20260531g` | 242x4MB | 1 | yes | 6/6 | 1/1 | 7.036 | 42.275 | 34.593 | 1.764 |
+
+Decision: startup timing is now available for future load-path experiments such
+as `--direct-io` / `--no-direct-io`. Those flags should be judged on
+`server_startup_seconds` separately from steady-state benchmark throughput and
+latency.
 
 ## Current Promotion State
 

@@ -101,10 +101,10 @@ does not preserve its initial single-frame fake-stream latency signal in a
 
 ## Next Optimization Work
 
-1. Before spending more runs on load-path flags, add or use explicit
-   server-ready/startup timing. `--direct-io` / `--no-direct-io` can then be
-   tested for load behavior, but it should not be interpreted as steady-state
-   decode acceleration without a decode metric win.
+1. Use the sweep manifest startup timing fields added in `9a8b4e8` for any
+   load-path flags. `--direct-io` / `--no-direct-io` can be tested for load
+   behavior, but it should not be interpreted as steady-state decode
+   acceleration without a decode metric win.
 2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
    `lfb` is recorded before each variant and failed starts can be labeled as
    memory-state-sensitive or parameter-incompatible.
