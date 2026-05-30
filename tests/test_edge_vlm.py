@@ -1428,6 +1428,32 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 self.assertIn("--cache-type-k", args)
                 self.assertIn("--cache-type-v", args)
 
+    def test_jetson_optimization_variants_include_host_repack_candidates(self):
+        variants = [
+            json.loads(line)
+            for line in Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        by_id = {variant["id"]: variant for variant in variants}
+
+        expected = {
+            "minicpm-q4-baseline-b128-u32-kvq8-nohost": ("minicpmv46-q4", 128, 32, "--no-host"),
+            "minicpm-q4-baseline-b128-u32-kvq8-norepack": ("minicpmv46-q4", 128, 32, "--no-repack"),
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8-nohost": ("gemma4-e2b-it-q4", 512, 512, "--no-host"),
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8-norepack": ("gemma4-e2b-it-q4", 512, 512, "--no-repack"),
+        }
+
+        for variant_id, (model, batch_size, ubatch_size, flag) in expected.items():
+            with self.subTest(variant_id=variant_id):
+                candidate = by_id[variant_id]
+                args = candidate["args"]
+                self.assertEqual(candidate["model"], model)
+                self.assertEqual(candidate["env"]["LLAMA_BATCH_SIZE"], batch_size)
+                self.assertEqual(candidate["env"]["LLAMA_UBATCH_SIZE"], ubatch_size)
+                self.assertIn(flag, args)
+                self.assertIn("--cache-type-k", args)
+                self.assertIn("--cache-type-v", args)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [
