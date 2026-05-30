@@ -89,18 +89,25 @@ The cache and continuous-batching repeats are also negative for default
 promotion: `kq4/vq8` fails startup, `kvq4` regresses MiniCPM and only gives
 Gemma an image-throughput tradeoff with worse fake-stream latency, and
 `--no-cont-batching` is not useful.
+The prompt-cache repeats are negative too: `--cache-ram 0` disables the prompt
+cache but sharply regresses image throughput and image latency, while
+`--no-cache-prompt` still leaves prompt-cache RAM updates in the server logs and
+is slower than the defaults.
 
 ## Next Optimization Work
 
 1. Continue only with flags already confirmed in pinned `llama-server --help`,
-   focusing next on prompt-cache controls such as `--cache-ram 0` and
-   `--no-cache-prompt`. `--mlock`, `--no-mmap`, lower KV cache precision, and
-   `--no-cont-batching` now have negative evidence on the current pinned image.
+   focusing next on host/repack paths such as `--no-host` and `--no-repack`.
+   `--direct-io` / `--no-direct-io` can be tested separately if load-path
+   behavior becomes part of the question, but it is less likely to improve
+   steady-state decode. `--mlock`, `--no-mmap`, lower KV cache precision,
+   `--no-cont-batching`, `--cache-ram 0`, and `--no-cache-prompt` now have
+   negative evidence on the current pinned image.
 2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
    `lfb` is recorded before each variant and failed starts can be labeled as
    memory-state-sensitive or parameter-incompatible.
 3. For Gemma, next useful variants are still within `N_GPU_LAYERS=12`; test
-   prompt/cache/batch behavior before raising GPU layers again.
+   host/repack behavior before raising GPU layers again.
 
 ## Follow-Up Validation
 

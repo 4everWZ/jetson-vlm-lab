@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, and `f1c219e` for cache/continuous-batching variants |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, and `7cee0f2` for prompt-cache variants |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, and `f1c219e` for cache/continuous-batching variants |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, and `7cee0f2` for prompt-cache variants |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -208,9 +208,37 @@ throughput in a 3-trial repeat but slows fake-stream latency more than the
 existing Flash Attention image-only tradeoff, so it is not a better candidate.
 Disabling continuous batching is negative for Gemma and not useful for MiniCPM.
 
+## Prompt Cache Candidates
+
+These runs tested prompt-cache controls after server logs showed repeated prompt
+cache updates. `--cache-ram 0` really disabled the prompt cache according to the
+server log. `--no-cache-prompt` did not disable prompt-cache RAM updates in this
+server path, so it should not be treated as equivalent to `--cache-ram 0`.
+
+| Model | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Note |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-cache-ram0` | `minicpm-cacheram0-3-20260531e` | 291x4MB | 3 | yes | 18/18 | 1/1 | 43.936 | 36.112 | 1.460 | 1.773 | 1.748 | prompt cache disabled |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-nocacheprompt` | `minicpm-nocacheprompt-3-20260531e` | 273x4MB | 3 | yes | 18/18 | 1/1 | 43.488 | 35.852 | 1.475 | 1.786 | 1.746 | prompt cache still updated |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-cache-ram0` | `gemma-cacheram0-3-20260531e` | 253x4MB | 3 | yes | 18/18 | 1/1 | 7.103 | 5.964 | 9.015 | 10.738 | 10.410 | prompt cache disabled |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-nocacheprompt` | `gemma-nocacheprompt-3-20260531e` | 270x4MB | 3 | yes | 18/18 | 1/1 | 6.783 | 5.857 | 9.448 | 10.944 | 10.649 | prompt cache still updated |
+
+Delta versus each model's current default:
+
+| Model | Variant | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---|---|---:|---:|---:|---:|---:|
+| MiniCPM | `cache-ram0` | -1.54% | -16.11% | +1.60% | +17.96% | -0.23% |
+| MiniCPM | `nocacheprompt` | -2.55% | -16.71% | +2.64% | +18.83% | -0.34% |
+| Gemma | `cache-ram0` | -0.50% | -15.94% | +0.50% | +17.75% | +2.10% |
+| Gemma | `nocacheprompt` | -4.99% | -17.45% | +5.33% | +20.01% | +4.44% |
+
+Decision: keep prompt caching enabled. The cache update overhead is much smaller
+than the image-path slowdown from disabling prompt cache RAM, and
+`--no-cache-prompt` is not the right knob for disabling the observed cache
+updates in this server build.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
 | MiniCPM-V 4.6 Q4 | `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial repeat did not show a `b512/u128` throughput win |
-| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads | Batch and Flash Attention variants are tradeoffs; memory mapping, locking, cache precision, and no-continuous-batching variants are not promotion candidates |
+| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads | Batch and Flash Attention variants are tradeoffs; memory mapping, locking, cache precision, no-continuous-batching, and prompt-cache variants are not promotion candidates |
