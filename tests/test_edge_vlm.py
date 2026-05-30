@@ -621,6 +621,80 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("repetitive_output", report_text)
         self.assertIn("empty_output", report_text)
 
+    def test_optimization_report_includes_fake_stream_guard_and_latency(self):
+        from edge_vlm.optimization import build_optimization_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            bench = tmp_path / "benchmarks" / "run-a.jsonl"
+            fake_stream = tmp_path / "fake_stream" / "run-a.jsonl"
+            report = tmp_path / "report.md"
+            bench.parent.mkdir()
+            fake_stream.parent.mkdir()
+            bench.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "model": "local-model",
+                                "run_id": "run-a",
+                                "prompt_case_id": "text_case",
+                                "input_type": "text",
+                                "success": True,
+                                "latency_s": 1.0,
+                                "tokens": 64,
+                                "tokens_per_sec": 64.0,
+                                "output_excerpt": "A useful answer with enough detail to pass the sanity guard.",
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "model": "local-model",
+                                "run_id": "run-a",
+                                "prompt_case_id": "image_case",
+                                "input_type": "image",
+                                "success": True,
+                                "latency_s": 2.0,
+                                "tokens": 64,
+                                "tokens_per_sec": 32.0,
+                                "output_excerpt": "The image shows two contrasting square shapes.",
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_stream.write_text(
+                json.dumps(
+                    {
+                        "frame_index": 0,
+                        "frame_id": "frame_001.png",
+                        "success": True,
+                        "latency_s": 3.25,
+                        "output_excerpt": "",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summaries = build_optimization_report(
+                input_paths=[bench],
+                fake_stream_paths=[fake_stream],
+                output_path=report,
+                min_output_chars=24,
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual(len(summaries), 1)
+        self.assertFalse(summaries[0].guard_passed)
+        self.assertEqual(summaries[0].fake_stream_records, 1)
+        self.assertEqual(summaries[0].fake_stream_successful, 1)
+        self.assertEqual(summaries[0].fake_stream_avg_latency_s, 3.25)
+        self.assertIn("Fake latency s", report_text)
+        self.assertIn("fake_stream:frame_001.png:empty_output", report_text)
+
     def test_jetson_sweep_dry_run_writes_reproducible_variant_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -706,6 +780,142 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("scripts/jetson/run_minicpmv46_llama_docker.sh", variant_plan["server_command"])
         self.assertIn("--cache-type-k", variant_plan["server_command"])
         self.assertTrue(variant_plan["paths"]["benchmark_jsonl"].endswith("unit-sweep-minicpm-unit.jsonl"))
+        self.assertTrue(variant_plan["paths"]["preflight_json"].endswith("unit-sweep-minicpm-unit.preflight.json"))
+
+    def test_jetson_sweep_run_records_preflight_and_reports_fake_stream(self):
+        from edge_vlm.jetson_sweep import run_sweep
+
+        class FakeProcess:
+            def poll(self):
+                return None
+
+            def terminate(self):
+                return None
+
+            def wait(self, timeout=None):
+                return 0
+
+            def kill(self):
+                return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            benchmark_jsonl = tmp_path / "benchmarks" / "unit-run.jsonl"
+            fake_stream_jsonl = tmp_path / "fake_stream" / "unit-run.jsonl"
+            preflight_json = tmp_path / "preflight" / "unit-run.preflight.json"
+            report = tmp_path / "report.md"
+            plan = {
+                "run_prefix": "unit",
+                "port": 18080,
+                "variants": [
+                    {
+                        "variant": {"id": "unit-variant"},
+                        "run_id": "unit-run",
+                        "server_command": ["bash", "server.sh"],
+                        "server_env": {},
+                        "benchmark_command": ["bash", "bench.sh"],
+                        "benchmark_env": {},
+                        "fake_stream_command": ["python3", "-m", "edge_vlm.fake_stream"],
+                        "fake_stream_env": {},
+                        "paths": {
+                            "benchmark_jsonl": str(benchmark_jsonl),
+                            "fake_stream_jsonl": str(fake_stream_jsonl),
+                            "server_log": str(tmp_path / "logs" / "server.log"),
+                            "preflight_json": str(preflight_json),
+                        },
+                    }
+                ],
+            }
+
+            def fake_preflight(path):
+                sample = {
+                    "captured_at": "2026-05-30T00:00:00+00:00",
+                    "tegrastats": {
+                        "available": True,
+                        "raw": "RAM 645/7620MB (lfb 150x4MB)",
+                        "lfb": {"free_blocks": 150, "block_mb": 4},
+                    },
+                }
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                Path(path).write_text(json.dumps(sample), encoding="utf-8")
+                return sample
+
+            def fake_run(command, **_kwargs):
+                if command == ["bash", "bench.sh"]:
+                    benchmark_jsonl.parent.mkdir(parents=True, exist_ok=True)
+                    benchmark_jsonl.write_text(
+                        "\n".join(
+                            [
+                                json.dumps(
+                                    {
+                                        "model": "local-model",
+                                        "run_id": "unit-run",
+                                        "prompt_case_id": "text_case",
+                                        "input_type": "text",
+                                        "success": True,
+                                        "latency_s": 1.0,
+                                        "tokens": 64,
+                                        "tokens_per_sec": 64.0,
+                                        "output_excerpt": "A usable answer with enough detail.",
+                                    }
+                                ),
+                                json.dumps(
+                                    {
+                                        "model": "local-model",
+                                        "run_id": "unit-run",
+                                        "prompt_case_id": "image_case",
+                                        "input_type": "image",
+                                        "success": True,
+                                        "latency_s": 2.0,
+                                        "tokens": 64,
+                                        "tokens_per_sec": 32.0,
+                                        "output_excerpt": "The image contains simple contrasting shapes.",
+                                    }
+                                ),
+                            ]
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+                else:
+                    fake_stream_jsonl.parent.mkdir(parents=True, exist_ok=True)
+                    fake_stream_jsonl.write_text(
+                        json.dumps(
+                            {
+                                "frame_index": 0,
+                                "frame_id": "frame_001.png",
+                                "success": True,
+                                "latency_s": 1.5,
+                                "output_excerpt": "The frame shows two contrasting square shapes.",
+                            }
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+                return subprocess.CompletedProcess(command, 0)
+
+            with patch("edge_vlm.jetson_sweep.capture_preflight_sample", side_effect=fake_preflight):
+                with patch("edge_vlm.jetson_sweep._wait_for_server", return_value=True):
+                    with patch("edge_vlm.jetson_sweep.subprocess.Popen", return_value=FakeProcess()):
+                        with patch("edge_vlm.jetson_sweep.subprocess.run", side_effect=fake_run):
+                            result = run_sweep(plan, wait_timeout_s=1.0, report_output=report)
+
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual(result["results"][0]["preflight"]["tegrastats"]["lfb"]["free_blocks"], 150)
+        self.assertEqual(result["results"][0]["preflight_path"], str(preflight_json))
+        self.assertEqual(result["results"][0]["fake_stream_returncode"], 0)
+        self.assertIn("1.500", report_text)
+        self.assertIn("Fake latency s", report_text)
+
+    def test_jetson_sweep_parses_tegrastats_lfb(self):
+        from edge_vlm.jetson_sweep import parse_tegrastats_lfb
+
+        parsed = parse_tegrastats_lfb(
+            "05-30-2026 RAM 645/7620MB (lfb 150x4MB) CPU [1%@729] GR3D_FREQ 0%"
+        )
+
+        self.assertEqual(parsed, {"free_blocks": 150, "block_mb": 4})
 
     def test_next_phase_spec_orders_infra_before_model_expansion_and_lists_tencent_youtu_vl(self):
         spec = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")

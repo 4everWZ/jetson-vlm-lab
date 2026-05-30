@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -16,6 +17,9 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from .optimization import build_optimization_report
+
+
+LFB_RE = re.compile(r"\blfb\s+(?P<free_blocks>\d+)x(?P<block_mb>\d+)MB\b")
 
 
 def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
@@ -35,6 +39,74 @@ def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
 
 def _timestamp_run_prefix() -> str:
     return datetime.now(timezone.utc).strftime("jetson-opt-%Y%m%dT%H%M%SZ")
+
+
+def parse_tegrastats_lfb(line: str) -> dict[str, int] | None:
+    match = LFB_RE.search(line)
+    if match is None:
+        return None
+    return {
+        "free_blocks": int(match.group("free_blocks")),
+        "block_mb": int(match.group("block_mb")),
+    }
+
+
+def _read_meminfo() -> dict[str, int]:
+    meminfo: dict[str, int] = {}
+    path = Path("/proc/meminfo")
+    if not path.is_file():
+        return meminfo
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        parts = value.strip().split()
+        if not parts:
+            continue
+        try:
+            meminfo[key] = int(parts[0])
+        except ValueError:
+            continue
+    return meminfo
+
+
+def _sample_tegrastats(interval_ms: int = 1000, timeout_s: float = 2.5) -> dict[str, Any]:
+    if shutil.which("tegrastats") is None:
+        return {"available": False, "raw": None, "lfb": None}
+    process = subprocess.Popen(
+        ["tegrastats", "--interval", str(interval_ms)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        output, _ = process.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        try:
+            output, _ = process.communicate(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            output, _ = process.communicate(timeout=2.0)
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    raw = lines[-1] if lines else None
+    return {
+        "available": True,
+        "raw": raw,
+        "lfb": parse_tegrastats_lfb(raw or ""),
+    }
+
+
+def capture_preflight_sample(path: str | Path) -> dict[str, Any]:
+    output = Path(path)
+    sample = {
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "meminfo_kb": _read_meminfo(),
+        "tegrastats": _sample_tegrastats(),
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(sample, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return sample
 
 
 _ENV_REF_RE = re.compile(r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))")
@@ -124,6 +196,7 @@ def build_sweep_plan(
         profile_dir = output_base / "benchmarks" / f"{run_id}.profile"
         fake_stream_jsonl = output_base / "fake_stream" / f"{run_id}.jsonl"
         server_log = log_base / f"{run_id}.server.log"
+        preflight_json = output_base / "preflight" / f"{run_id}.preflight.json"
         benchmark_env = {
             **server_env,
             "EDGE_VLM_FORMAL_RUN_ID": run_id,
@@ -175,6 +248,7 @@ def build_sweep_plan(
                     "profile_dir": str(profile_dir),
                     "fake_stream_jsonl": str(fake_stream_jsonl),
                     "server_log": str(server_log),
+                    "preflight_json": str(preflight_json),
                 },
             }
         )
@@ -223,8 +297,10 @@ def _terminate_process(process: subprocess.Popen[Any]) -> None:
 def run_sweep(plan: dict[str, Any], *, wait_timeout_s: float, report_output: str | Path) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     benchmark_paths: list[str] = []
+    fake_stream_paths: list[str] = []
     for variant_plan in plan["variants"]:
         paths = variant_plan["paths"]
+        preflight = capture_preflight_sample(paths["preflight_json"])
         Path(paths["server_log"]).parent.mkdir(parents=True, exist_ok=True)
         server_log = open(paths["server_log"], "w", encoding="utf-8")
         server = subprocess.Popen(
@@ -245,6 +321,8 @@ def run_sweep(plan: dict[str, Any], *, wait_timeout_s: float, report_output: str
                         "server_returncode": server.poll(),
                         "benchmark_returncode": None,
                         "fake_stream_returncode": None,
+                        "preflight_path": paths["preflight_json"],
+                        "preflight": preflight,
                     }
                 )
                 continue
@@ -265,6 +343,8 @@ def run_sweep(plan: dict[str, Any], *, wait_timeout_s: float, report_output: str
                 fake_stream_returncode = fake_stream_result.returncode
             if benchmark_result.returncode == 0 and Path(paths["benchmark_jsonl"]).is_file():
                 benchmark_paths.append(paths["benchmark_jsonl"])
+            if fake_stream_returncode == 0 and Path(paths["fake_stream_jsonl"]).is_file():
+                fake_stream_paths.append(paths["fake_stream_jsonl"])
             results.append(
                 {
                     "run_id": variant_plan["run_id"],
@@ -273,13 +353,19 @@ def run_sweep(plan: dict[str, Any], *, wait_timeout_s: float, report_output: str
                     "server_returncode": server.poll(),
                     "benchmark_returncode": benchmark_result.returncode,
                     "fake_stream_returncode": fake_stream_returncode,
+                    "preflight_path": paths["preflight_json"],
+                    "preflight": preflight,
                 }
             )
         finally:
             _terminate_process(server)
             server_log.close()
     if benchmark_paths:
-        build_optimization_report(input_paths=benchmark_paths, output_path=report_output)
+        build_optimization_report(
+            input_paths=benchmark_paths,
+            fake_stream_paths=fake_stream_paths,
+            output_path=report_output,
+        )
     return {
         "run_prefix": plan["run_prefix"],
         "results": results,

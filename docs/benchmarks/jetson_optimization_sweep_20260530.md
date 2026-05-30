@@ -76,9 +76,9 @@ This is not a promotable Gemma path on the pinned container image.
 ## Next Optimization Work
 
 1. Repeat MiniCPM `b128/u32` vs `b512/u128` with a longer run and thermal notes.
-2. Add an optional sweep preflight that samples `tegrastats` `lfb` before each
-   Gemma variant so failed starts can be labeled as memory-state-sensitive or
-   parameter-incompatible.
+2. Use the updated sweep preflight JSON for future runs so `tegrastats` `lfb`
+   is recorded before each Gemma variant and failed starts can be labeled as
+   memory-state-sensitive or parameter-incompatible.
 3. Check the pinned llama.cpp server help inside the container before adding
    speculative acceleration flags such as flash attention or mmap/mlock changes.
 4. For Gemma, next useful variants are still within `N_GPU_LAYERS=12`; test
