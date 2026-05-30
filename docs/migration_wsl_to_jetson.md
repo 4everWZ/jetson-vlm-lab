@@ -91,6 +91,7 @@ Do not use Jetson as the primary conversion or quantization machine. The current
 6. Start `tegrastats` logging before benchmark runs.
 7. Run a text-only case before image cases.
 8. Record server command, container image, model ref, quantization, context size, and power mode with benchmark output.
+9. For formal runs, prefer `scripts/jetson/run_formal_benchmark.sh` so benchmark JSONL, summary, manifest, profile files, and `tegrastats` share one run id.
 
 ## Gemma 4 E2B-it On Jetson
 

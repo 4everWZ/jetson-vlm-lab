@@ -331,12 +331,27 @@ Jetson 脚本默认使用 dusty-nv `llama_cpp` 镜像。Jetson 上如果装了 j
 JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
 
+正式 Jetson benchmark 时，先启动上面的某个模型 server，再跑 benchmark wrapper，让 JSONL、Markdown、manifest、profile 文件和可选 `tegrastats` 输出共用一个 run id：
+
+```bash
+EDGE_VLM_FORMAL_RUN_ID=minicpmv46-q4-jetson-formal-001 \
+EDGE_VLM_CONFIG=configs/models/minicpmv46_q4.yaml \
+EDGE_VLM_OUTPUT=outputs/benchmarks/minicpmv46-q4-jetson-formal-001.jsonl \
+EDGE_VLM_SUMMARY_OUTPUT=outputs/benchmarks/minicpmv46-q4-jetson-formal-001.md \
+EDGE_VLM_METADATA_OUTPUT=outputs/benchmarks/minicpmv46-q4-jetson-formal-001.manifest.json \
+EDGE_VLM_TRIAL_COUNT=3 \
+scripts/jetson/run_formal_benchmark.sh
+```
+
+用 `EDGE_VLM_FORMAL_DRY_RUN=1 EDGE_VLM_SKIP_TEGRASTATS=1` 可以在没有 server 或 Jetson 硬件时验证 wrapper 结构。
+
 完整 checklist 见 [docs/migration_wsl_to_jetson.md](docs/migration_wsl_to_jetson.md)。
 
 ## 文档
 
 - [Runtime matrix](docs/runtime_matrix.md)
 - [Benchmark protocol](docs/benchmark_protocol.md)
+- [Next phase roadmap](docs/specs/next_phase_benchmark_and_models.md)
 - [WSL to Jetson migration](docs/migration_wsl_to_jetson.md)
 - [Implementation plan](docs/implementation_plan.md)
 - [APEX workflow matrix](docs/matrix_edge_vlm_workflow.md)

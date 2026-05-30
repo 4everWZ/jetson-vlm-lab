@@ -13,7 +13,7 @@ Not implemented in the current version.
 
 - `edge_vlm.client.OpenAICompatClient`: Sends `/v1/chat/completions` requests and supports dry-run payload validation.
 - `edge_vlm.image_payload`: Converts local images into data URLs and builds content parts.
-- `edge_vlm.benchmark.run_benchmark`: Reads JSONL cases, writes JSONL results, and can write a Markdown summary for the current run.
+- `edge_vlm.benchmark.run_benchmark`: Reads JSONL cases, writes JSONL results, can repeat full-case trials, and can write Markdown summary plus JSON manifest sidecars for the current run.
 - `edge_vlm.fake_stream.run_fake_stream`: Iterates a sorted image folder and writes one response record per frame.
 - `edge_vlm.config.load_model_config`: Loads YAML/JSON model configs with environment overrides for host and port.
 
@@ -33,7 +33,8 @@ The benchmark treats `input_type=fake_stream` as a marker case and records an in
 - The image payload uses OpenAI-style `image_url` content because llama.cpp documents this for `/v1/chat/completions`; server capability still needs runtime verification.
 - YAML parsing supports PyYAML when present and a narrow fallback parser for current config files.
 - Fake-stream execution is separate from the benchmark loop so frame-level failure handling can be explicit and resumable.
-- Markdown summaries are optional sidecar files generated from records written in the current run; JSONL remains the raw source of truth.
+- Markdown summaries are optional readable sidecar files generated from records written in the current run.
+- JSON manifests are optional machine-readable sidecar files for formal runs; JSONL plus manifest remain the raw source of truth.
 
 ## Verification
 
@@ -47,5 +48,8 @@ PYTHONPATH=src conda run -n transformers python -m edge_vlm.benchmark \
   --cases configs/benchmark/prompt_cases.jsonl \
   --output outputs/benchmarks/gemma4-e2b-q8-dryrun.jsonl \
   --summary-output outputs/benchmarks/gemma4-e2b-q8-dryrun.md \
+  --metadata-output outputs/benchmarks/gemma4-e2b-q8-dryrun.manifest.json \
+  --run-id gemma4-e2b-q8-dryrun \
+  --trial-count 1 \
   --dry-run
 ```

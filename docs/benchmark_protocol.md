@@ -26,6 +26,9 @@ The benchmark writes JSONL records with:
 - `quantization`
 - `model_ref`
 - `device`
+- `run_id`
+- `trial_index`
+- `case_index`
 - `prompt_case_id`
 - `input_type`
 - `image_path`
@@ -39,6 +42,33 @@ The benchmark writes JSONL records with:
 - `output_excerpt`
 
 Token counts are recorded only when the backend response exposes usage fields. If token counts are missing, `tokens` and `tokens_per_sec` remain null.
+
+## Manifest Sidecar
+
+Use `--metadata-output` for formal runs. The manifest records:
+
+- run id, start/end timestamps, and device label
+- config/cases/output/summary/metadata paths
+- model name, family, backend, model ref, and quantization
+- benchmark arguments, including dry-run mode, token limit, temperature, stream mode, and trial count
+- success/failure counts for the current run
+- selected runtime environment variables such as model paths, context size, GPU layers, batch/ubatch, container image, and server port
+- Jetson profile pointers for `tegrastats`, `nvpmodel`, and `jetson_clocks` when captured by the formal wrapper
+
+Example:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.benchmark \
+  --config configs/models/minicpmv46_q4.yaml \
+  --cases configs/benchmark/prompt_cases.jsonl \
+  --output outputs/benchmarks/minicpmv46-q4-formal.jsonl \
+  --summary-output outputs/benchmarks/minicpmv46-q4-formal.md \
+  --metadata-output outputs/benchmarks/minicpmv46-q4-formal.manifest.json \
+  --run-id minicpmv46-q4-formal-001 \
+  --trial-count 3 \
+  --max-tokens 64 \
+  --temperature 0
+```
 
 ## WSL Dry Run
 
@@ -129,7 +159,7 @@ Add `--dry-run` to validate folder iteration and JSONL logging without contactin
 
 ## Jetson Run
 
-On Jetson, start `tegrastats` in one terminal:
+For smoke runs, start `tegrastats` in one terminal:
 
 ```bash
 scripts/jetson/monitor_tegrastats.sh
@@ -145,9 +175,25 @@ EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
   --summary-output outputs/benchmarks/gemma4-e2b-q8-jetson.md
 ```
 
+For formal Jetson runs, start the model server first and then use the wrapper so JSONL, Markdown summary, manifest, device profile, and optional `tegrastats` log use one run id:
+
+```bash
+EDGE_VLM_FORMAL_RUN_ID=minicpmv46-q4-jetson-formal-001 \
+EDGE_VLM_CONFIG=configs/models/minicpmv46_q4.yaml \
+EDGE_VLM_OUTPUT=outputs/benchmarks/minicpmv46-q4-jetson-formal-001.jsonl \
+EDGE_VLM_SUMMARY_OUTPUT=outputs/benchmarks/minicpmv46-q4-jetson-formal-001.md \
+EDGE_VLM_METADATA_OUTPUT=outputs/benchmarks/minicpmv46-q4-jetson-formal-001.manifest.json \
+EDGE_VLM_TRIAL_COUNT=3 \
+EDGE_VLM_MAX_TOKENS=64 \
+EDGE_VLM_TEMPERATURE=0 \
+scripts/jetson/run_formal_benchmark.sh
+```
+
+Use `EDGE_VLM_FORMAL_DRY_RUN=1 EDGE_VLM_SKIP_TEGRASTATS=1` to validate the wrapper without a running server or Jetson hardware.
+
 ## Reporting Rules
 
 - Report dry-run logs as payload/logging validation only.
 - Report WSL and Jetson logs separately.
-- Include model ref, quantization, context size, `N_GPU_LAYERS`, Jetson power mode, storage location, and whether image cases succeeded.
+- Include model ref, quantization, context size, `N_GPU_LAYERS`, Jetson power mode, storage location, run id, trial count, manifest path, `tegrastats` status, and whether image cases succeeded.
 - Do not compare Jetson and WSL as equivalent hardware. Use WSL for development correctness and Jetson for edge runtime observations.

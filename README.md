@@ -331,12 +331,27 @@ Use `JETSON_DRY_RUN=1` to print the Docker command without requiring Docker or J
 JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
 
+For formal Jetson runs, start one of the model servers above first, then run the benchmark wrapper so JSONL, Markdown, manifest, profile files, and optional `tegrastats` output share one run id:
+
+```bash
+EDGE_VLM_FORMAL_RUN_ID=minicpmv46-q4-jetson-formal-001 \
+EDGE_VLM_CONFIG=configs/models/minicpmv46_q4.yaml \
+EDGE_VLM_OUTPUT=outputs/benchmarks/minicpmv46-q4-jetson-formal-001.jsonl \
+EDGE_VLM_SUMMARY_OUTPUT=outputs/benchmarks/minicpmv46-q4-jetson-formal-001.md \
+EDGE_VLM_METADATA_OUTPUT=outputs/benchmarks/minicpmv46-q4-jetson-formal-001.manifest.json \
+EDGE_VLM_TRIAL_COUNT=3 \
+scripts/jetson/run_formal_benchmark.sh
+```
+
+Use `EDGE_VLM_FORMAL_DRY_RUN=1 EDGE_VLM_SKIP_TEGRASTATS=1` to validate the wrapper without a running server or Jetson hardware.
+
 See [docs/migration_wsl_to_jetson.md](docs/migration_wsl_to_jetson.md) for the full checklist.
 
 ## Documentation
 
 - [Runtime matrix](docs/runtime_matrix.md)
 - [Benchmark protocol](docs/benchmark_protocol.md)
+- [Next phase roadmap](docs/specs/next_phase_benchmark_and_models.md)
 - [WSL to Jetson migration](docs/migration_wsl_to_jetson.md)
 - [Implementation plan](docs/implementation_plan.md)
 - [APEX workflow matrix](docs/matrix_edge_vlm_workflow.md)

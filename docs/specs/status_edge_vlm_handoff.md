@@ -66,6 +66,7 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
   - `scripts/jetson/run_gemma4_e2b_llama_docker.sh`
   - `scripts/jetson/run_minicpmv46_llama_docker.sh`
   - `scripts/jetson/monitor_tegrastats.sh`
+  - `scripts/jetson/run_formal_benchmark.sh`
 - Jetson launchers use dusty-nv `llama_cpp` containers by default:
   - `LLAMA_CPP_DOCKER_IMAGE` pins an explicit image.
   - `autotag llama_cpp` is used on Jetson when available.
@@ -80,6 +81,8 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
   - `data/sample_images/image_safety_scene_single.png`
   - `data/sample_stream/frame_001.png`
 - Benchmark runs can optionally write a Markdown summary with `--summary-output`.
+- Benchmark records can include `run_id`, `trial_index`, and `case_index`, and formal runs can write a JSON manifest with `--metadata-output`.
+- The Jetson formal benchmark wrapper can dry-run without hardware, or capture profile files and `tegrastats` beside a real benchmark run when available.
 - README and Chinese README are project entry points, not progress logs.
 
 ### Verified On WSL
@@ -135,8 +138,8 @@ Prepare and hand off the WSL-first, Jetson-Orin-targeted edge VLM experimentatio
 ### Deferred / Not Implemented
 
 - Jetson Q8 execution.
-- Jetson `tegrastats` capture paired with benchmark output.
-- Formal Jetson performance reporting with repeated trials, power mode, and thermal context.
+- Real Jetson `tegrastats` capture paired with benchmark output from a model run.
+- Real formal Jetson performance records with repeated trials, power mode, and thermal context.
 - Ollama, NanoLLM, vLLM, TensorRT/TensorRT-LLM, and custom kernels.
 - Camera access or live video stream capture.
 - Local MiniCPM HF checkpoint conversion or local quantization as a supported baseline.
@@ -309,7 +312,7 @@ PYTHONPATH=src VLM_SERVER_PORT=<port> conda run -n transformers python -m edge_v
 ## Active Blockers Or Open Questions
 
 - Jetson Q4 smoke is no longer blocked: copied outputs show MiniCPM-V 4.6 Q4 and Gemma Q4 ran successfully.
-- Jetson Q8, formal `tegrastats`-paired performance reporting, camera input, long-run behavior, power mode, and thermal context remain open.
+- Jetson Q8, real formal `tegrastats`-paired performance records, camera input, long-run behavior, power mode, and thermal context remain open.
 - WSL sandboxed commands may not access NVML/GPU. Use full-access local shell for GPU runtime observations.
 - The project has no dependency file yet. That is intentional because the current Python client uses standard library HTTP and tests run in the user-provided `transformers` Conda environment.
 
@@ -317,7 +320,7 @@ PYTHONPATH=src VLM_SERVER_PORT=<port> conda run -n transformers python -m edge_v
 
 1. Treat MiniCPM-V 4.6 Q4 as the fastest observed Jetson smoke path for first demos.
 2. Keep Gemma Q4 mmproj on GPU for the observed Jetson smoke path unless retesting.
-3. Repeat the Jetson Q4 runs with `tegrastats`, power mode, and thermal context captured beside the benchmark JSONL.
+3. Repeat the Jetson Q4 runs through `scripts/jetson/run_formal_benchmark.sh` so `tegrastats`, power mode, thermal context, JSONL, summary, and manifest share one run id.
 4. Add Jetson Q8 only after the Q4 path has a clean formal benchmark record.
 5. Add camera/live stream only after the fake-stream path is stable under repeated Jetson runs.
 

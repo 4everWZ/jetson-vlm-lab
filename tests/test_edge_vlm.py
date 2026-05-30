@@ -413,6 +413,134 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("| text_case | text | yes |", summary_text)
         self.assertIn("| image_case | image | yes |", summary_text)
 
+    def test_benchmark_writes_run_metadata_and_repeats_trials(self):
+        from edge_vlm.benchmark import run_benchmark
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            cases = tmp_path / "cases.jsonl"
+            output = tmp_path / "bench.jsonl"
+            metadata = tmp_path / "bench.manifest.json"
+            cases.write_text(
+                json.dumps(
+                    {
+                        "id": "text_case",
+                        "input_type": "text",
+                        "prompt": "Say one short sentence.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  family: Local",
+                        "  backend: llama.cpp",
+                        "  model_ref: local/example",
+                        "  quantization: Q4_K_M",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "runtime:",
+                        "  ctx_size: 512",
+                        "capabilities:",
+                        "  image: false",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            count = run_benchmark(
+                config_path=config,
+                cases_path=cases,
+                output_path=output,
+                metadata_path=metadata,
+                run_id="formal-unit-run",
+                trial_count=2,
+                dry_run=True,
+                max_tokens=16,
+                temperature=0.0,
+            )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            manifest = json.loads(metadata.read_text(encoding="utf-8"))
+
+        self.assertEqual(count, 2)
+        self.assertEqual([record["trial_index"] for record in records], [1, 2])
+        self.assertEqual([record["case_index"] for record in records], [1, 1])
+        self.assertTrue(all(record["run_id"] == "formal-unit-run" for record in records))
+        self.assertEqual(manifest["run_id"], "formal-unit-run")
+        self.assertEqual(manifest["cases_written"], 2)
+        self.assertEqual(manifest["successful"], 2)
+        self.assertEqual(manifest["failed"], 0)
+        self.assertEqual(manifest["benchmark"]["trial_count"], 2)
+        self.assertEqual(manifest["benchmark"]["max_tokens"], 16)
+        self.assertEqual(manifest["model"]["name"], "local-model")
+        self.assertEqual(manifest["model"]["quantization"], "Q4_K_M")
+        self.assertIn("started_at", manifest)
+        self.assertIn("ended_at", manifest)
+        self.assertIn("runtime_env", manifest)
+
+    def test_formal_jetson_benchmark_wrapper_dry_run_writes_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            cases = tmp_path / "cases.jsonl"
+            output = tmp_path / "bench.jsonl"
+            summary = tmp_path / "bench.md"
+            metadata = tmp_path / "bench.manifest.json"
+            cases.write_text(
+                json.dumps({"id": "text_case", "input_type": "text", "prompt": "Say hi."}) + "\n",
+                encoding="utf-8",
+            )
+            env = {
+                **os.environ,
+                "PYTHONPATH": "src",
+                "EDGE_VLM_FORMAL_RUN_ID": "formal-wrapper-unit",
+                "EDGE_VLM_CONFIG": "configs/models/minicpmv46_q4.yaml",
+                "EDGE_VLM_CASES": str(cases),
+                "EDGE_VLM_OUTPUT": str(output),
+                "EDGE_VLM_SUMMARY_OUTPUT": str(summary),
+                "EDGE_VLM_METADATA_OUTPUT": str(metadata),
+                "EDGE_VLM_TRIAL_COUNT": "2",
+                "EDGE_VLM_MAX_TOKENS": "8",
+                "EDGE_VLM_TEMPERATURE": "0",
+                "EDGE_VLM_FORMAL_DRY_RUN": "1",
+                "EDGE_VLM_SKIP_TEGRASTATS": "1",
+            }
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_formal_benchmark.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            manifest = json.loads(metadata.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(manifest["run_id"], "formal-wrapper-unit")
+        self.assertEqual(manifest["cases_written"], 2)
+        self.assertEqual(manifest["jetson"]["tegrastats_log"], None)
+        self.assertEqual(manifest["jetson"]["tegrastats_status"], "skipped")
+
+    def test_next_phase_spec_orders_infra_before_model_expansion_and_lists_tencent_youtu_vl(self):
+        spec = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
+
+        self.assertIn("Phase 1: Formal Benchmark Infra", spec)
+        self.assertIn("Phase 2: Lightweight Model Expansion", spec)
+        self.assertLess(
+            spec.index("Phase 1: Formal Benchmark Infra"),
+            spec.index("Phase 2: Lightweight Model Expansion"),
+        )
+        self.assertIn("tencent/Youtu-VL-4B-Instruct-GGUF", spec)
+        self.assertIn("SmolVLM2", spec)
+        self.assertIn("Qwen3-VL-2B", spec)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [

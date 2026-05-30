@@ -33,18 +33,19 @@ optional Markdown summary
 - Configs parse.
 - `scripts/common/check_server.sh` passes against a running server.
 - Benchmark dry run writes JSONL.
-- Benchmark dry run can write an optional Markdown summary.
+- Benchmark dry run can write optional Markdown summary and JSON manifest sidecars.
 - Shared image and fake-stream sample assets are present for out-of-box payload checks.
 - Real Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 WSL CUDA benchmark records observed text and sample-image server output.
 - Real Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 WSL CUDA fake-stream runs record observed frame output.
 - Real MiniCPM-V 4.6 Q4 and Gemma Q4 Jetson smoke logs record observed text and sample-image server output.
 - Real MiniCPM-V 4.6 Q4 and Gemma Q4 Jetson fake-stream logs record observed frame output.
-- Formal Jetson performance reporting still needs `tegrastats` alongside benchmark JSONL.
+- Formal Jetson performance reporting still needs real `tegrastats`-paired model runs; wrapper and manifest support are present.
 
 ## Benchmark / Regression Entry Points
 
 - Unit tests: `PYTHONPATH=src conda run -n transformers python -m unittest discover -s tests -v`
-- Dry benchmark: `python -m edge_vlm.benchmark --dry-run --summary-output ...`
+- Dry benchmark: `python -m edge_vlm.benchmark --dry-run --summary-output ... --metadata-output ...`
+- Formal benchmark dry run: `EDGE_VLM_FORMAL_DRY_RUN=1 EDGE_VLM_SKIP_TEGRASTATS=1 scripts/jetson/run_formal_benchmark.sh`
 - Fake stream: `python -m edge_vlm.fake_stream --dry-run ...`
 - Server health: `scripts/common/check_server.sh`
 - Jetson launcher self-check: `JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh`
@@ -57,8 +58,8 @@ optional Markdown summary
 - MiniCPM-V 4.6 local HF checkpoint conversion and local quantization are not WSL acceptance paths on this memory-constrained host; use the official pre-built GGUF artifacts.
 - Gemma local quantization is not a WSL acceptance path on this host; use the prepared Q8_0 artifacts or the downloaded pre-built Q4_K_M artifact.
 - Gemma Q8 WSL CUDA image requests require the observed `LLAMA_BATCH_SIZE=512` and `LLAMA_UBATCH_SIZE=512` setting on this llama.cpp build; the lower text-only `LLAMA_UBATCH_SIZE=32` setting triggered a non-causal attention assertion.
-- Jetson Q8, camera input, long-run behavior, thermal/power behavior, and broad performance remain unverified.
+- Jetson Q8, camera input, long-run behavior, real thermal/power behavior, and broad performance remain unverified.
 
 ## Final Acceptance Status
 
-Partially implemented. The scaffold, scripts, configs, tests, docs, shared sample assets, optional benchmark Markdown summaries, and ignored local model artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU fallback llama.cpp build with low-memory settings. WSL CUDA build/run wrappers exist; the CUDA build is verified with `CMAKE_CUDA_ARCHITECTURES=86`, `BUILD_JOBS=8`, and `GGML_CUDA=ON`. Gemma Q8_0, Gemma Q4_K_M, and MiniCPM-V 4.6 Q4_K_M WSL CUDA text/sample-image benchmarks passed with one server slot; real fake-stream runs against one committed sample frame also passed. MiniCPM-V 4.6 Q4 and Gemma Q4 Jetson smoke runs also passed with copied benchmark/fake-stream logs. Jetson Q8, `tegrastats`-paired performance reporting, camera input, long-run behavior, and broad performance remain unverified.
+Partially implemented. The scaffold, scripts, configs, tests, docs, shared sample assets, optional benchmark Markdown summaries, optional benchmark JSON manifests, formal wrapper dry-run support, and ignored local model artifacts exist. Gemma Q8_0 text-only WSL smoke passed on the local CPU fallback llama.cpp build with low-memory settings. WSL CUDA build/run wrappers exist; the CUDA build is verified with `CMAKE_CUDA_ARCHITECTURES=86`, `BUILD_JOBS=8`, and `GGML_CUDA=ON`. Gemma Q8_0, Gemma Q4_K_M, and MiniCPM-V 4.6 Q4_K_M WSL CUDA text/sample-image benchmarks passed with one server slot; real fake-stream runs against one committed sample frame also passed. MiniCPM-V 4.6 Q4 and Gemma Q4 Jetson smoke runs also passed with copied benchmark/fake-stream logs. Jetson Q8, real `tegrastats`-paired performance records, camera input, long-run behavior, and broad performance remain unverified.
