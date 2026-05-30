@@ -70,7 +70,7 @@ This is not a promotable Gemma path on the pinned container image.
 
 | Model | Current best promotable candidate | Reason |
 |---|---|---|
-| MiniCPM-V 4.6 Q4 | `batch=512`, `ubatch=128`, `N_GPU_LAYERS=32`, `CTX_SIZE=512`, q8_0 KV cache | Passed formal benchmark and fake-stream sanity with small speed gain over baseline |
+| MiniCPM-V 4.6 Q4 | keep `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, `CTX_SIZE=512`, q8_0 KV cache | Later 5-trial promotion repeat did not show a meaningful `batch=512`, `ubatch=128` advantage |
 | Gemma 4 E2B-it Q4 | keep `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, `CTX_SIZE=512`, q8_0 KV cache | `b256/u256` is mixed, and `gpu16` fails startup |
 
 ## Next Optimization Work
@@ -114,3 +114,32 @@ run with an intentionally unreachable threshold confirmed the skip path:
 | Run prefix | Variant | Threshold | Observed `lfb` | Result |
 |---|---|---:|---|---|
 | `min-lfb-skip-20260530` | `minicpm-q4-b512-u128-kvq8` | 9999 | `89x4MB` | wrote manifest/preflight only, `preflight_passed=false`, no Docker container launched |
+
+## MiniCPM Promotion Repeat
+
+Run prefixes:
+
+- `minicpm-promo-20260530a` for the baseline plus candidate attempt
+- `minicpm-promo-20260530b` for the candidate after clearing page cache
+
+Both valid benchmark runs used `--trial-count 5`, `--max-tokens 64`,
+`--temperature 0`, and `--min-lfb-blocks 150`.
+
+| Variant | Valid preflight `lfb` | Formal success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake-stream latency s | Guard |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| `minicpm-q4-baseline-b128-u32-kvq8` | `230x4MB` | 30/30 | 44.616 | 43.028 | 1.437 | 1.503 | 1.759 | yes |
+| `minicpm-q4-b512-u128-kvq8` | `241x4MB` | 30/30 | 44.546 | 43.066 | 1.439 | 1.500 | 1.735 | yes |
+
+The attempted same-run candidate comparison was skipped by the preflight gate
+because `lfb` dropped to `100x4MB` after the baseline run. After clearing page
+cache, the candidate ran successfully with `lfb 241x4MB`.
+
+This repeat weakens the earlier promotion case for `batch=512`, `ubatch=128`.
+Compared with the baseline, text throughput was slightly lower, image
+throughput was only 0.09% higher, and fake-stream latency improved by about
+1.4%. That is not enough margin to replace the baseline default.
+
+Current MiniCPM recommendation: keep `batch=128`, `ubatch=32` as the default
+stable setting, keep `batch=512`, `ubatch=128` as a candidate, and only promote
+it if a longer thermal run shows a consistent advantage across text, image, and
+fake-stream latency.
