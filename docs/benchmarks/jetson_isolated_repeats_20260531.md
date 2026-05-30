@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, then `c322312` for Flash Attention variants |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, and `433c718` for `mlock` plus Docker memlock ulimit variants |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, then `c322312` for Flash Attention variants |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, and `433c718` for `mlock` plus Docker memlock ulimit variants |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -132,9 +132,44 @@ formal text/image throughput. Gemma improves image throughput and image latency
 but regresses text throughput and fake-stream latency, so it is a tradeoff
 rather than a clean acceleration.
 
+## Memory Mapping and Locking Candidates
+
+These exploratory runs tested `--mlock`, `--no-mmap`, and `--mlock` with Docker
+`--ulimit memlock=-1:-1`. The plain `--mlock` runs started, but the server logs
+showed `RLIMIT_MEMLOCK` failures, so those rows are not valid measurements of
+actual locked-memory behavior.
+
+| Model | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Note |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-mlock` | `minicpm-mlock3-20260531b` | 283x4MB | 3 | yes | 18/18 | 1/1 | 44.286 | 41.508 | 1.448 | 1.565 | 1.738 | `mlock` failed due `RLIMIT_MEMLOCK` |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-mlock-ulimit` | `minicpm-mlockulimit3-20260531b` | 310x4MB | 3 | yes | 18/18 | 1/1 | 44.317 | 41.591 | 1.448 | 1.563 | 1.751 | no `mlock` warning |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-nommap` | `minicpm-nommap3-20260531b` | 278x4MB | 3 | yes | 18/18 | 1/1 | 44.111 | 41.558 | 1.454 | 1.563 | 1.741 | started cleanly |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-mlock` | `gemma-mlock3-20260531b` | 279x4MB | 3 | yes | 18/18 | 1/1 | 6.989 | 6.907 | 9.161 | 9.365 | 10.174 | `mlock` failed due `RLIMIT_MEMLOCK` |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-mlock-ulimit` | `gemma-mlockulimit3-20260531b` | 296x4MB | 3 | yes | 18/18 | 1/1 | 6.856 | 6.898 | 9.337 | 9.457 | 9.731 | 3-trial fake latency improved, then failed to repeat |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-mlock-ulimit` | `gemma-mlockulimit5-20260531b` | 312x4MB | 5 | yes | 30/30 | 1/1 | 6.985 | 7.005 | 9.169 | 9.223 | 10.656 | no `mlock` warning |
+
+Gemma `--no-mmap` is not viable on this pinned image and memory state:
+
+| Variant | Run prefix | Preflight `lfb` | Server ready | Server return code | Evidence |
+|---|---|---:|---|---:|---|
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8-nommap` | `gemma-nommap3-20260531b` | 286x4MB | no | 133 | server log shows `cudaMalloc failed: out of memory` while allocating a 317.05 MiB CUDA buffer |
+
+Delta for the valid `mlock+ulimit` rows versus each model's current default:
+
+| Model | Run prefix | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---|---|---:|---:|---:|---:|---:|
+| MiniCPM `mlock+ulimit` 3-trial | `minicpm-mlockulimit3-20260531b` | -0.69% | -3.38% | +0.77% | +3.99% | -0.06% |
+| Gemma `mlock+ulimit` 5-trial | `gemma-mlockulimit5-20260531b` | -2.16% | -1.27% | +2.22% | +1.14% | +4.51% |
+
+Decision: do not promote `--mlock`, `--mlock` with raised Docker memlock
+ulimit, or `--no-mmap` as defaults. Plain `--mlock` was not a valid test until
+the Docker ulimit was raised; with the ulimit raised it still failed to improve
+formal throughput. Gemma `--no-mmap` fails startup under high `lfb`, so keep it
+out of promotion sweeps unless a future memory/layout change makes it relevant.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
 | MiniCPM-V 4.6 Q4 | `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial repeat did not show a `b512/u128` throughput win |
-| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads | 5-trial search shows tradeoffs rather than a clear default win |
+| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads | Batch and Flash Attention variants are tradeoffs; memory mapping and locking variants are not promotion candidates |

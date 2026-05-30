@@ -81,11 +81,16 @@ fake-stream latency, while `b384/u384` improves fake-stream latency but slows
 formal text/image throughput. Explicit `--flash-attn on` is supported by the
 pinned container but is also mixed: MiniCPM formal throughput regresses, while
 Gemma image throughput improves at the cost of text and fake-stream latency.
+The follow-up memory-mapping repeats also keep the promotion state unchanged:
+plain `--mlock` hits `RLIMIT_MEMLOCK`, `mlock` with Docker memlock ulimit still
+does not beat the defaults, MiniCPM `--no-mmap` regresses formal throughput, and
+Gemma `--no-mmap` fails startup with CUDA OOM despite high preflight `lfb`.
 
 ## Next Optimization Work
 
 1. Continue only with flags already confirmed in pinned `llama-server --help`,
-   such as `--mlock`, `--no-mmap`, cache settings, and continuous batching.
+   focusing next on cache settings and continuous batching. `--mlock` and
+   `--no-mmap` now have negative evidence on the current pinned image.
 2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
    `lfb` is recorded before each variant and failed starts can be labeled as
    memory-state-sensitive or parameter-incompatible.
