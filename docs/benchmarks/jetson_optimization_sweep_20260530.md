@@ -73,11 +73,19 @@ This is not a promotable Gemma path on the pinned container image.
 | MiniCPM-V 4.6 Q4 | keep `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, `CTX_SIZE=512`, q8_0 KV cache | Later 5-trial promotion repeat did not show a meaningful `batch=512`, `ubatch=128` advantage |
 | Gemma 4 E2B-it Q4 | keep `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, `CTX_SIZE=512`, q8_0 KV cache | `b256/u256` is mixed, and `gpu16` fails startup |
 
+The 2026-05-31 isolated remote repeats in
+`docs/benchmarks/jetson_isolated_repeats_20260531.md` keep this promotion
+state unchanged. MiniCPM `b512/u128` still does not beat the baseline. Gemma
+`b256/u256` remains a candidate because it slightly improves formal latency in
+an isolated 3-trial repeat, but the margin is small and prior fake-stream
+evidence was mixed.
+
 ## Next Optimization Work
 
-1. Repeat MiniCPM `b128/u32` vs `b512/u128` with a longer run and thermal notes.
-2. Use the updated sweep preflight JSON for future runs so `tegrastats` `lfb`
-   is recorded before each Gemma variant and failed starts can be labeled as
+1. Run a longer isolated Gemma `b512/u512` vs `b256/u256` repeat with thermal
+   notes before promoting the lower batch/ubatch candidate.
+2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
+   `lfb` is recorded before each variant and failed starts can be labeled as
    memory-state-sensitive or parameter-incompatible.
 3. Check the pinned llama.cpp server help inside the container before adding
    speculative acceleration flags such as flash attention or mmap/mlock changes.
