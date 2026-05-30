@@ -225,6 +225,22 @@ root so Jetson `lfb` and memory state are visible before server startup.
 For promotion sweeps, add `--min-lfb-blocks 150` or a stricter threshold learned
 from prior runs so memory-fragmented starts are skipped and labeled before
 Docker launches.
+When comparing variants back-to-back, add `--pre-variant-command` to run the
+same cleanup before each preflight, for example:
+
+```bash
+PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
+  --run-prefix minicpm-promo-001 \
+  --model minicpmv46-q4 \
+  --trial-count 5 \
+  --max-tokens 64 \
+  --temperature 0 \
+  --min-lfb-blocks 150 \
+  --pre-variant-command "sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'"
+```
+
+A non-zero preparation command skips that variant before preflight and records
+the failure in the sweep manifest.
 
 ## Reporting Rules
 

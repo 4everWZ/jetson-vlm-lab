@@ -170,6 +170,7 @@ def build_sweep_plan(
     fake_stream_image_dir: str = "data/sample_stream",
     fake_stream_prompt: str = "Describe this frame.",
     fake_stream_max_frames: int = 1,
+    pre_variant_command: str | None = None,
     base_env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     source_env = dict(os.environ if base_env is None else base_env)
@@ -256,6 +257,7 @@ def build_sweep_plan(
         "variants_path": str(variants_path),
         "run_prefix": run_prefix,
         "port": port,
+        "pre_variant_command": pre_variant_command,
         "variants": planned,
     }
 
@@ -307,18 +309,72 @@ def _preflight_block_reason(preflight: dict[str, Any], min_lfb_blocks: int | Non
     return None
 
 
+def _text_tail(value: str | None, max_chars: int = 4000) -> str:
+    if not value:
+        return ""
+    return value[-max_chars:]
+
+
+def _run_pre_variant_command(command: str | None) -> dict[str, Any]:
+    if not command:
+        return {
+            "pre_variant_command": None,
+            "pre_variant_command_passed": None,
+            "pre_variant_command_returncode": None,
+            "pre_variant_command_stdout_tail": "",
+            "pre_variant_command_stderr_tail": "",
+        }
+    result = subprocess.run(
+        command,
+        shell=True,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return {
+        "pre_variant_command": command,
+        "pre_variant_command_passed": result.returncode == 0,
+        "pre_variant_command_returncode": result.returncode,
+        "pre_variant_command_stdout_tail": _text_tail(result.stdout),
+        "pre_variant_command_stderr_tail": _text_tail(result.stderr),
+    }
+
+
 def run_sweep(
     plan: dict[str, Any],
     *,
     wait_timeout_s: float,
     report_output: str | Path,
     min_lfb_blocks: int | None = None,
+    pre_variant_command: str | None = None,
 ) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     benchmark_paths: list[str] = []
     fake_stream_paths: list[str] = []
+    command = pre_variant_command if pre_variant_command is not None else plan.get("pre_variant_command")
     for variant_plan in plan["variants"]:
         paths = variant_plan["paths"]
+        pre_variant_result = _run_pre_variant_command(command)
+        if pre_variant_result["pre_variant_command_passed"] is False:
+            results.append(
+                {
+                    "run_id": variant_plan["run_id"],
+                    "variant_id": variant_plan["variant"]["id"],
+                    "server_ready": False,
+                    "server_returncode": None,
+                    "benchmark_returncode": None,
+                    "fake_stream_returncode": None,
+                    "preflight_path": paths["preflight_json"],
+                    "preflight": None,
+                    "preflight_passed": False,
+                    "preflight_reason": (
+                        "pre_variant_command_failed "
+                        f"returncode {pre_variant_result['pre_variant_command_returncode']}"
+                    ),
+                    **pre_variant_result,
+                }
+            )
+            continue
         preflight = capture_preflight_sample(paths["preflight_json"])
         preflight_reason = _preflight_block_reason(preflight, min_lfb_blocks)
         if preflight_reason is not None:
@@ -334,6 +390,7 @@ def run_sweep(
                     "preflight": preflight,
                     "preflight_passed": False,
                     "preflight_reason": preflight_reason,
+                    **pre_variant_result,
                 }
             )
             continue
@@ -361,6 +418,7 @@ def run_sweep(
                         "preflight": preflight,
                         "preflight_passed": True,
                         "preflight_reason": None,
+                        **pre_variant_result,
                     }
                 )
                 continue
@@ -395,6 +453,7 @@ def run_sweep(
                     "preflight": preflight,
                     "preflight_passed": True,
                     "preflight_reason": None,
+                    **pre_variant_result,
                 }
             )
         finally:
@@ -437,6 +496,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Skip a variant before server startup when tegrastats lfb free blocks are below this threshold",
     )
+    parser.add_argument(
+        "--pre-variant-command",
+        default=None,
+        help="Shell command to run before each variant preflight; a non-zero exit skips that variant",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--plan-output", default=None)
     parser.add_argument("--report-output", default=None)
@@ -462,6 +526,7 @@ def main(argv: list[str] | None = None) -> int:
         fake_stream_image_dir=args.fake_stream_image_dir,
         fake_stream_prompt=args.fake_stream_prompt,
         fake_stream_max_frames=args.fake_stream_max_frames,
+        pre_variant_command=args.pre_variant_command,
     )
     if not plan["variants"]:
         print(json.dumps({"error": "no variants selected", "variants": args.variants}, ensure_ascii=False), file=sys.stderr)
@@ -478,6 +543,7 @@ def main(argv: list[str] | None = None) -> int:
         wait_timeout_s=args.wait_timeout_s,
         report_output=report_output,
         min_lfb_blocks=args.min_lfb_blocks,
+        pre_variant_command=args.pre_variant_command,
     )
     manifest = Path(output_root) / f"{run_prefix}.manifest.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)

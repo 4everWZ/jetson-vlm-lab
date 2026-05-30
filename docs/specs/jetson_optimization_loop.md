@@ -91,6 +91,25 @@ below the threshold and records `preflight_passed=false` plus a
 `preflight_reason` in the sweep manifest. The default is unset, so exploratory
 runs still execute and gather evidence.
 
+For promotion comparisons where memory fragmentation can bias later variants,
+run a preparation command before every variant preflight:
+
+```bash
+PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
+  --run-prefix minicpm-promo-001 \
+  --model minicpmv46-q4 \
+  --trial-count 5 \
+  --max-tokens 64 \
+  --temperature 0 \
+  --min-lfb-blocks 150 \
+  --pre-variant-command "sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'"
+```
+
+The command is recorded in the dry-run plan and sweep manifest. If it returns a
+non-zero exit code, that variant is skipped before preflight or Docker startup
+and the manifest records `pre_variant_command_passed=false` plus
+`preflight_reason=pre_variant_command_failed returncode <N>`.
+
 ## Promotion Rule
 
 A candidate can become the new baseline only when:
