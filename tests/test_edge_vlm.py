@@ -1198,6 +1198,25 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("SmolVLM2", spec)
         self.assertIn("Qwen3-VL-2B", spec)
 
+    def test_jetson_optimization_variants_include_gemma_mid_batch_candidate(self):
+        variants = [
+            json.loads(line)
+            for line in Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        by_id = {variant["id"]: variant for variant in variants}
+
+        candidate = by_id["gemma-q4-gpu12-b384-u384-kvq8"]
+
+        self.assertEqual(candidate["model"], "gemma4-e2b-it-q4")
+        self.assertEqual(candidate["env"]["N_GPU_LAYERS"], 12)
+        self.assertEqual(candidate["env"]["LLAMA_BATCH_SIZE"], 384)
+        self.assertEqual(candidate["env"]["LLAMA_UBATCH_SIZE"], 384)
+        self.assertIn("--batch-size", candidate["args"])
+        self.assertIn("384", candidate["args"])
+        self.assertIn("--cache-type-k", candidate["args"])
+        self.assertIn("q8_0", candidate["args"])
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [
