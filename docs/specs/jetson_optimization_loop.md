@@ -37,6 +37,8 @@ Current sweep knobs are deliberately narrow:
   `--batch-size`, `--ubatch-size`, `--cache-type-k`, `--cache-type-v`,
   `--flash-attn`, `--mlock`, `--mmap`/`--no-mmap`, `--cont-batching`,
   `--no-warmup`, and Gemma `-fit off`
+- Docker launch env `DOCKER_GPU_ARGS` only for runtime capability flags needed
+  by a measured server flag, such as raising `memlock` for `--mlock`
 
 Do not add speculative llama.cpp flags until the container help or a dry-run
 command confirms the flag exists in the pinned Jetson image.
