@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, and `9a8b4e8` for startup timing capture |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, and `ddb76ad` for DirectIO variants |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, and `9a8b4e8` for startup timing capture |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, and `ddb76ad` for DirectIO variants |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -305,9 +305,56 @@ as `--direct-io` / `--no-direct-io`. Those flags should be judged on
 `server_startup_seconds` separately from steady-state benchmark throughput and
 latency.
 
+## DirectIO Candidates
+
+These runs used the startup timing fields from commit `9a8b4e8` to separate
+load-path behavior from steady-state benchmark metrics. The 3-trial run tested
+the baseline, explicit `--direct-io`, and explicit `--no-direct-io` for both
+models. A follow-up 5-trial run repeated Gemma baseline versus `--direct-io`
+because the 3-trial Gemma signal was large enough to require confirmation.
+
+| Model | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8` | `minicpm-baseline-directio3-20260531h` | 189x4MB | 3 | yes | 18/18 | 1/1 | 7.037 | 44.189 | 41.414 | 1.451 | 1.569 | 1.734 |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-directio` | `minicpm-directio-3-20260531h` | 187x4MB | 3 | yes | 18/18 | 1/1 | 7.034 | 44.191 | 41.550 | 1.453 | 1.564 | 1.738 |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-nodirectio` | `minicpm-nodirectio-3-20260531h` | 200x4MB | 3 | yes | 18/18 | 1/1 | 7.037 | 44.200 | 41.413 | 1.452 | 1.570 | 1.744 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8` | `gemma-baseline-directio3-20260531h` | 206x4MB | 3 | yes | 18/18 | 1/1 | 7.032 | 6.961 | 6.697 | 9.199 | 9.672 | 10.132 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | `gemma-directio-3-20260531h` | 244x4MB | 3 | yes | 18/18 | 1/1 | 8.041 | 7.020 | 7.159 | 9.121 | 9.084 | 9.497 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-nodirectio` | `gemma-nodirectio-3-20260531h` | 257x4MB | 3 | yes | 18/18 | 1/1 | 7.036 | 7.033 | 6.886 | 9.101 | 9.419 | 10.130 |
+
+3-trial delta versus each same-run baseline:
+
+| Model | Variant | Startup | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---|---|---:|---:|---:|---:|---:|---:|
+| MiniCPM | `directio` | -0.04% | +0.00% | +0.33% | +0.14% | -0.32% | +0.23% |
+| MiniCPM | `nodirectio` | -0.01% | +0.02% | -0.00% | +0.07% | +0.06% | +0.58% |
+| Gemma | `directio` | +14.35% | +0.85% | +6.90% | -0.85% | -6.08% | -6.27% |
+| Gemma | `nodirectio` | +0.06% | +1.03% | +2.82% | -1.07% | -2.62% | -0.02% |
+
+The 5-trial Gemma repeat reduced the formal throughput delta, but it kept a
+single-frame fake-stream latency improvement. Startup stayed about one second
+slower with `--direct-io`.
+
+| Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8` | `gemma-baseline-directio5-20260531h` | 262x4MB | 5 | yes | 30/30 | 1/1 | 7.034 | 7.135 | 7.058 | 8.976 | 9.149 | 10.356 |
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | `gemma-directio-5-20260531h` | 252x4MB | 5 | yes | 30/30 | 1/1 | 8.040 | 7.149 | 7.073 | 8.958 | 9.078 | 9.897 |
+
+5-trial delta for Gemma `--direct-io` versus the same-run baseline:
+
+| Startup | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---:|---:|---:|---:|---:|---:|
+| +14.30% | +0.20% | +0.21% | -0.20% | -0.78% | -4.43% |
+
+Decision: do not change MiniCPM; DirectIO is noise-level there. Keep Gemma
+`--direct-io` as a long-lived-server streaming candidate, not a default yet. It
+passes the guard and does not hurt formal throughput in the 5-trial repeat, but
+it increases startup time by about one second and the fake-stream evidence is
+still one frame because `data/sample_stream` only contains `frame_001.png`.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
 | MiniCPM-V 4.6 Q4 | `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial repeat did not show a `b512/u128` throughput win |
-| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads | Batch and Flash Attention variants are tradeoffs; memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not promotion candidates |
+| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads; DirectIO for long-lived streaming workloads | Batch, Flash Attention, and DirectIO variants are tradeoffs; memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |

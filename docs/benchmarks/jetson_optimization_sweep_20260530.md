@@ -98,24 +98,29 @@ The host-buffer and repack repeats are not promotion candidates: MiniCPM
 the guard after CUDA OOM during request processing, and Gemma `--no-repack`
 does not preserve its initial single-frame fake-stream latency signal in a
 5-trial repeat.
+The DirectIO repeats also keep MiniCPM unchanged. Gemma `--direct-io` is a
+long-lived-server streaming candidate rather than a default: a 5-trial repeat
+kept formal text/image throughput effectively flat and improved the current
+single-frame fake-stream latency by 4.43%, but startup time increased by about
+one second.
 
 ## Next Optimization Work
 
-1. Use the sweep manifest startup timing fields added in `9a8b4e8` for any
-   load-path flags. `--direct-io` / `--no-direct-io` can be tested for load
-   behavior, but it should not be interpreted as steady-state decode
-   acceleration without a decode metric win.
+1. Strengthen fake-stream evidence before accepting Gemma `--direct-io` as a
+   runtime default. `data/sample_stream` currently has one frame, so add or use
+   a small multi-frame stream before treating the 4.43% single-frame fake
+   latency win as stable streaming evidence.
 2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
    `lfb` is recorded before each variant and failed starts can be labeled as
    memory-state-sensitive or parameter-incompatible.
-3. Strengthen fake-stream evidence before accepting small streaming-latency
-   wins. `data/sample_stream` currently has one frame, so
-   `--fake-stream-max-frames 3` still produced `Fake success` 1/1.
+3. Keep judging load-path flags with the sweep manifest startup timing fields
+   added in `9a8b4e8`, separately from steady-state formal/fake metrics.
 4. `--mlock`, `--no-mmap`, lower KV cache precision, `--no-cont-batching`,
-   `--cache-ram 0`, `--no-cache-prompt`, `--no-host`, and `--no-repack` now have
-   negative evidence on the current pinned image. For steady-state speed, the
-   next high-leverage path is likely lightweight model expansion unless a new
-   confirmed llama.cpp flag changes decode behavior.
+   `--cache-ram 0`, `--no-cache-prompt`, `--no-host`, `--no-repack`, and
+   MiniCPM DirectIO now have negative or noise-level evidence on the current
+   pinned image. For MiniCPM steady-state speed, the next high-leverage path is
+   likely lightweight model expansion unless a new confirmed llama.cpp flag
+   changes decode behavior.
 
 ## Follow-Up Validation
 
