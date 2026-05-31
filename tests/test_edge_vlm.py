@@ -69,6 +69,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
     def test_llama_cpp_artifact_builder_prefers_direct_docker_when_available(self):
         artifact_builder = Path("scripts/build_llama_cpp_artifacts.sh").read_text(encoding="utf-8")
 
+        self.assertIn('BUILD_JOBS="${BUILD_JOBS:-6}"', artifact_builder)
         self.assertIn('DOCKER_BIN="${DOCKER_BIN:-}"', artifact_builder)
         self.assertIn("docker ps >/dev/null 2>&1", artifact_builder)
         self.assertIn("DOCKER_CMD=(docker)", artifact_builder)

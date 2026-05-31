@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 BUILDER_IMAGE="${BUILDER_IMAGE:-dustynv/cuda:12.8-samples-r36.4.0-cu128-24.04}"
 LLAMA_CPP_REF="${LLAMA_CPP_REF:-$(git ls-remote https://github.com/ggml-org/llama.cpp.git HEAD | awk '{print $1}')}"
-BUILD_JOBS="${BUILD_JOBS:-2}"
+BUILD_JOBS="${BUILD_JOBS:-6}"
 DOCKER_BIN="${DOCKER_BIN:-}"
 
 OUT_DIR="$PWD/artifacts/llama.cpp-install"
