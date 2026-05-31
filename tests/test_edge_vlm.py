@@ -1378,6 +1378,31 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 self.assertEqual(args[args.index("--cache-type-k") + 1], cache_k)
                 self.assertEqual(args[args.index("--cache-type-v") + 1], cache_v)
 
+    def test_jetson_optimization_variants_include_gemma_flash_attention_cache_precision_candidates(self):
+        variants = [
+            json.loads(line)
+            for line in Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        by_id = {variant["id"]: variant for variant in variants}
+
+        expected = {
+            "gemma-q4-baseline-gpu12-b512-u512-kq4-vq8-faon": ("q4_0", "q8_0"),
+            "gemma-q4-baseline-gpu12-b512-u512-kvq4-faon": ("q4_0", "q4_0"),
+        }
+
+        for variant_id, (cache_k, cache_v) in expected.items():
+            with self.subTest(variant_id=variant_id):
+                candidate = by_id[variant_id]
+                args = candidate["args"]
+                self.assertEqual(candidate["model"], "gemma4-e2b-it-q4")
+                self.assertEqual(candidate["env"]["N_GPU_LAYERS"], 12)
+                self.assertEqual(candidate["env"]["LLAMA_BATCH_SIZE"], 512)
+                self.assertEqual(candidate["env"]["LLAMA_UBATCH_SIZE"], 512)
+                self.assertEqual(args[args.index("--cache-type-k") + 1], cache_k)
+                self.assertEqual(args[args.index("--cache-type-v") + 1], cache_v)
+                self.assertEqual(args[args.index("--flash-attn") + 1], "on")
+
     def test_jetson_optimization_variants_include_no_cont_batching_candidates(self):
         variants = [
             json.loads(line)
