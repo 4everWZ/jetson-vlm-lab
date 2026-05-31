@@ -42,6 +42,7 @@ of relying only on an implicit process environment.
 | `remote-smoke-real-20260531b` | `minicpm-q4-baseline-b128-u32-kvq8` | `--min-lfb-blocks 150` | skipped before Docker; `lfb_free_blocks 88 < required 150` |
 | `remote-smoke-real-20260531c` | `minicpm-q4-baseline-b128-u32-kvq8` | no `lfb` gate, 1 trial, 64 tokens | completed formal benchmark and fake-stream sidecar |
 | `dropcache-validate-minicpm-20260531c` | `minicpm-q4-baseline-b128-u32-kvq8` | `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`, `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--min-lfb-blocks 150` | completed formal benchmark and three-frame fake-stream sidecar; manifest records `pre_variant_command_passed=true` |
+| `current-defaults-wrapper-smoke64-20260531a` | MiniCPM/Gemma current defaults | `scripts/jetson/run_remote_current_defaults_suite.sh`, `JETSON_REMOTE_SYNC=0`, 1 trial, 64 tokens, one fake-stream frame | completed both variants, generated `comparison.md`, and passed both guards |
 
 ## Successful Smoke Result
 
@@ -60,6 +61,26 @@ lfb 88x4MB
 This is a remote execution smoke, not a promotion run. It used a low-contiguous
 memory state and only one formal trial, so it should not replace the documented
 MiniCPM baseline or be used to rank batch/ubatch candidates.
+
+## Current Defaults Wrapper Smoke
+
+Run prefix: `current-defaults-wrapper-smoke64-20260531a`
+
+This validated `scripts/jetson/run_remote_current_defaults_suite.sh` end to
+end on the Jetson bench worktree. The wrapper ran both current default variants
+with `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`,
+`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--min-lfb-blocks 150`, one
+formal trial, 64 tokens, one fake-stream frame, then generated the comparison
+report from the sweep manifest.
+
+| Model | Variant | Preflight `lfb` | Guard | Formal success | Fake success | Startup s | Text tok/s | Image tok/s | Fake latency s |
+|---|---|---:|---|---:|---:|---:|---:|---:|---:|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8` | 269x4MB | yes | 6/6 | 1/1 | 6.027 | 47.466 | 37.840 | 1.657 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8` | 260x4MB | yes | 6/6 | 1/1 | 6.019 | 11.773 | 9.418 | 6.257 |
+
+This is wrapper validation, not a promotion run. A shorter 32-token probe
+completed but failed the lightweight quality guard due missing canary terms, so
+64 tokens should remain the minimum smoke setting when the guard result matters.
 
 ## Follow-Up
 
