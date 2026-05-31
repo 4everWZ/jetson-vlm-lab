@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: Text-only Tencent Hy-MT1.5 1.8B low-bit GGUF canary from the 2026-05-31 refresh. The first Jetson smoke on the pinned llama.cpp runtime failed before server ready with invalid ggml type 42, so keep it out of default text repeats until runtime support changes.
+  status: Text-only Tencent Hy-MT1.5 1.8B low-bit GGUF canary from the 2026-05-31 refresh. Included in the dedicated Tencent text-suite default; the first Jetson smoke on the pinned llama.cpp runtime failed before server ready with invalid ggml type 42, so treat failures as runtime-support evidence rather than VLM ranking evidence.

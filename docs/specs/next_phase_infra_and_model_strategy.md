@@ -47,7 +47,7 @@ Lightweight model evidence is promising but not promotable yet:
 | HunyuanOCR 1B Q8 | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded through `ggml-org/HunyuanOCR-GGUF` after the launcher-resume fix and completed formal/fake-stream records, but the guard failed because all output excerpts were repetitive exclamation-mark strings. This is not an official Tencent-owned GGUF artifact. | Do not run formal repeats for the current Q8 artifact/runtime path. Revisit only with bounded quality triage of artifact, prompt/template handling, or runtime lane. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
 | Youtu-VL-4B third-party Q4 | Jetson cached smoke passed with CPU mmproj, but it is slow and not official Tencent support. | Separate CPU-mmproj and GPU-mmproj artifact A/B before any ranking. |
-| Tencent Hy-MT1.5/Hy-MT2 1.8B GGUF text variants | Added to the text/router lane only: Hy-MT2 Q4_K_M/Q6_K/Q8_0 are default-suite rows; Hy-MT1.5 1.25bit/2bit and Hy-MT2 1.25Bit/2Bit are runtime-gated low-bit canaries. The Hy-MT1.5 1.25bit canary failed on pinned llama.cpp with invalid ggml type 42. | 5-trial text-only repeat through `scripts/jetson/run_remote_tencent_text_suite.sh` for the default Q4/Q6/Q8 rows; do not rank against VLM image/fake-stream rows. |
+| Tencent Hy-MT1.5/Hy-MT2 1.8B GGUF text variants | Added to the text/router lane only: Hy-MT1.5 1.25bit/2bit and Hy-MT2 1.25Bit/2Bit/Q4_K_M/Q6_K/Q8_0 are all included in the dedicated Tencent text suite by default. Low-bit rows are runtime-compatibility canaries; the Hy-MT1.5 1.25bit canary failed on pinned llama.cpp with invalid ggml type 42. Hy-MT2 Q4 cached smoke `tencent-hy-mt2-q4-smoke64-cached-20260531b` passed the text guard at 19.759 tok/s and 3.070 s average text latency. | 5-trial text-only repeat through `scripts/jetson/run_remote_tencent_text_suite.sh` for all configured text rows unless `JETSON_TENCENT_TEXT_VARIANTS` narrows the set; Q6/Q8 still need real Jetson evidence; do not rank against VLM image/fake-stream rows. |
 
 Tencent Hub note from the 2026-05-31 refresh: the current official small GGUF
 Tencent rows such as `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF`,
@@ -55,7 +55,8 @@ Tencent rows such as `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF`,
 `tencent/Hy-MT2-1.8B-1.25Bit-GGUF`, and
 `tencent/Hy-MT2-1.8B-2Bit-GGUF` are text/translation models, not VLM
 candidates. They are configured for text/router benchmarks only. Low-bit rows
-stay out of default repeats until the runtime supports their GGUF tensor types.
+stay in the dedicated text-suite default as runtime-compatibility canaries, with
+failures recorded as runtime support evidence rather than VLM ranking evidence.
 Newer Tencent small VLM-like releases such as `tencent/Penguin-VL-2B`,
 `tencent/HY-Embodied-0.5`, `tencent/HY-Embodied-0.5-X`, and
 `tencent/Youtu-Parsing` are Transformers/Safetensors/custom-code paths, not
@@ -356,9 +357,10 @@ estimates:
    Youtu Q4 third-party CPU-mmproj under the fixed comparison policy.
    HunyuanOCR Q8 is excluded from this repeat queue until its current
    guard-failing repeated punctuation output is explained and fixed.
-3. Run Tencent Hy-MT2 Q4/Q6/Q8 text/router variants separately if a text-only
-   route is useful; keep them out of VLM ranking tables. Revisit Hy-MT1.5 and
-   Hy-MT2 low-bit rows only after runtime support is proven.
+3. Run the dedicated Tencent Hy-MT1.5/Hy-MT2 text/router suite separately if a
+   text-only route is useful; keep all seven rows out of VLM ranking tables,
+   repeat the Q4 smoke before using it, add Q6/Q8 Jetson evidence, and treat
+   low-bit failures as runtime-compatibility evidence.
 4. Add artifact A/B rows only for candidates that survive repeat, starting with
    mmproj placement and available quantization differences.
 5. Use profiling evidence to choose exactly one runtime lane for a smoke.

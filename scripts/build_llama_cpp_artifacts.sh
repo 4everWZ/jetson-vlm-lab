@@ -7,6 +7,7 @@ BUILDER_IMAGE="${BUILDER_IMAGE:-dustynv/cuda:12.8-samples-r36.4.0-cu128-24.04}"
 LLAMA_CPP_REF="${LLAMA_CPP_REF:-$(git ls-remote https://github.com/ggml-org/llama.cpp.git HEAD | awk '{print $1}')}"
 BUILD_JOBS="${BUILD_JOBS:-6}"
 DOCKER_BIN="${DOCKER_BIN:-}"
+BUILD_LOG_DIR="${BUILD_LOG_DIR:-$PWD/outputs/build/llama-cpp}"
 
 OUT_DIR="$PWD/artifacts/llama.cpp-install"
 
@@ -14,6 +15,7 @@ echo "BUILDER_IMAGE=$BUILDER_IMAGE"
 echo "LLAMA_CPP_REF=$LLAMA_CPP_REF"
 echo "BUILD_JOBS=$BUILD_JOBS"
 echo "OUT_DIR=$OUT_DIR"
+echo "BUILD_LOG_DIR=$BUILD_LOG_DIR"
 
 if [[ -n "${DOCKER_BIN}" ]]; then
   read -r -a DOCKER_CMD <<< "${DOCKER_BIN}"
@@ -25,15 +27,17 @@ fi
 echo "DOCKER_CMD=${DOCKER_CMD[*]}"
 
 rm -rf "$OUT_DIR"
-mkdir -p "$OUT_DIR"
+mkdir -p "$OUT_DIR" "$BUILD_LOG_DIR"
 
 "${DOCKER_CMD[@]}" run --rm \
   --runtime nvidia \
   --network host \
   --ipc host \
+  -e BUILDER_IMAGE="$BUILDER_IMAGE" \
   -e LLAMA_CPP_REF="$LLAMA_CPP_REF" \
   -e BUILD_JOBS="$BUILD_JOBS" \
   -v "$PWD/artifacts:/artifacts" \
+  -v "$BUILD_LOG_DIR:/build-logs" \
   "$BUILDER_IMAGE" \
   bash -lc '
 set -eux
@@ -75,9 +79,23 @@ cp -av build/bin/llama-mtmd-cli /artifacts/llama.cpp-install/bin/
 
 echo "$LLAMA_CPP_REF" > /artifacts/llama.cpp-install/LLAMA_CPP_REF
 
-ldd /artifacts/llama.cpp-install/bin/llama-server || true
-/artifacts/llama.cpp-install/bin/llama-server --help | grep -n -C 5 -E -- "--mmproj|mmproj|mtmd|image" || true
+find /artifacts/llama.cpp-install -type f -printf "%P\n" | sort > /build-logs/copied-files.txt
+ldd /artifacts/llama.cpp-install/bin/llama-server > /build-logs/llama-server.ldd.txt 2>&1 || true
+/artifacts/llama.cpp-install/bin/llama-server --version > /build-logs/llama-server.version.txt 2>&1 || true
+/artifacts/llama.cpp-install/bin/llama-server --help > /build-logs/llama-server.help.txt 2>&1 || true
+{
+  echo "BUILDER_IMAGE=$BUILDER_IMAGE"
+  echo "LLAMA_CPP_REF=$LLAMA_CPP_REF"
+  echo "BUILD_JOBS=$BUILD_JOBS"
+  echo "copied-files=/build-logs/copied-files.txt"
+  echo "llama-server.version=/build-logs/llama-server.version.txt"
+  echo "llama-server.help=/build-logs/llama-server.help.txt"
+} > /build-logs/llama-cpp-artifacts.manifest.txt
+
+cat /build-logs/llama-server.ldd.txt || true
+grep -n -C 5 -E -- "--mmproj|mmproj|mtmd|image" /build-logs/llama-server.help.txt || true
 '
 
 echo "Artifacts built:"
 find "$OUT_DIR" -maxdepth 3 -type f -print
+echo "Build evidence written to $BUILD_LOG_DIR"

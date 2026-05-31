@@ -9,6 +9,7 @@ BUILD_DATE="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 VCS_REF="${VCS_REF:-$(git rev-parse --short=12 HEAD)}"
 SKIP_ARTIFACT_BUILD="${SKIP_ARTIFACT_BUILD:-0}"
 DOCKER_BIN="${DOCKER_BIN:-}"
+BUILD_LOG_DIR="${BUILD_LOG_DIR:-$PWD/outputs/build/llama-cpp}"
 
 if [[ -n "${DOCKER_BIN}" ]]; then
   read -r -a DOCKER_CMD <<< "${DOCKER_BIN}"
@@ -23,6 +24,8 @@ echo "IMAGE_TAG=${IMAGE_TAG}"
 echo "BUILD_DATE=${BUILD_DATE}"
 echo "VCS_REF=${VCS_REF}"
 echo "DOCKER_CMD=${DOCKER_CMD[*]}"
+echo "BUILD_LOG_DIR=${BUILD_LOG_DIR}"
+mkdir -p "${BUILD_LOG_DIR}"
 
 if [[ "${SKIP_ARTIFACT_BUILD}" == "0" ]]; then
   LLAMA_CPP_REF="${LLAMA_CPP_REF}" scripts/build_llama_cpp_artifacts.sh
@@ -52,6 +55,18 @@ if [[ "${artifact_files[*]}" != "${expected_artifact_files[*]}" ]]; then
   exit 2
 fi
 
+artifact_files_manifest="${BUILD_LOG_DIR}/artifact-files-${LLAMA_CPP_REF:0:12}.txt"
+image_manifest="${BUILD_LOG_DIR}/image-manifest-${LLAMA_CPP_REF:0:12}.txt"
+printf '%s\n' "${artifact_files[@]}" > "${artifact_files_manifest}"
+{
+  echo "IMAGE_TAG=${IMAGE_TAG}"
+  echo "BUILD_DATE=${BUILD_DATE}"
+  echo "VCS_REF=${VCS_REF}"
+  echo "LLAMA_CPP_REF=${LLAMA_CPP_REF}"
+  echo "DOCKER_CMD=${DOCKER_CMD[*]}"
+  echo "artifact-files=${artifact_files_manifest}"
+} > "${image_manifest}"
+
 "${DOCKER_CMD[@]}" build \
   -f docker/llama-cpp/Dockerfile \
   --build-arg "BUILD_DATE=${BUILD_DATE}" \
@@ -61,3 +76,4 @@ fi
   .
 
 echo "Built ${IMAGE_TAG}"
+echo "Image build evidence written to ${image_manifest}"

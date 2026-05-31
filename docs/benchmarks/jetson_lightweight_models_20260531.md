@@ -229,11 +229,11 @@ they split into two lanes:
 
 | Model | HF source | Repo status |
 |---|---|---|
-| Hy-MT1.5 1.8B 1.25bit GGUF | `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF` / `Hy-MT1.5-1.8B-1.25bit.gguf` | Added as text/router runtime canary; first Jetson smoke failed before server ready with `invalid ggml type 42` on the pinned llama.cpp image. |
-| Hy-MT1.5 1.8B 2bit GGUF | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf` | Added as text/router runtime canary; keep out of default repeats until low-bit GGUF support is proven. |
-| Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as text/router low-bit canary; not in the default text suite until current-runtime support is proven. |
-| Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as text/router low-bit canary; not in the default text suite until current-runtime support is proven. |
-| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; not VLM candidates. |
+| Hy-MT1.5 1.8B 1.25bit GGUF | `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF` / `Hy-MT1.5-1.8B-1.25bit.gguf` | Added as a default text/router runtime canary; first Jetson smoke failed before server ready with `invalid ggml type 42` on the pinned llama.cpp image. |
+| Hy-MT1.5 1.8B 2bit GGUF | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
+| Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
+| Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
+| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; Q4 cached Jetson smoke passed, Q6/Q8 still need real Jetson evidence; not VLM candidates. |
 | Hy-MT2 1.8B FP8 | `tencent/Hy-MT2-1.8B-FP8` | Deferred; Safetensors/compressed-tensors path, no low-friction GGUF launcher row. |
 | HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Jetson smoke loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs; not an official Tencent-owned GGUF artifact and not ranked. |
 | Penguin-VL-2B | `tencent/Penguin-VL-2B` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
@@ -243,13 +243,12 @@ they split into two lanes:
 The executable Hy-MT1.5 and Hy-MT2 rows use
 `scripts/jetson/run_hf_gguf_llama_docker.sh`,
 `configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
-`scripts/jetson/run_remote_tencent_text_suite.sh` defaults to the Hy-MT2
-Q4/Q6/Q8 rows with the same locked-clocks/cache-drop/min-lfb policy and
-`--fake-stream-max-frames 0`. The low-bit Hy-MT1.5/Hy-MT2 rows remain available
-through explicit `JETSON_TENCENT_TEXT_VARIANTS` or
-`JETSON_TENCENT_TEXT_EXTRA_VARIANTS` overrides for runtime-compatibility
-canaries. The sweep planner also skips fake-stream for these rows because their
-configs are text-only. Do not compare them against
+`scripts/jetson/run_remote_tencent_text_suite.sh` defaults to all seven
+configured Hy-MT1.5/Hy-MT2 rows with the same locked-clocks/cache-drop/min-lfb
+policy and `--fake-stream-max-frames 0`. Low-bit failures are runtime
+compatibility evidence; use `JETSON_TENCENT_TEXT_VARIANTS` only when a run needs
+to narrow the default set. The sweep planner also skips fake-stream for these
+rows because their configs are text-only. Do not compare them against
 SmolVLM2/Qwen/HunyuanOCR/Youtu image or fake-stream metrics.
 
 Hy-MT1.5 1.25bit canary evidence:
@@ -258,15 +257,29 @@ Hy-MT1.5 1.25bit canary evidence:
 |---|---:|---|---:|---:|---|
 | `tencent-hy-mt1p5-1p25bit-smoke64-20260531a` | 251x4MB | no | 1 | 2.012 | pinned llama.cpp rejected tensor type 42 while loading `blk.0.attn_k.weight` |
 
+Hy-MT2 Q4 cached smoke evidence:
+
+| Run prefix | Preflight `lfb` | Startup s | Guard | Success | Text tok/s | Text latency s | Max temp C | Avg power W | Avg GR3D % | Min lfb blocks |
+|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| `tencent-hy-mt2-q4-smoke64-cached-20260531b` | 233x4MB | 4.029 | yes | 4/4 | 19.759 | 3.070 | 53.812 | 21.731 | 95.333 | 160 |
+
+The first Q4 attempt was interrupted while downloading the artifact. A
+background `curl --continue-at -` resume completed
+`models/tencent/Hy-MT2-1.8B-GGUF/Hy-MT2-1.8B-Q4_K_M.gguf`
+at 1,133,080,448 bytes; the cached smoke then loaded the local artifact, skipped
+fake-stream because the config is text-only, and produced coherent text outputs
+for the four text prompt cases. Treat this as a text/router smoke only.
+
 ## Next Model Checks
 
 1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M, Qwen3-VL 2B,
    and the Youtu Q4 third-party CPU-mmproj path before ranking them against
    MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
-2. Run Hy-MT2 Q4/Q6/Q8 rows only as a separate text/router study if they become
-   useful for routing or translation pre/post-processing. Revisit Hy-MT1.5 and
-   Hy-MT2 low-bit rows only after a newer runtime or scoped canary proves
-   support for their GGUF tensor types.
+2. Run the dedicated Tencent Hy-MT1.5/Hy-MT2 text suite only as a separate
+   text/router study if it becomes useful for routing or translation
+   pre/post-processing; Q4 has one cached smoke, Q6/Q8 and repeated text runs
+   are still pending, and low-bit failures should feed the runtime/build lane,
+   not VLM ranking.
 3. Add a separate Youtu Q4 GPU-mmproj/offload canary if memory allows; keep it
    distinct from the CPU-mmproj smoke and the official Tencent Q8 failure.
 4. Revisit HunyuanOCR only through a bounded quality triage of artifact,

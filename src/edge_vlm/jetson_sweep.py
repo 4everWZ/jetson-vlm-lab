@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -433,13 +434,31 @@ def _terminate_process(process: subprocess.Popen[Any]) -> dict[str, Any]:
             "server_shutdown_seconds": 0.0,
             "server_shutdown_method": "already_exited",
         }
-    method = "terminate"
-    process.terminate()
+    pid = getattr(process, "pid", None)
+    if isinstance(pid, int):
+        method = "terminate_group"
+        try:
+            os.killpg(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return {
+                "server_shutdown_seconds": time.monotonic() - shutdown_started,
+                "server_shutdown_method": "already_exited",
+            }
+    else:
+        method = "terminate"
+        process.terminate()
     try:
         process.wait(timeout=20)
     except subprocess.TimeoutExpired:
-        method = "kill"
-        process.kill()
+        if isinstance(pid, int):
+            method = "kill_group"
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        else:
+            method = "kill"
+            process.kill()
         process.wait(timeout=20)
     return {
         "server_shutdown_seconds": time.monotonic() - shutdown_started,
@@ -751,6 +770,7 @@ def run_sweep(
             stderr=subprocess.STDOUT,
             env=_merged_env(variant_plan["server_env"]),
             text=True,
+            start_new_session=True,
         )
         result_entry: dict[str, Any] | None = None
         server_timing: dict[str, Any] = _not_started_server_timing()

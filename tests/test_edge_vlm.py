@@ -70,19 +70,26 @@ class EdgeVlmContractsTest(unittest.TestCase):
         artifact_builder = Path("scripts/build_llama_cpp_artifacts.sh").read_text(encoding="utf-8")
 
         self.assertIn('BUILD_JOBS="${BUILD_JOBS:-6}"', artifact_builder)
+        self.assertIn('BUILD_LOG_DIR="${BUILD_LOG_DIR:-$PWD/outputs/build/llama-cpp}"', artifact_builder)
         self.assertIn('DOCKER_BIN="${DOCKER_BIN:-}"', artifact_builder)
         self.assertIn("docker ps >/dev/null 2>&1", artifact_builder)
         self.assertIn("DOCKER_CMD=(docker)", artifact_builder)
         self.assertIn("DOCKER_CMD=(sudo docker)", artifact_builder)
+        self.assertIn('-v "$BUILD_LOG_DIR:/build-logs"', artifact_builder)
+        self.assertIn("llama-server.help.txt", artifact_builder)
+        self.assertIn("copied-files.txt", artifact_builder)
         self.assertIn('"${DOCKER_CMD[@]}" run --rm', artifact_builder)
 
     def test_llama_cpp_image_builder_records_ref_in_tag_and_labels(self):
         image_builder = Path("scripts/build_llama_cpp_image.sh").read_text(encoding="utf-8")
 
         self.assertIn('LLAMA_CPP_REF="${LLAMA_CPP_REF:-', image_builder)
+        self.assertIn('BUILD_LOG_DIR="${BUILD_LOG_DIR:-$PWD/outputs/build/llama-cpp}"', image_builder)
         self.assertIn('IMAGE_TAG="${IMAGE_TAG:-ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87-${LLAMA_CPP_REF:0:7}}"', image_builder)
         self.assertIn("--build-arg", image_builder)
         self.assertIn("LLAMA_CPP_REF=${LLAMA_CPP_REF}", image_builder)
+        self.assertIn("image-manifest", image_builder)
+        self.assertIn("artifact-files", image_builder)
         self.assertIn("-f docker/llama-cpp/Dockerfile", image_builder)
 
     def test_llama_cpp_image_builder_rejects_unexpected_artifact_files(self):
@@ -109,6 +116,14 @@ class EdgeVlmContractsTest(unittest.TestCase):
         gitignore = Path(".gitignore").read_text(encoding="utf-8")
 
         self.assertIn("artifacts/", gitignore)
+
+    def test_jetson_sweep_server_processes_are_group_terminated(self):
+        sweep = Path("src/edge_vlm/jetson_sweep.py").read_text(encoding="utf-8")
+
+        self.assertIn("start_new_session=True", sweep)
+        self.assertIn("os.killpg", sweep)
+        self.assertIn("signal.SIGTERM", sweep)
+        self.assertIn("signal.SIGKILL", sweep)
 
     def test_minicpm_prepare_downloads_official_prebuilt_artifacts(self):
         prepare_script = Path("scripts/wsl/prepare_minicpmv46_q4.sh").read_text(encoding="utf-8")
@@ -2446,6 +2461,53 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 self.assertEqual(variant["env"]["EDGE_VLM_CASES"], "configs/benchmark/text_prompt_cases.jsonl")
                 self.assertIn("--parallel", variant["args"])
                 self.assertIn("--no-warmup", variant["args"])
+
+    def test_tencent_text_suite_docs_match_all_variant_default_policy(self):
+        checked_paths = (
+            "docs/specs/next_phase_infra_and_model_strategy.md",
+            "docs/specs/next_phase_benchmark_and_models.md",
+            "docs/benchmarks/jetson_lightweight_models_20260531.md",
+            "docs/benchmark_protocol.md",
+            "docs/matrix_edge_vlm_workflow.md",
+            "configs/benchmark/jetson_optimization_variants.jsonl",
+            "configs/models/tencent_hy_mt1p5_1p8b_1p25bit.yaml",
+            "configs/models/tencent_hy_mt1p5_1p8b_2bit.yaml",
+            "configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml",
+            "configs/models/tencent_hy_mt2_1p8b_2bit.yaml",
+        )
+        stale_phrases = (
+            "defaults to Hy-MT2 Q4/Q6/Q8",
+            "default-suite rows",
+            "current-runtime-compatible Hy-MT2 Q4_K_M/Q6_K/Q8_0",
+            "keep out of default text repeats",
+            "stay out of default repeats",
+            "not in the default text suite",
+            "must be passed through `JETSON_TENCENT_TEXT_VARIANTS`",
+            "Hy-MT2 Q4/Q6/Q8 rows only",
+        )
+
+        for path in checked_paths:
+            text = Path(path).read_text(encoding="utf-8")
+            with self.subTest(path=path):
+                for phrase in stale_phrases:
+                    self.assertNotIn(phrase, text)
+
+    def test_tencent_hy_mt2_q4_smoke_evidence_is_documented_as_text_only(self):
+        benchmark_doc = Path("docs/benchmarks/jetson_lightweight_models_20260531.md").read_text(
+            encoding="utf-8"
+        )
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(
+            encoding="utf-8"
+        )
+        model_doc = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
+        matrix = Path("docs/matrix_edge_vlm_workflow.md").read_text(encoding="utf-8")
+
+        for text in (benchmark_doc, strategy_doc, model_doc):
+            self.assertIn("tencent-hy-mt2-q4-smoke64-cached-20260531b", text)
+            self.assertIn("19.759", text)
+        self.assertIn("text/router", benchmark_doc)
+        self.assertIn("not a VLM ranking row", model_doc)
+        self.assertIn("guard-passing cached text smoke", matrix)
 
     def test_jetson_hf_gguf_vlm_launcher_can_dry_run_model_ref(self):
         with tempfile.TemporaryDirectory() as tmp:
