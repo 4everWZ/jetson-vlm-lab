@@ -85,6 +85,15 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("LLAMA_CPP_REF=${LLAMA_CPP_REF}", image_builder)
         self.assertIn("-f docker/llama-cpp/Dockerfile", image_builder)
 
+    def test_llama_cpp_image_builder_rejects_unexpected_artifact_files(self):
+        image_builder = Path("scripts/build_llama_cpp_image.sh").read_text(encoding="utf-8")
+
+        self.assertIn("allowed_artifact_files=(", image_builder)
+        self.assertIn("LLAMA_CPP_REF", image_builder)
+        self.assertIn("bin/llama-server", image_builder)
+        self.assertIn("bin/llama-mtmd-cli", image_builder)
+        self.assertIn("Unexpected file in artifacts/llama.cpp-install", image_builder)
+
     def test_llama_cpp_docker_context_excludes_local_state_and_keeps_artifacts(self):
         dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
 

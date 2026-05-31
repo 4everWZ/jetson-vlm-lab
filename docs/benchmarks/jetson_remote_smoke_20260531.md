@@ -82,6 +82,63 @@ This is wrapper validation, not a promotion run. A shorter 32-token probe
 completed but failed the lightweight quality guard due missing canary terms, so
 64 tokens should remain the minimum smoke setting when the guard result matters.
 
+## llama.cpp Runtime Image Replacement Smoke
+
+Run prefixes:
+
+- `runtime-b4c0549-smoke64-20260531a`
+- `runtime-d749821-smoke64-20260531a`
+
+This checked whether a newer artifact-copy llama.cpp runtime image can replace
+the current canonical Jetson image. Both runs used
+`scripts/jetson/run_remote_current_defaults_suite.sh`, `JETSON_REMOTE_SYNC=0`,
+`JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`,
+`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--min-lfb-blocks 150`, one
+formal trial, 64 tokens, and one fake-stream frame.
+
+Runtime images:
+
+| Runtime | Docker tag | Image id | llama.cpp ref | Version output |
+|---|---|---|---|---|
+| Previous canonical | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` | `52a8ad644e41` | `b4c0549a49be` | `9352 (b4c0549a4)` |
+| Candidate | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87-d749821` | `36f3398b7885` | `d749821db3bd` | `9438 (d749821db)` |
+
+The candidate image was built from the existing artifact-copy path. The Docker
+build context was 137.69MB, matching the 132MB `artifacts/llama.cpp-install`
+tree, and the runtime install tree contained only:
+
+```text
+/opt/llama.cpp/LLAMA_CPP_REF
+/opt/llama.cpp/bin/llama-mtmd-cli
+/opt/llama.cpp/bin/llama-server
+```
+
+The latest llama.cpp CMake configure still reported HTTPS disabled because
+OpenSSL was not found, so the host-side HF download path remains necessary for
+Hub-hosted GGUF candidates.
+
+Cross-runtime comparison:
+
+| Model | Runtime ref | Preflight `lfb` | Guard | Formal success | Fake success | Startup s | Text tok/s | Image tok/s | Fake latency s | Text delta | Image delta | Fake delta |
+|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| MiniCPM-V 4.6 Q4 | `b4c0549a49be` | 192x4MB | yes | 6/6 | 1/1 | 6.024 | 47.399 | 37.650 | 1.659 | +0.00% | +0.00% | +0.00% |
+| MiniCPM-V 4.6 Q4 | `d749821db3bd` | 211x4MB | yes | 6/6 | 1/1 | 6.024 | 47.071 | 37.812 | 1.660 | -0.69% | +0.43% | +0.06% |
+| Gemma 4 E2B-it Q4 | `b4c0549a49be` | 209x4MB | yes | 6/6 | 1/1 | 6.020 | 12.314 | 9.374 | 6.379 | +0.00% | +0.00% | +0.00% |
+| Gemma 4 E2B-it Q4 | `d749821db3bd` | 214x4MB | yes | 6/6 | 1/1 | 6.019 | 12.383 | 9.812 | 6.074 | +0.56% | +4.67% | -4.78% |
+
+Decision: the candidate passed the current-default smoke guard for both default
+models and is eligible to replace the canonical Jetson llama.cpp tag. Treat the
+speed deltas as smoke evidence only; run a 10-trial current-defaults suite
+before making a performance-promotion claim.
+
+Post-smoke registry action: the candidate image was retagged and pushed over
+the canonical tag. Both
+`ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` and
+`ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87-d749821` now resolve
+locally on the Jetson to image id `36f3398b7885` and repo digest
+`sha256:86dd1f9dd7bd0f42940c591142279cdf6c5659317486e0b12167571c2046bffa`.
+The previous local image id `52a8ad644e41` was removed after the push.
+
 ## Follow-Up
 
 Before the next promotion comparison, run the remote wrapper with

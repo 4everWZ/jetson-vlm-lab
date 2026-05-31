@@ -36,6 +36,22 @@ if [[ ! -x artifacts/llama.cpp-install/bin/llama-server ]]; then
   exit 2
 fi
 
+allowed_artifact_files=(
+  "LLAMA_CPP_REF"
+  "bin/llama-mtmd-cli"
+  "bin/llama-server"
+)
+mapfile -t artifact_files < <(cd artifacts/llama.cpp-install && find . -type f -printf '%P\n' | sort)
+mapfile -t expected_artifact_files < <(printf '%s\n' "${allowed_artifact_files[@]}" | sort)
+if [[ "${artifact_files[*]}" != "${expected_artifact_files[*]}" ]]; then
+  echo "Unexpected file in artifacts/llama.cpp-install; refusing to build runtime image." >&2
+  echo "Expected files:" >&2
+  printf '  %s\n' "${expected_artifact_files[@]}" >&2
+  echo "Actual files:" >&2
+  printf '  %s\n' "${artifact_files[@]}" >&2
+  exit 2
+fi
+
 "${DOCKER_CMD[@]}" build \
   -f docker/llama-cpp/Dockerfile \
   --build-arg "BUILD_DATE=${BUILD_DATE}" \
