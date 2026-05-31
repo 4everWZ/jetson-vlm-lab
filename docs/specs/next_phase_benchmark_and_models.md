@@ -40,7 +40,7 @@ Initial candidate order:
 |---|---|---|---|
 | SmolVLM2 256M | Lowest-resource image baseline and latency floor | `ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0` | Jetson 1-trial smoke passed in `smolvlm2-256m-smoke64-20260531c`; latency floor only, not a quality/default replacement |
 | Qwen3-VL-2B Thinking | New small Qwen VLM quality/speed comparison | `Qwen/Qwen3-VL-2B-Thinking-GGUF:Q4_K_M` | Jetson 1-trial cached smoke passed in `qwen3vl-2b-thinking-smoke64-cached-20260531c`; needs repeated formal run before ranking |
-| Tencent Youtu-VL-4B | Tencent small VLM candidate for Chinese/image reasoning comparison | `tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0` | Added as generic HF GGUF smoke candidate; start with conservative GPU offload |
+| Tencent Youtu-VL-4B | Tencent small VLM candidate for Chinese/image reasoning comparison | `tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0` | Downloaded official Q8/BF16-mmproj artifacts, but Jetson smoke `youtu-vl-4b-q8-smoke64-20260531a` failed before server ready with CUDA OOM while allocating the 893MB mmproj buffer; defer unless a lower-bit official artifact or different backend is available |
 | SmolVLM2 500M | Slightly larger latency/quality point if 256M is too weak | `ggml-org/SmolVLM2-500M-Video-Instruct-GGUF` | Watchlist; add after 256M establishes the path |
 | InternVL3 1B / 2B | Compact OpenGVLab comparison point | `ggml-org/InternVL3-1B-Instruct-GGUF`, `ggml-org/InternVL3-2B-Instruct-GGUF` | Candidate, not observed in this repo |
 | Moondream2 | Very small VLM behavior/latency check | `ggml-org/moondream2-20250414-GGUF` | Candidate, not observed in this repo |
@@ -58,7 +58,8 @@ First smoke order:
 
 1. `smolvlm2-256m-q8-smoke`
 2. `qwen3-vl-2b-thinking-q4-smoke`
-3. `youtu-vl-4b-q8-smoke`
+3. `youtu-vl-4b-q8-smoke` did not become a promotable smoke candidate because
+   the official Q8 model plus BF16 mmproj failed startup on Jetson with CUDA OOM.
 
 Each smoke must pass the same preflight, startup timing, formal benchmark, and
 three-frame fake-stream path before any tuning sweep is added.

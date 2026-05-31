@@ -9,8 +9,8 @@ Jetson paths.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `94154a4` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `94154a4` |
+| Local branch / commit | `bench/formal-jetson-infra` / through `2184f84` before this Youtu note |
+| Jetson branch / commit | `bench/formal-jetson-infra` / through `2184f84` before this Youtu note |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
 | Model root | `/home/weizheng/code/jetson-vlm-lab/models` |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
@@ -68,8 +68,6 @@ HF GGUF launcher path. It is much faster than the MiniCPM/Gemma baselines, but
 its output is visibly weaker and repetitive on the simple sample frames. Treat
 it as a latency floor, not as a replacement default.
 
-## Next Model Checks
-
 ## Qwen3-VL 2B Thinking Q4 Smoke
 
 Variant: `qwen3-vl-2b-thinking-q4-smoke`
@@ -96,9 +94,47 @@ slower than SmolVLM2 256M but still substantially faster than the current
 Gemma Q4 baseline, and its sample outputs are more deliberate than SmolVLM2.
 Do not promote it without a repeated formal run and output review.
 
+## Youtu-VL 4B Q8 Smoke
+
+Variant: `youtu-vl-4b-q8-smoke`
+
+The official Tencent GGUF artifacts downloaded successfully, but the pinned
+llama.cpp container failed before server ready while loading the BF16 multimodal
+projector. The failed run used conservative GPU offload (`N_GPU_LAYERS=12`) and
+had a clean preflight memory state.
+
+Downloaded Youtu artifacts:
+
+| File | Size |
+|---|---:|
+| `models/tencent/Youtu-VL-4B-Instruct-GGUF/Youtu-VL-4B-Instruct-Q8_0.gguf` | 5,211,323,488 bytes |
+| `models/tencent/Youtu-VL-4B-Instruct-GGUF/mmproj-Youtu-VL-4b-Instruct-BF16.gguf` | 893,397,344 bytes |
+
+| Run prefix | Preflight `lfb` | Server ready | Server return code | Wait s | Failure |
+|---|---:|---|---:|---:|---|
+| `youtu-vl-4b-q8-smoke64-20260531a` | 245x4MB | no | 133 | 1818.172 | CUDA OOM allocating 851.99 MiB for the mmproj buffer |
+
+Relevant server log tail:
+
+```text
+device_info: CUDA0 : Orin (7619 MiB, 6558 MiB free)
+ggml_backend_cuda_buffer_type_alloc_buffer: allocating 851.99 MiB on device 0: cudaMalloc failed: out of memory
+alloc_tensor_range: failed to allocate CUDA0 buffer of size 893373568
+```
+
+Decision: the official Tencent Youtu-VL-4B Q8 plus BF16 mmproj package is not a
+viable default smoke candidate on this Jetson with the current pinned llama.cpp
+image/config. Keep the downloaded artifacts as evidence, but defer promotion
+until a lower-bit official artifact or different backend is available. A
+third-party Q4 GGUF would be a separate research choice, not the same official
+Tencent candidate.
+
 ## Next Model Checks
 
-1. Run `youtu-vl-4b-q8-smoke` only after confirming enough contiguous memory,
-   because the Q8 model is much larger than SmolVLM2 256M.
-2. Promote none of these candidates until a 3- or 5-trial formal repeat passes
+1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M and Qwen3-VL 2B
+   before ranking them against MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
+2. Add another Tencent path only if the artifact/backend choice is explicit:
+   lower-bit official GGUF if available, otherwise a clearly marked third-party
+   quantized GGUF experiment.
+3. Promote none of these candidates until a formal repeat passes
    the guard and preserves acceptable output quality.
