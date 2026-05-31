@@ -459,26 +459,93 @@ def _write_run_profile_artifacts(paths: dict[str, Any], server_timing: dict[str,
     if not isinstance(tegrastats_log, str) or not Path(tegrastats_log).is_file():
         return _missing_profile_artifact(paths, "missing_tegrastats_log")
     startup_seconds = server_timing.get("server_startup_seconds")
+    phase_timings = _profile_phase_timings(paths, startup_seconds)
     profile_summary = write_profile_artifacts(
         tegrastats_log=tegrastats_log,
         profile_jsonl_path=str(profile_jsonl),
         summary_path=str(profile_summary_json),
-        phase_timings={
-            "server_startup": {
-                "available": isinstance(startup_seconds, (int, float)),
-                "duration_s": startup_seconds,
-            },
-        },
-        profile_files={
-            "nvpmodel": str(jetson.get("power_mode") or ""),
-            "jetson_clocks": str(jetson.get("jetson_clocks") or ""),
-        },
+        phase_timings=phase_timings,
+        profile_files=_profile_files(paths, jetson),
     )
     return {
         "profile_jsonl_path": str(profile_jsonl),
         "profile_summary_path": str(profile_summary_json),
         "profile_summary": profile_summary,
     }
+
+
+def _latency_sum_from_jsonl(path: str | Path, predicate: Any) -> float | None:
+    source = Path(path)
+    if not source.is_file():
+        return None
+    total = 0.0
+    found = False
+    for record in _iter_jsonl(source):
+        if not predicate(record):
+            continue
+        latency = record.get("latency_s")
+        if isinstance(latency, (int, float)):
+            total += float(latency)
+            found = True
+    return total if found else None
+
+
+def _phase_entry(duration: float | None, reason: str = "not_recorded") -> dict[str, Any]:
+    return {
+        "available": duration is not None,
+        "duration_s": duration,
+        "reason": None if duration is not None else reason,
+    }
+
+
+def _profile_phase_timings(paths: dict[str, Any], startup_seconds: Any) -> dict[str, Any]:
+    benchmark_jsonl = paths.get("benchmark_jsonl")
+    fake_stream_jsonl = paths.get("fake_stream_jsonl")
+    text_duration = (
+        _latency_sum_from_jsonl(benchmark_jsonl, lambda record: record.get("input_type") == "text")
+        if isinstance(benchmark_jsonl, str)
+        else None
+    )
+    image_duration = (
+        _latency_sum_from_jsonl(
+            benchmark_jsonl,
+            lambda record: str(record.get("input_type") or "").startswith("image"),
+        )
+        if isinstance(benchmark_jsonl, str)
+        else None
+    )
+    fake_stream_duration = (
+        _latency_sum_from_jsonl(fake_stream_jsonl, lambda _record: True)
+        if isinstance(fake_stream_jsonl, str)
+        else None
+    )
+    return {
+        "server_startup": _phase_entry(
+            float(startup_seconds) if isinstance(startup_seconds, (int, float)) else None,
+        ),
+        "formal_text": _phase_entry(text_duration),
+        "formal_image": _phase_entry(image_duration),
+        "fake_stream": _phase_entry(fake_stream_duration),
+    }
+
+
+def _profile_files(paths: dict[str, Any], jetson: dict[str, Any]) -> dict[str, str]:
+    profile_files: dict[str, str] = {}
+    profile_dir = paths.get("profile_dir")
+    if isinstance(profile_dir, str) and profile_dir:
+        profile_files.update(
+            {
+                "uname": str(Path(profile_dir) / "uname.txt"),
+                "docker_version": str(Path(profile_dir) / "docker-version.txt"),
+                "nvpmodel": str(Path(profile_dir) / "nvpmodel.txt"),
+                "jetson_clocks": str(Path(profile_dir) / "jetson-clocks.txt"),
+            }
+        )
+    if isinstance(jetson.get("power_mode"), str):
+        profile_files["nvpmodel"] = str(jetson["power_mode"])
+    if isinstance(jetson.get("jetson_clocks"), str):
+        profile_files["jetson_clocks"] = str(jetson["jetson_clocks"])
+    return profile_files
 
 
 def run_sweep(

@@ -1378,6 +1378,10 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertTrue(profile_summary_json_exists)
         self.assertEqual(result["results"][0]["profile_summary"]["samples"], 2)
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["server_startup"]["duration_s"], 2.5)
+        self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["formal_text"]["duration_s"], 1.0)
+        self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["formal_image"]["duration_s"], 2.0)
+        self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["fake_stream"]["duration_s"], 1.5)
+        self.assertFalse(result["results"][0]["profile_summary"]["phase_timings"]["artifact_check_or_download"]["available"])
         self.assertIn("gpu_compute", result["results"][0]["profile_summary"]["bottleneck_labels"])
         self.assertIn("emc_memory_bandwidth", result["results"][0]["profile_summary"]["bottleneck_labels"])
         self.assertIn("1.500", report_text)
@@ -1711,6 +1715,19 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("tencent/Youtu-VL-4B-Instruct-GGUF", spec)
         self.assertIn("SmolVLM2", spec)
         self.assertIn("Qwen3-VL-2B", spec)
+
+    def test_workflow_matrix_tracks_next_phase_infra_and_model_specs(self):
+        matrix = Path("docs/matrix_edge_vlm_workflow.md").read_text(encoding="utf-8")
+
+        self.assertIn("next_phase_infra_and_model_strategy.md", matrix)
+        self.assertIn("jetson_optimization_loop.md", matrix)
+        self.assertIn("src/edge_vlm/jetson_profile.py", matrix)
+        self.assertIn("scripts/jetson/run_optimization_sweep.sh", matrix)
+        self.assertIn("scripts/jetson/run_remote_current_defaults_suite.sh", matrix)
+        self.assertIn("run_hf_gguf_vlm_llama_docker.sh", matrix)
+        self.assertIn("SmolVLM2", matrix)
+        self.assertIn("Qwen3-VL", matrix)
+        self.assertIn("Youtu-VL", matrix)
 
     def test_jetson_optimization_variants_include_gemma_mid_batch_candidate(self):
         variants = [
