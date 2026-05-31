@@ -4,6 +4,12 @@
 
 Build a reproducible Jetson benchmark loop before adding more model families. New models must be compared against the same run metadata, repeated trials, power/thermal context, and prompt cases as the existing MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4 smoke paths.
 
+Current follow-on direction: `docs/specs/next_phase_infra_and_model_strategy.md`
+narrows the next phase after the MiniCPM/Gemma parameter sweeps. Treat this
+document as the benchmark/model expansion foundation, and use the infra strategy
+spec for profiling gates, runtime gates, artifact comparison rules, and the
+decision to stop broad llama.cpp flag sweeps for the current defaults.
+
 ## Phase 1: Formal Benchmark Infra
 
 Implement and use a formal benchmark path around the existing `edge_vlm.benchmark` runner.
@@ -70,9 +76,19 @@ three-frame fake-stream path before any tuning sweep is added.
 
 ## Phase 3: llama.cpp Acceleration Sweep
 
-Run parameter sweeps only after Phase 1 has at least one formal MiniCPM-V 4.6 Q4 baseline and one formal Gemma Q4 baseline.
+This phase has enough evidence for MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4:
+the tracked sweeps and max-clocks repeats did not produce a clean default
+promotion from batch/ubatch, Flash Attention, KV-cache precision, memory
+mapping, locking, prompt-cache, host-buffer, repack, DirectIO, warmup, or higher
+Gemma GPU offload. Do not continue broad llama.cpp flag sweeps for these two
+current defaults. New llama.cpp probes should start from a profiling claim or a
+new confirmed container capability and should follow
+`docs/specs/next_phase_infra_and_model_strategy.md`.
 
-Use `docs/specs/jetson_optimization_loop.md` and `scripts/jetson/run_optimization_sweep.sh` for reproducible sweeps. A faster candidate is not promotable unless the optimization report marks its sanity guard as passing.
+When a scoped probe is justified, use `docs/specs/jetson_optimization_loop.md`
+and `scripts/jetson/run_optimization_sweep.sh` for reproducible sweeps. A
+faster candidate is not promotable unless the optimization report marks its
+sanity guard as passing.
 
 Sweep variables:
 
