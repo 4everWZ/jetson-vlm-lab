@@ -6,6 +6,7 @@ remote_exec="${JETSON_REMOTE_EXEC:-${repo_root}/scripts/jetson/remote_exec.sh}"
 remote_sync="${JETSON_REMOTE_SYNC:-1}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
 llama_cpp_image="${JETSON_REMOTE_LLAMA_CPP_IMAGE:-ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87}"
+prepare_max_clocks="${JETSON_REMOTE_PREPARE_MAX_CLOCKS:-0}"
 
 if [[ $# -eq 0 ]]; then
   echo "Usage: $0 <edge_vlm.jetson_sweep args...>" >&2
@@ -16,6 +17,20 @@ if [[ "${remote_sync}" == "1" ]]; then
   "${remote_exec}" git pull --ff-only
 elif [[ "${remote_sync}" != "0" ]]; then
   echo "JETSON_REMOTE_SYNC must be 0 or 1." >&2
+  exit 2
+fi
+
+if [[ "${prepare_max_clocks}" == "1" ]]; then
+  sudo_password="${JETSON_REMOTE_SUDO_PASSWORD:-${JETSON_SSH_PASSWORD:-}}"
+  if [[ -z "${sudo_password}" ]]; then
+    echo "JETSON_REMOTE_PREPARE_MAX_CLOCKS requires JETSON_REMOTE_SUDO_PASSWORD or JETSON_SSH_PASSWORD." >&2
+    exit 2
+  fi
+  clocks_capture="outputs/jetson_inspect/jetson-clocks-max-$(date -u +%Y%m%dT%H%M%SZ).txt"
+  printf '%s\n' "${sudo_password}" | "${remote_exec}" \
+    sudo -S sh -c "mkdir -p outputs/jetson_inspect && jetson_clocks && jetson_clocks --show > ${clocks_capture}"
+elif [[ "${prepare_max_clocks}" != "0" ]]; then
+  echo "JETSON_REMOTE_PREPARE_MAX_CLOCKS must be 0 or 1." >&2
   exit 2
 fi
 

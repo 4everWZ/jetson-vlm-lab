@@ -278,6 +278,7 @@ For optimization sweeps, prefer the remote sweep wrapper so the Jetson worktree
 is updated and the pinned llama.cpp image is applied consistently:
 
 ```bash
+JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
 scripts/jetson/run_remote_optimization_sweep.sh \
   --run-prefix minicpm-promo-iso-001 \
   --variant minicpm-q4-baseline-b128-u32-kvq8 \
@@ -294,6 +295,12 @@ Set `JETSON_REMOTE_SYNC=0` to skip the initial `git pull --ff-only`, or set
 `JETSON_REMOTE_LLAMA_CPP_IMAGE` to test another pinned llama.cpp image.
 The generated sweep plan records inherited launcher environment, including the
 pinned llama.cpp image, so the plan itself contains the server image evidence.
+Set `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1` for promotion/comparison sweeps. The
+wrapper runs `sudo jetson_clocks` and captures `sudo jetson_clocks --show` under
+ignored `outputs/jetson_inspect/` before launching the sweep. It reads the sudo
+password from `JETSON_REMOTE_SUDO_PASSWORD` or `JETSON_SSH_PASSWORD` in the
+ignored `.env.jetson` file and passes it over stdin; do not put passwords in
+tracked files or command-line arguments.
 
 ## Reporting Rules
 

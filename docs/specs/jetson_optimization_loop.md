@@ -101,15 +101,22 @@ failures from parameter-incompatible failures.
 For promotion or final comparison sweeps, lock Jetson clocks before the run:
 
 ```bash
-sudo jetson_clocks
-sudo jetson_clocks --show
+JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 scripts/jetson/run_remote_optimization_sweep.sh \
+  --run-prefix minicpm-promo-001 \
+  --variant minicpm-q4-baseline-b128-u32-kvq8 \
+  --trial-count 5 \
+  --max-tokens 64 \
+  --temperature 0 \
+  --min-lfb-blocks 150
 ```
 
 The max-clocks repeat in `docs/benchmarks/jetson_isolated_repeats_20260531.md`
 showed this is not just bookkeeping: MiniCPM and especially Gemma improved
 substantially after clocks were locked. Treat runs without confirmed
 `jetson_clocks` state as exploratory unless the comparison is explicitly about
-dynamic-clock behavior.
+dynamic-clock behavior. The remote wrapper captures `sudo jetson_clocks --show`
+under ignored `outputs/jetson_inspect/` when
+`JETSON_REMOTE_PREPARE_MAX_CLOCKS=1` is set.
 
 The sweep manifest also records server startup timing for variants that reach
 Docker startup:

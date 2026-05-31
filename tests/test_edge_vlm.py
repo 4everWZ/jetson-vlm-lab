@@ -2029,6 +2029,92 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("ARG=--dry-run\n", log_text)
         self.assertIn("ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
 
+    def test_remote_optimization_sweep_can_prepare_max_clocks_without_logging_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                        "if [[ \"${1:-}\" == \"sudo\" ]]; then",
+                        "  IFS= read -r password_from_stdin || true",
+                        "  printf 'STDIN_BYTES=%s\\n' \"${#password_from_stdin}\" >> \"${FAKE_REMOTE_LOG}\"",
+                        "fi",
+                        "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_remote, 0o755)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--dry-run",
+                    "--variant",
+                    "minicpm-q4-baseline-b128-u32-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                    "JETSON_REMOTE_SYNC": "0",
+                    "JETSON_REMOTE_PREPARE_MAX_CLOCKS": "1",
+                    "JETSON_SSH_PASSWORD": "secret-password",
+                    "FAKE_REMOTE_LOG": str(log_file),
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 2)
+        self.assertIn("ARG=sudo\nARG=-S\nARG=sh\nARG=-c\n", log_text)
+        self.assertIn("jetson_clocks && jetson_clocks --show > outputs/jetson_inspect/jetson-clocks-max-", log_text)
+        self.assertIn("STDIN_BYTES=15\n", log_text)
+        self.assertIn("ARG=bash\nARG=scripts/jetson/run_optimization_sweep.sh\n", log_text)
+        self.assertNotIn("secret-password", log_text)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+
+    def test_remote_optimization_sweep_prepare_max_clocks_requires_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_remote = Path(tmp) / "remote_exec.sh"
+            fake_remote.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            os.chmod(fake_remote, 0o755)
+
+            env = {
+                **os.environ,
+                "JETSON_REMOTE_EXEC": str(fake_remote),
+                "JETSON_REMOTE_SYNC": "0",
+                "JETSON_REMOTE_PREPARE_MAX_CLOCKS": "1",
+            }
+            env.pop("JETSON_SSH_PASSWORD", None)
+            env.pop("JETSON_REMOTE_SUDO_PASSWORD", None)
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--dry-run",
+                    "--variant",
+                    "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("JETSON_REMOTE_PREPARE_MAX_CLOCKS requires", result.stderr)
+
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
 
