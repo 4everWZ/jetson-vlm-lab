@@ -3040,6 +3040,93 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(records[0]["error"], "bad frame")
         self.assertTrue(records[1]["success"])
 
+    def test_fake_stream_records_schedule_delay_and_backpressure(self):
+        from edge_vlm.client import CompletionResult
+        from edge_vlm.fake_stream import run_fake_stream
+
+        class FakeClock:
+            def __init__(self):
+                self.now = 100.0
+                self.sleeps: list[float] = []
+
+            def perf_counter(self):
+                return self.now
+
+            def sleep(self, seconds):
+                self.sleeps.append(seconds)
+                self.now += seconds
+
+        class FakeClient:
+            def __init__(self, clock):
+                self.clock = clock
+                self.latencies = [0.25, 1.25, 0.1]
+                self.calls = 0
+
+            def complete(self, **_kwargs):
+                latency = self.latencies[self.calls]
+                self.calls += 1
+                self.clock.now += latency
+                return CompletionResult(
+                    ok=True,
+                    text=f"frame {self.calls} ok with enough detail",
+                    request={},
+                    response={"dry_run": True},
+                    latency_s=latency,
+                    timings={"http_request_s": latency},
+                )
+
+        clock = FakeClock()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            image_dir = tmp_path / "frames"
+            image_dir.mkdir()
+            for frame_id in ("001.jpg", "002.jpg", "003.jpg"):
+                (image_dir / frame_id).write_bytes(b"\xff\xd8\xff\xd9")
+            output = tmp_path / "stream.jsonl"
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  image: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("edge_vlm.fake_stream.OpenAICompatClient.from_config", return_value=FakeClient(clock)):
+                with patch("edge_vlm.fake_stream.time.perf_counter", side_effect=clock.perf_counter):
+                    with patch("edge_vlm.fake_stream.time.sleep", side_effect=clock.sleep):
+                        count = run_fake_stream(
+                            config_path=config,
+                            image_dir=image_dir,
+                            output_path=output,
+                            prompt="Describe this frame.",
+                            interval_s=1.0,
+                            max_frames=3,
+                        )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(count, 3)
+        self.assertEqual(clock.sleeps, [0.75])
+        self.assertEqual(records[0]["stream_timing"]["scheduled_offset_s"], 0.0)
+        self.assertEqual(records[0]["stream_timing"]["pre_frame_sleep_s"], 0.0)
+        self.assertEqual(records[0]["stream_timing"]["schedule_delay_s"], 0.0)
+        self.assertEqual(records[1]["stream_timing"]["scheduled_offset_s"], 1.0)
+        self.assertEqual(records[1]["stream_timing"]["pre_frame_sleep_s"], 0.75)
+        self.assertEqual(records[1]["stream_timing"]["schedule_delay_s"], 0.0)
+        self.assertEqual(records[2]["stream_timing"]["scheduled_offset_s"], 2.0)
+        self.assertEqual(records[2]["stream_timing"]["pre_frame_sleep_s"], 0.0)
+        self.assertEqual(records[2]["stream_timing"]["schedule_delay_s"], 0.25)
+        self.assertEqual(records[2]["stream_timing"]["backpressure_s"], 0.25)
+
 
 if __name__ == "__main__":
     unittest.main()

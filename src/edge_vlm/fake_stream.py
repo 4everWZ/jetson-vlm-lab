@@ -27,6 +27,31 @@ def _wall_time_pair_from_latency(started_wall: datetime, latency_s: float) -> tu
     return started_wall.isoformat(), ended_wall.isoformat()
 
 
+def _stream_timing_for_frame(
+    *,
+    stream_started: float,
+    frame_index: int,
+    interval_s: float,
+) -> tuple[float, dict[str, float]]:
+    scheduled_offset_s = frame_index * interval_s if interval_s > 0 else 0.0
+    scheduled_start = stream_started + scheduled_offset_s
+    before_sleep = time.perf_counter()
+    pre_frame_sleep_s = 0.0
+    if interval_s > 0 and before_sleep < scheduled_start:
+        sleep_for = scheduled_start - before_sleep
+        time.sleep(sleep_for)
+        pre_frame_sleep_s = time.perf_counter() - before_sleep
+    actual_start = time.perf_counter()
+    schedule_delay_s = max(0.0, actual_start - scheduled_start) if interval_s > 0 else 0.0
+    return actual_start, {
+        "interval_s": interval_s,
+        "scheduled_offset_s": scheduled_offset_s,
+        "pre_frame_sleep_s": pre_frame_sleep_s,
+        "schedule_delay_s": schedule_delay_s,
+        "backpressure_s": schedule_delay_s,
+    }
+
+
 def run_fake_stream(
     *,
     config_path: str | Path,
@@ -50,8 +75,14 @@ def run_fake_stream(
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     count = 0
+    stream_started = time.perf_counter()
     with output.open("a", encoding="utf-8") as handle:
         for index, frame in enumerate(frames):
+            frame_started_mono, stream_timing = _stream_timing_for_frame(
+                stream_started=stream_started,
+                frame_index=index,
+                interval_s=interval_s,
+            )
             started_wall = datetime.now(timezone.utc)
             try:
                 result = client.complete(
@@ -74,14 +105,16 @@ def run_fake_stream(
                     "latency_s": 0.0,
                     "output_excerpt": "",
                     "input_timing": {},
+                    "stream_timing": {
+                        **stream_timing,
+                        "frame_elapsed_s": time.perf_counter() - frame_started_mono,
+                    },
                 }
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 handle.flush()
                 count += 1
                 if stop_on_error:
                     break
-                if interval_s > 0 and index < len(frames) - 1:
-                    time.sleep(interval_s)
                 continue
             started, ended = _wall_time_pair_from_latency(started_wall, result.latency_s)
             record: dict[str, Any] = {
@@ -95,14 +128,16 @@ def run_fake_stream(
                 "latency_s": result.latency_s,
                 "output_excerpt": result.text[:500],
                 "input_timing": dict(result.timings),
+                "stream_timing": {
+                    **stream_timing,
+                    "frame_elapsed_s": time.perf_counter() - frame_started_mono,
+                },
             }
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
             handle.flush()
             count += 1
             if stop_on_error and not result.ok:
                 break
-            if interval_s > 0 and index < len(frames) - 1:
-                time.sleep(interval_s)
     return count
 
 

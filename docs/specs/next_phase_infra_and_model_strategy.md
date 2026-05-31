@@ -215,7 +215,9 @@ Instrument the client/input path separately:
 - JSON serialization. Implemented in `input_timing.json_serialize_s`.
 - HTTP request/response elapsed time. Implemented in `input_timing.http_request_s`.
 - Server-reported token usage and request latency when available.
-- Fake-stream scheduling delay and backpressure. Not yet implemented.
+- Fake-stream scheduling delay and backpressure. Implemented in
+  `stream_timing.schedule_delay_s`, `stream_timing.backpressure_s`, and
+  `stream_timing.pre_frame_sleep_s` using fixed-cadence frame scheduling.
 
 Routing policy candidates:
 
