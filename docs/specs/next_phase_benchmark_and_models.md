@@ -85,23 +85,28 @@ three-frame fake-stream path before any tuning sweep is added.
 ### Text/Router Lane
 
 Tencent's newest small official GGUF rows are text/translation models, not
-VLMs. The executable Hy-MT1.5 and Hy-MT2 rows are configured separately so
-they can be tested as text/router candidates without polluting VLM rankings:
+VLMs. The executable Hy-MT1.5, Hy-MT2, and Youtu-LLM rows are configured
+separately so they can be tested as text/router candidates without polluting VLM
+rankings:
 
 | Candidate | Config | Source file |
 |---|---|---|
 | Hy-MT1.5 1.8B 1.25bit | `configs/models/tencent_hy_mt1p5_1p8b_1p25bit.yaml` | `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF` / `Hy-MT1.5-1.8B-1.25bit.gguf`; default text-suite runtime canary failed on pinned llama.cpp with invalid ggml type 42 |
 | Hy-MT1.5 1.8B 2bit | `configs/models/tencent_hy_mt1p5_1p8b_2bit.yaml` | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf`; default text-suite runtime canary failed on pinned llama.cpp with tensor offset `203248672` |
+| HY-MT1.5 1.8B Q4_K_M | `configs/models/tencent_hy_mt1p5_1p8b_q4.yaml` | `tencent/HY-MT1.5-1.8B-GGUF` / `HY-MT1.5-1.8B-Q4_K_M.gguf`; added as an official text/router default, no Jetson evidence yet |
+| HY-MT1.5 1.8B Q6_K | `configs/models/tencent_hy_mt1p5_1p8b_q6.yaml` | `tencent/HY-MT1.5-1.8B-GGUF` / `HY-MT1.5-1.8B-Q6_K.gguf`; added as an official text/router default, no Jetson evidence yet |
+| HY-MT1.5 1.8B Q8_0 | `configs/models/tencent_hy_mt1p5_1p8b_q8.yaml` | `tencent/HY-MT1.5-1.8B-GGUF` / `HY-MT1.5-1.8B-Q8_0.gguf`; added as an official text/router default, no Jetson evidence yet |
 | Hy-MT2 1.8B 1.25Bit | `configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml` | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf`; default text-suite runtime canary |
 | Hy-MT2 1.8B 2Bit | `configs/models/tencent_hy_mt2_1p8b_2bit.yaml` | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf`; default text-suite runtime canary failed on pinned llama.cpp with tensor offset `203248672` |
 | Hy-MT2 1.8B Q4_K_M | `configs/models/tencent_hy_mt2_1p8b_q4.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q4_K_M.gguf`; cached Jetson smoke `tencent-hy-mt2-q4-smoke64-cached-20260531b` passed text guard at 19.759 tok/s, full-suite run `tencent-text-smoke64-20260531T120054Z` passed at 33.541 tok/s, and repeat `tencent-text-repeat5-20260531a` passed 20/20 at 34.528 tok/s |
 | Hy-MT2 1.8B Q6_K | `configs/models/tencent_hy_mt2_1p8b_q6.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q6_K.gguf`; full-suite run `tencent-text-smoke64-20260531T120054Z` passed at 26.287 tok/s, cached run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s, and repeat `tencent-text-repeat5-20260531a` passed 20/20 at 26.778 tok/s |
 | Hy-MT2 1.8B Q8_0 | `configs/models/tencent_hy_mt2_1p8b_q8.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q8_0.gguf`; Q8 full-suite row is invalidated by the pre-fix launcher cleanup/stale-port issue, but cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s with `terminate_group` shutdown, and repeat `tencent-text-repeat5-20260531a` passed 20/20 at 31.395 tok/s |
+| Youtu-LLM 2B Q8_0 | `configs/models/tencent_youtu_llm_2b_q8.yaml` | `tencent/Youtu-LLM-2B-GGUF` / `Youtu-LLM-2B-Q8_0.gguf`; added as an official text/router default, no Jetson evidence yet; F16 sibling is deferred from the default suite due higher memory pressure |
 
 These variants use `scripts/jetson/run_hf_gguf_llama_docker.sh`,
 `configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
 The dedicated wrapper `scripts/jetson/run_remote_tencent_text_suite.sh`
-defaults to all seven configured Hy-MT1.5/Hy-MT2 rows under locked clocks,
+defaults to all eleven configured Tencent text GGUF rows under locked clocks,
 cache drop, `--min-lfb-blocks`, and a mechanical comparison report with
 `--fake-stream-max-frames 0`. Use `JETSON_TENCENT_TEXT_VARIANTS` to narrow the
 default set or `JETSON_TENCENT_TEXT_EXTRA_VARIANTS` to append scoped canaries.
@@ -165,11 +170,13 @@ TensorRT, TensorRT-LLM, NanoLLM, Ollama, vLLM, and custom kernels stay deferred 
 - Tencent Youtu-Parsing: https://hf.co/tencent/Youtu-Parsing
 - Tencent Hy-MT1.5 1.8B 1.25bit GGUF: https://hf.co/tencent/Hy-MT1.5-1.8B-1.25bit-GGUF
 - Tencent Hy-MT1.5 1.8B 2bit GGUF: https://hf.co/tencent/Hy-MT1.5-1.8B-2bit-GGUF
+- Tencent HY-MT1.5 1.8B GGUF: https://hf.co/tencent/HY-MT1.5-1.8B-GGUF
 - Tencent Hy-MT1.5 1.8B 1.25bit Safetensors: https://hf.co/tencent/Hy-MT1.5-1.8B-1.25bit
 - Tencent Hy-MT1.5 1.8B 2bit Safetensors: https://hf.co/tencent/Hy-MT1.5-1.8B-2bit
 - Tencent Hy-MT2 1.8B GGUF: https://hf.co/tencent/Hy-MT2-1.8B-GGUF
 - Tencent Hy-MT2 1.8B 1.25Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF
 - Tencent Hy-MT2 1.8B 2Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-2Bit-GGUF
+- Tencent Youtu-LLM 2B GGUF: https://hf.co/tencent/Youtu-LLM-2B-GGUF
 - InternVL3 1B GGUF: https://hf.co/ggml-org/InternVL3-1B-Instruct-GGUF
 - InternVL3 2B GGUF: https://hf.co/ggml-org/InternVL3-2B-Instruct-GGUF
 - Moondream2 GGUF: https://hf.co/ggml-org/moondream2-20250414-GGUF

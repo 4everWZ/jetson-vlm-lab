@@ -5,9 +5,13 @@ from __future__ import annotations
 import json
 import re
 import statistics
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+TIMESTAMP_PREFIX_RE = re.compile(
+    r"^(?P<captured_at>\d{4}-\d{2}-\d{2}T\S+)\s+(?P<body>.*)$"
+)
 RAM_RE = re.compile(
     r"\bRAM\s+(?P<used>\d+)/(?P<total>\d+)MB"
     r"(?:\s+\(lfb\s+(?P<lfb_blocks>\d+)x(?P<lfb_mb>\d+)MB\))?"
@@ -72,10 +76,36 @@ def _parse_cpu_cores(raw_cores: str) -> list[dict[str, int | str | None]]:
     return cores
 
 
+def _parse_capture_datetime(captured_at: str | None) -> datetime | None:
+    if not captured_at:
+        return None
+    normalized = captured_at
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def _split_timestamp_prefix(line: str) -> tuple[str | None, str]:
+    match = TIMESTAMP_PREFIX_RE.match(line)
+    if match is None:
+        return None, line
+    captured_at = match.group("captured_at")
+    if _parse_capture_datetime(captured_at) is None:
+        return None, line
+    return captured_at, match.group("body")
+
+
 def parse_tegrastats_line(line: str) -> dict[str, Any]:
     sample: dict[str, Any] = {"raw": line}
+    captured_at, stats_line = _split_timestamp_prefix(line)
+    if captured_at is not None:
+        sample["captured_at"] = captured_at
+        sample["raw_tegrastats"] = stats_line
 
-    ram_match = RAM_RE.search(line)
+    ram_match = RAM_RE.search(stats_line)
     if ram_match is not None:
         sample["ram"] = {
             "used_mb": int(ram_match.group("used")),
@@ -87,7 +117,7 @@ def parse_tegrastats_line(line: str) -> dict[str, Any]:
                 "block_mb": int(ram_match.group("lfb_mb")),
             }
 
-    swap_match = SWAP_RE.search(line)
+    swap_match = SWAP_RE.search(stats_line)
     if swap_match is not None:
         swap = {
             "used_mb": int(swap_match.group("used")),
@@ -96,11 +126,11 @@ def parse_tegrastats_line(line: str) -> dict[str, Any]:
         }
         sample["swap"] = swap
 
-    cpu_match = CPU_RE.search(line)
+    cpu_match = CPU_RE.search(stats_line)
     if cpu_match is not None:
         sample["cpu"] = {"cores": _parse_cpu_cores(cpu_match.group("cores"))}
 
-    for engine_match in ENGINE_RE.finditer(line):
+    for engine_match in ENGINE_RE.finditer(stats_line):
         key = "gr3d" if engine_match.group("name") == "GR3D_FREQ" else "emc"
         freq = engine_match.group("freq")
         sample[key] = {
@@ -110,7 +140,7 @@ def parse_tegrastats_line(line: str) -> dict[str, Any]:
 
     temps = {
         match.group("name"): float(match.group("temp"))
-        for match in TEMP_RE.finditer(line)
+        for match in TEMP_RE.finditer(stats_line)
     }
     if temps:
         sample["temps_c"] = temps
@@ -120,12 +150,25 @@ def parse_tegrastats_line(line: str) -> dict[str, Any]:
             "instant": int(match.group("instant")),
             "average": int(match.group("average")),
         }
-        for match in POWER_RE.finditer(line)
+        for match in POWER_RE.finditer(stats_line)
     }
     if power:
         sample["power_mw"] = power
 
     return sample
+
+
+def _capture_datetimes(samples: Iterable[dict[str, Any]]) -> list[datetime | None]:
+    return [
+        _parse_capture_datetime(sample.get("captured_at") if isinstance(sample, dict) else None)
+        for sample in samples
+    ]
+
+
+def _capture_duration_s(start: datetime | None, end: datetime | None) -> float | None:
+    if start is None or end is None:
+        return None
+    return round((end - start).total_seconds(), 3)
 
 
 def iter_tegrastats_samples(path: str | Path) -> Iterator[dict[str, Any]]:
@@ -395,6 +438,13 @@ def summarize_tegrastats_samples(
     input_timing_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     parsed_samples = list(samples)
+    capture_points = [
+        (sample.get("captured_at"), captured)
+        for sample, captured in zip(parsed_samples, _capture_datetimes(parsed_samples))
+        if isinstance(sample.get("captured_at"), str) and captured is not None
+    ]
+    first_capture = capture_points[0] if capture_points else (None, None)
+    last_capture = capture_points[-1] if capture_points else (None, None)
     normalized_phases = _normalize_phase_timings(phase_timings)
     normalized_input_summary = _normalize_input_timing_summary(input_timing_summary)
     temps: list[float] = []
@@ -466,6 +516,9 @@ def summarize_tegrastats_samples(
         "min_lfb_free_blocks": min(lfb_blocks) if lfb_blocks else None,
         "max_ram_used_mb": max(ram_used) if ram_used else None,
         "avg_cpu_util_pct": _round_or_none(avg_cpu),
+        "first_captured_at": first_capture[0],
+        "last_captured_at": last_capture[0],
+        "captured_duration_s": _capture_duration_s(first_capture[1], last_capture[1]),
         "phase_timings": normalized_phases,
         "input_timing_summary": normalized_input_summary,
         "bottleneck_labels": bottlenecks,
@@ -495,14 +548,19 @@ def write_profile_artifacts(
     profile_files: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     samples = list(iter_tegrastats_samples(tegrastats_log))
+    capture_datetimes = _capture_datetimes(samples)
+    first_capture = next((captured for captured in capture_datetimes if captured is not None), None)
     profile_jsonl = Path(profile_jsonl_path)
     profile_jsonl.parent.mkdir(parents=True, exist_ok=True)
     with profile_jsonl.open("w", encoding="utf-8") as handle:
-        for index, sample in enumerate(samples):
-            handle.write(
-                json.dumps({"sample_index": index, "sample": sample}, ensure_ascii=False)
-                + "\n"
-            )
+        for index, (sample, captured) in enumerate(zip(samples, capture_datetimes)):
+            record: dict[str, Any] = {"sample_index": index, "sample": sample}
+            captured_at = sample.get("captured_at")
+            if isinstance(captured_at, str):
+                record["captured_at"] = captured_at
+            if first_capture is not None and captured is not None:
+                record["elapsed_s"] = round((captured - first_capture).total_seconds(), 3)
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     summary = summarize_tegrastats_samples(
         samples,

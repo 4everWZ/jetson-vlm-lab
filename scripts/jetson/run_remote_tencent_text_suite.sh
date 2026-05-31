@@ -14,7 +14,7 @@ min_lfb_blocks="${JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS:-150}"
 wait_timeout_s="${JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S:-600}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
 
-candidate_variants_text="${JETSON_TENCENT_TEXT_VARIANTS:-tencent-hy-mt1p5-1p8b-1p25bit-text-smoke tencent-hy-mt1p5-1p8b-2bit-text-smoke tencent-hy-mt2-1p8b-1p25bit-text-smoke tencent-hy-mt2-1p8b-2bit-text-smoke tencent-hy-mt2-1p8b-q4-text-smoke tencent-hy-mt2-1p8b-q6-text-smoke tencent-hy-mt2-1p8b-q8-text-smoke}"
+candidate_variants_text="${JETSON_TENCENT_TEXT_VARIANTS:-tencent-hy-mt1p5-1p8b-1p25bit-text-smoke tencent-hy-mt1p5-1p8b-2bit-text-smoke tencent-hy-mt1p5-1p8b-q4-text-smoke tencent-hy-mt1p5-1p8b-q6-text-smoke tencent-hy-mt1p5-1p8b-q8-text-smoke tencent-hy-mt2-1p8b-1p25bit-text-smoke tencent-hy-mt2-1p8b-2bit-text-smoke tencent-hy-mt2-1p8b-q4-text-smoke tencent-hy-mt2-1p8b-q6-text-smoke tencent-hy-mt2-1p8b-q8-text-smoke tencent-youtu-llm-2b-q8-text-smoke}"
 extra_variants_text="${JETSON_TENCENT_TEXT_EXTRA_VARIANTS:-}"
 manifest_path="${JETSON_TENCENT_TEXT_MANIFEST:-outputs/optimization_sweeps/${run_prefix}/${run_prefix}.manifest.json}"
 comparison_output="${JETSON_TENCENT_TEXT_COMPARISON_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.md}"

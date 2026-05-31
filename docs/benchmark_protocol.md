@@ -19,8 +19,8 @@ Small non-private sample images are included under `data/sample_images/` so dry 
 
 `configs/benchmark/text_prompt_cases.jsonl` is the text/router-only subset. It
 contains no image or fake-stream cases, and is used by text-only model variants
-such as Tencent Hy-MT1.5 and Hy-MT2. Do not mix text/router rows into VLM
-rankings.
+such as Tencent Hy-MT1.5, Hy-MT2, and Youtu-LLM. Do not mix text/router rows
+into VLM rankings.
 
 ## Raw Output
 
@@ -374,12 +374,18 @@ Successful sweep variants also write derived profile artifacts under
 `outputs/optimization_sweeps/<run-prefix>/profiles/` and launcher lifecycle
 events under `outputs/optimization_sweeps/<run-prefix>/lifecycle/`:
 
-- `<run-id>.profile.jsonl` contains parsed `tegrastats` samples.
+- `<run-id>.profile.jsonl` contains parsed `tegrastats` samples. When the raw
+  log line has a UTC timestamp prefix, each profile record also includes
+  `captured_at` and `elapsed_s` so `tegrastats` evidence can be aligned with
+  benchmark, fake-stream, and lifecycle phases. `run_formal_benchmark.sh`
+  prefixes `tegrastats` lines this way for formal runs.
 - `<run-id>.summary.json` contains aggregate memory, power, thermal,
   GR3D/EMC/CPU, bottleneck labels, profile file pointers, and available phase
-  timings. It also includes `input_timing_summary` aggregated from benchmark
-  and fake-stream JSONL, with payload overhead, estimated end-to-end latency,
-  request wait, request body bytes, image bytes, and per-source record counts.
+  timings. For timestamped logs it also records `first_captured_at`,
+  `last_captured_at`, and `captured_duration_s`. It includes
+  `input_timing_summary` aggregated from benchmark and fake-stream JSONL, with
+  payload overhead, estimated end-to-end latency, request wait, request body
+  bytes, image bytes, and per-source record counts.
 - `<run-id>.lifecycle.jsonl` contains optional launcher phase records emitted
   through `EDGE_VLM_LAUNCH_PHASE_LOG`.
 
@@ -496,12 +502,13 @@ text cases through the Tencent text suite wrapper:
 scripts/jetson/run_remote_tencent_text_suite.sh
 ```
 
-The wrapper defaults to all seven configured Hy-MT1.5/Hy-MT2 rows, runs with
+The wrapper defaults to all eleven configured Tencent text GGUF rows, runs with
 locked clocks, drops caches before each variant, sets
 `--fake-stream-max-frames 0`, and writes a comparison report. Low-bit rows are
 runtime-compatibility canaries inside that dedicated text suite; the first
 Hy-MT1.5 1.25bit Jetson smoke failed before server ready on the pinned llama.cpp
-image with `invalid ggml type 42`. Override
+image with `invalid ggml type 42`. The HY-MT1.5 Q4/Q6/Q8 and Youtu-LLM Q8 rows
+are executable defaults but still need Jetson evidence before route use. Override
 `JETSON_TENCENT_TEXT_RUN_PREFIX`,
 `JETSON_TENCENT_TEXT_TRIAL_COUNT`, `JETSON_TENCENT_TEXT_MAX_TOKENS`,
 `JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS`, `JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S`,

@@ -58,8 +58,9 @@ requirements remain explicit follow-up tasks:
   conservative `input_payload` and `runtime_overhead` triage labels. Runtime log
   or server-side timing hooks remain follow-up work before making deeper decode
   attribution claims.
-- Add time stamps to profile JSONL records when the raw `tegrastats` line does
-  not include a parseable timestamp.
+- Formal benchmark runs now prefix `tegrastats` lines with UTC timestamps;
+  profile JSONL records expose `captured_at` and `elapsed_s`, and summary JSON
+  exposes `first_captured_at`, `last_captured_at`, and `captured_duration_s`.
 
 ## Task 1: Structured Tegrastats Parser
 

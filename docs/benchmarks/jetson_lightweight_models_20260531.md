@@ -296,11 +296,13 @@ they split into two lanes:
 |---|---|---|
 | Hy-MT1.5 1.8B 1.25bit GGUF | `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF` / `Hy-MT1.5-1.8B-1.25bit.gguf` | Added as a default text/router runtime canary; first Jetson smoke failed before server ready with `invalid ggml type 42` on the pinned llama.cpp image. |
 | Hy-MT1.5 1.8B 2bit GGUF | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
+| HY-MT1.5 1.8B Q4/Q6/Q8 GGUF | `tencent/HY-MT1.5-1.8B-GGUF` / `HY-MT1.5-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants after the 2026-05-31 refresh. No Jetson evidence yet; keep out of VLM ranking. |
 | Hy-MT1.5 1.8B Safetensors 1.25bit/2bit | `tencent/Hy-MT1.5-1.8B-1.25bit`, `tencent/Hy-MT1.5-1.8B-2bit` | Deferred; latest non-GGUF quant rows, no selected Transformers/conversion path in the current GGUF bench lane. |
 | Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
 | Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
 | Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; Q4/Q6 passed the full text-suite smoke, Q6 cached run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s, Q8 cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s, and 5-trial repeat `tencent-text-repeat5-20260531a` passed Q4/Q6/Q8 at 34.528/26.778/31.395 tok/s. Not VLM candidates. |
 | Hy-MT2 1.8B FP8 | `tencent/Hy-MT2-1.8B-FP8` | Deferred; Safetensors/compressed-tensors path, no low-friction GGUF launcher row. |
+| Youtu-LLM 2B Q8 GGUF | `tencent/Youtu-LLM-2B-GGUF` / `Youtu-LLM-2B-Q8_0.gguf` | Added as a default text/router config and variant. No Jetson evidence yet; F16 sibling is deferred from the default suite due higher memory pressure. |
 | HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Jetson smoke loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs; not an official Tencent-owned GGUF artifact and not ranked. |
 | Penguin-VL-2B | `tencent/Penguin-VL-2B` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
 | HY-Embodied-0.5 / HY-Embodied-0.5-X | `tencent/HY-Embodied-0.5`, `tencent/HY-Embodied-0.5-X` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
@@ -309,8 +311,8 @@ they split into two lanes:
 The executable Hy-MT1.5 and Hy-MT2 rows use
 `scripts/jetson/run_hf_gguf_llama_docker.sh`,
 `configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
-`scripts/jetson/run_remote_tencent_text_suite.sh` defaults to all seven
-configured Hy-MT1.5/Hy-MT2 rows with the same locked-clocks/cache-drop/min-lfb
+`scripts/jetson/run_remote_tencent_text_suite.sh` defaults to all eleven
+configured Tencent text GGUF rows with the same locked-clocks/cache-drop/min-lfb
 policy and `--fake-stream-max-frames 0`. Low-bit failures are runtime
 compatibility evidence; use `JETSON_TENCENT_TEXT_VARIANTS` only when a run needs
 to narrow the default set. The sweep planner also skips fake-stream for these
@@ -339,8 +341,8 @@ for the four text prompt cases. Treat this as a text/router smoke only.
 Tencent text-suite smoke evidence:
 
 Run prefix:
-`tencent-text-smoke64-20260531T120054Z`. The suite used all seven configured
-Hy-MT1.5/Hy-MT2 text rows, `--trial-count 1`, `--max-tokens 64`,
+`tencent-text-smoke64-20260531T120054Z`. The suite used the then-configured
+seven Hy-MT1.5/Hy-MT2 text rows, `--trial-count 1`, `--max-tokens 64`,
 `--fake-stream-max-frames 0`, locked clocks, cache drop, and
 `--min-lfb-blocks 150`. Q4 and Q6 include first-run host-side artifact download
 time in startup; do not use those startup values as cached-startup evidence.
@@ -375,9 +377,10 @@ than promotions.
 
 Tencent text-suite 5-trial repeat evidence:
 
-Run prefix: `tencent-text-repeat5-20260531a`. The repeat used all seven
-configured Hy-MT1.5/Hy-MT2 text rows, locked clocks, cache drop before each
-variant, `--trial-count 5`, `--max-tokens 64`, `--fake-stream-max-frames 0`,
+Run prefix: `tencent-text-repeat5-20260531a`. The repeat used the
+then-configured seven Hy-MT1.5/Hy-MT2 text rows, locked clocks, cache drop
+before each variant, `--trial-count 5`, `--max-tokens 64`,
+`--fake-stream-max-frames 0`,
 `--min-lfb-blocks 150`, and the canonical llama.cpp image
 `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`
 with image id `36f3398b7885` and llama.cpp ref `d749821db3bd`.
@@ -404,11 +407,13 @@ still needs human output review and route-specific translation/router checks.
    Qwen3-VL 2B to image/fake-stream balanced_candidate rather than text/code.
 2. Use profiling next: capture memory/`lfb`, CPU/GPU/EMC, phase, and input
    pipeline evidence before selecting any deeper runtime or routing change.
-3. Run the dedicated Tencent Hy-MT1.5/Hy-MT2 text suite only as a separate
-   text/router study if it becomes useful for routing or translation
-   pre/post-processing; Q4/Q6 now have one valid full-suite smoke, Q6/Q8 have
-   cached single-run evidence, Q4/Q6/Q8 have valid 5-trial text repeat evidence,
-   and low-bit failures should feed the runtime/build lane, not VLM ranking.
+3. Run the dedicated Tencent Hy-MT1.5/Hy-MT2/Youtu-LLM text suite only as a
+   separate text/router study if it becomes useful for routing or translation
+   pre/post-processing; Hy-MT2 Q4/Q6 have one valid full-suite smoke, Hy-MT2
+   Q6/Q8 have cached single-run evidence, Hy-MT2 Q4/Q6/Q8 have valid 5-trial
+   text repeat evidence, the newly added HY-MT1.5 Q4/Q6/Q8 and Youtu-LLM Q8
+   rows still need Jetson evidence, and low-bit failures should feed the
+   runtime/build lane, not VLM ranking.
 4. Add a separate Youtu Q4 GPU-mmproj/offload canary only if memory allows and
    the result answers an artifact/runtime question; keep it
    distinct from the CPU-mmproj smoke and the official Tencent Q8 failure.

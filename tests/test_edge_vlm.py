@@ -610,6 +610,61 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(manifest["jetson"]["tegrastats_log"], None)
         self.assertEqual(manifest["jetson"]["tegrastats_status"], "skipped")
 
+    def test_formal_jetson_benchmark_wrapper_prefixes_tegrastats_with_utc_timestamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            bin_dir = tmp_path / "bin"
+            bin_dir.mkdir()
+            fake_tegrastats = bin_dir / "tegrastats"
+            fake_tegrastats.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "printf '%s\\n' 'RAM 1000/7620MB (lfb 200x4MB) CPU [10%@1000] GR3D_FREQ 20%@[1020] EMC_FREQ 30%@3199 gpu@40.0C VDD_IN 8000mW/7000mW'",
+                        "sleep 5",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_tegrastats, 0o755)
+            cases = tmp_path / "cases.jsonl"
+            output = tmp_path / "bench.jsonl"
+            summary = tmp_path / "bench.md"
+            metadata = tmp_path / "bench.manifest.json"
+            tegrastats_log = tmp_path / "tegrastats.log"
+            cases.write_text(
+                json.dumps({"id": "text_case", "input_type": "text", "prompt": "Say hi."}) + "\n",
+                encoding="utf-8",
+            )
+            env = {
+                **os.environ,
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "PYTHONPATH": "src",
+                "EDGE_VLM_FORMAL_RUN_ID": "formal-wrapper-timestamp-unit",
+                "EDGE_VLM_CONFIG": "configs/models/minicpmv46_q4.yaml",
+                "EDGE_VLM_CASES": str(cases),
+                "EDGE_VLM_OUTPUT": str(output),
+                "EDGE_VLM_SUMMARY_OUTPUT": str(summary),
+                "EDGE_VLM_METADATA_OUTPUT": str(metadata),
+                "EDGE_VLM_TEGRASTATS_LOG": str(tegrastats_log),
+                "EDGE_VLM_TRIAL_COUNT": "1",
+                "EDGE_VLM_MAX_TOKENS": "8",
+                "EDGE_VLM_TEMPERATURE": "0",
+                "EDGE_VLM_FORMAL_DRY_RUN": "1",
+            }
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_formal_benchmark.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+            log_text = tegrastats_log.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertRegex(log_text, r"^\d{4}-\d{2}-\d{2}T.*Z RAM 1000/7620MB")
+
     def test_optimization_report_ranks_only_sanity_passing_runs(self):
         from edge_vlm.optimization import build_optimization_report
 
@@ -1994,8 +2049,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
             log.write_text(
                 "\n".join(
                     [
-                        "RAM 2000/7620MB (lfb 200x4MB) CPU [40%@1728] GR3D_FREQ 12%@[1020] EMC_FREQ 31%@3199 gpu@54.0C VDD_IN 8000mW/7000mW",
-                        "RAM 2200/7620MB (lfb 160x4MB) CPU [45%@1728] GR3D_FREQ 18%@[1020] EMC_FREQ 36%@3199 gpu@58.0C VDD_IN 9000mW/8000mW",
+                        "2026-05-31T13:45:54.000000Z RAM 2000/7620MB (lfb 200x4MB) CPU [40%@1728] GR3D_FREQ 12%@[1020] EMC_FREQ 31%@3199 gpu@54.0C VDD_IN 8000mW/7000mW",
+                        "2026-05-31T13:45:55.500000Z RAM 2200/7620MB (lfb 160x4MB) CPU [45%@1728] GR3D_FREQ 18%@[1020] EMC_FREQ 36%@3199 gpu@58.0C VDD_IN 9000mW/8000mW",
                     ]
                 )
                 + "\n",
@@ -2014,7 +2069,14 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertEqual(len(profile_records), 2)
         self.assertEqual(profile_records[0]["sample_index"], 0)
+        self.assertEqual(profile_records[0]["captured_at"], "2026-05-31T13:45:54.000000Z")
+        self.assertEqual(profile_records[0]["elapsed_s"], 0.0)
+        self.assertEqual(profile_records[1]["captured_at"], "2026-05-31T13:45:55.500000Z")
+        self.assertEqual(profile_records[1]["elapsed_s"], 1.5)
         self.assertEqual(profile_records[0]["sample"]["ram"]["used_mb"], 2000)
+        self.assertEqual(summary["first_captured_at"], "2026-05-31T13:45:54.000000Z")
+        self.assertEqual(summary["last_captured_at"], "2026-05-31T13:45:55.500000Z")
+        self.assertEqual(summary["captured_duration_s"], 1.5)
         self.assertEqual(summary["samples"], 2)
         self.assertEqual(summary["phase_timings"]["server_startup"]["duration_s"], 35.0)
         self.assertFalse(summary["phase_timings"]["artifact_check_or_download"]["available"])
@@ -2024,6 +2086,16 @@ class EdgeVlmContractsTest(unittest.TestCase):
             "outputs/benchmarks/unit.profile/jetson-clocks.txt",
         )
         self.assertEqual(summary_record, summary)
+        for doc_path in (
+            "docs/benchmark_protocol.md",
+            "docs/specs/jetson_optimization_loop.md",
+            "docs/specs/next_phase_infra_and_model_strategy.md",
+            "docs/matrix_edge_vlm_workflow.md",
+        ):
+            doc = Path(doc_path).read_text(encoding="utf-8")
+            with self.subTest(doc_path=doc_path):
+                self.assertIn("captured_at", doc)
+                self.assertIn("elapsed_s", doc)
 
     def test_quality_review_applies_route_specific_policy_to_benchmark_jsonl(self):
         from edge_vlm.quality_review import format_markdown_report, review_benchmark_jsonl
@@ -2164,6 +2236,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
         )
         self.assertIn("tencent/Youtu-VL-4B-Instruct-GGUF", spec)
         self.assertIn("ggml-org/HunyuanOCR-GGUF", spec)
+        self.assertIn("tencent/HY-MT1.5-1.8B-GGUF", spec)
+        self.assertIn("tencent/Youtu-LLM-2B-GGUF", spec)
         self.assertIn("Hy-MT1.5 1.8B Safetensors", spec)
         self.assertIn("Hy-MT1.5", spec)
         self.assertIn("SmolVLM2", spec)
@@ -2583,6 +2657,24 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 "model_file": "Hy-MT1.5-1.8B-2bit.gguf",
                 "quantization": "2bit",
             },
+            "tencent-hy-mt1p5-1p8b-q4": {
+                "config": "configs/models/tencent_hy_mt1p5_1p8b_q4.yaml",
+                "model_ref": "tencent/HY-MT1.5-1.8B-GGUF:Q4_K_M",
+                "model_file": "HY-MT1.5-1.8B-Q4_K_M.gguf",
+                "quantization": "Q4_K_M",
+            },
+            "tencent-hy-mt1p5-1p8b-q6": {
+                "config": "configs/models/tencent_hy_mt1p5_1p8b_q6.yaml",
+                "model_ref": "tencent/HY-MT1.5-1.8B-GGUF:Q6_K",
+                "model_file": "HY-MT1.5-1.8B-Q6_K.gguf",
+                "quantization": "Q6_K",
+            },
+            "tencent-hy-mt1p5-1p8b-q8": {
+                "config": "configs/models/tencent_hy_mt1p5_1p8b_q8.yaml",
+                "model_ref": "tencent/HY-MT1.5-1.8B-GGUF:Q8_0",
+                "model_file": "HY-MT1.5-1.8B-Q8_0.gguf",
+                "quantization": "Q8_0",
+            },
             "tencent-hy-mt2-1p8b-1p25bit": {
                 "config": "configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml",
                 "model_ref": "tencent/Hy-MT2-1.8B-1.25Bit-GGUF:1.25Bit",
@@ -2611,6 +2703,12 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 "config": "configs/models/tencent_hy_mt2_1p8b_q8.yaml",
                 "model_ref": "tencent/Hy-MT2-1.8B-GGUF:Q8_0",
                 "model_file": "Hy-MT2-1.8B-Q8_0.gguf",
+                "quantization": "Q8_0",
+            },
+            "tencent-youtu-llm-2b-q8": {
+                "config": "configs/models/tencent_youtu_llm_2b_q8.yaml",
+                "model_ref": "tencent/Youtu-LLM-2B-GGUF:Q8_0",
+                "model_file": "Youtu-LLM-2B-Q8_0.gguf",
                 "quantization": "Q8_0",
             },
         }
@@ -2663,8 +2761,12 @@ class EdgeVlmContractsTest(unittest.TestCase):
             "configs/benchmark/jetson_optimization_variants.jsonl",
             "configs/models/tencent_hy_mt1p5_1p8b_1p25bit.yaml",
             "configs/models/tencent_hy_mt1p5_1p8b_2bit.yaml",
+            "configs/models/tencent_hy_mt1p5_1p8b_q4.yaml",
+            "configs/models/tencent_hy_mt1p5_1p8b_q6.yaml",
+            "configs/models/tencent_hy_mt1p5_1p8b_q8.yaml",
             "configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml",
             "configs/models/tencent_hy_mt2_1p8b_2bit.yaml",
+            "configs/models/tencent_youtu_llm_2b_q8.yaml",
         )
         stale_phrases = (
             "defaults to Hy-MT2 Q4/Q6/Q8",
@@ -3814,11 +3916,15 @@ class EdgeVlmContractsTest(unittest.TestCase):
         for variant_id in (
             "tencent-hy-mt1p5-1p8b-1p25bit-text-smoke",
             "tencent-hy-mt1p5-1p8b-2bit-text-smoke",
+            "tencent-hy-mt1p5-1p8b-q4-text-smoke",
+            "tencent-hy-mt1p5-1p8b-q6-text-smoke",
+            "tencent-hy-mt1p5-1p8b-q8-text-smoke",
             "tencent-hy-mt2-1p8b-1p25bit-text-smoke",
             "tencent-hy-mt2-1p8b-2bit-text-smoke",
             "tencent-hy-mt2-1p8b-q4-text-smoke",
             "tencent-hy-mt2-1p8b-q6-text-smoke",
             "tencent-hy-mt2-1p8b-q8-text-smoke",
+            "tencent-youtu-llm-2b-q8-text-smoke",
         ):
             self.assertIn(f"SWEEP_ARG=--variant\nSWEEP_ARG={variant_id}\n", log_text)
         self.assertIn("SWEEP_ARG=--trial-count\nSWEEP_ARG=4\n", log_text)

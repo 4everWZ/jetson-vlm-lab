@@ -41,6 +41,47 @@ capture_command jetson-clocks.txt jetson_clocks --show
 export EDGE_VLM_POWER_MODE="${profile_dir}/nvpmodel.txt"
 export EDGE_VLM_JETSON_CLOCKS="${profile_dir}/jetson-clocks.txt"
 
+start_timestamped_tegrastats() {
+  local interval_ms="$1"
+  local log_path="$2"
+  "${python_bin}" -c '
+import datetime as dt
+import signal
+import subprocess
+import sys
+
+interval_ms = sys.argv[1]
+child = subprocess.Popen(
+    ["tegrastats", "--interval", interval_ms],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+)
+
+def stop(signum, frame):
+    if child.poll() is None:
+        child.terminate()
+        try:
+            child.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait(timeout=2)
+    raise SystemExit(0)
+
+signal.signal(signal.SIGTERM, stop)
+signal.signal(signal.SIGINT, stop)
+
+assert child.stdout is not None
+for raw_line in child.stdout:
+    timestamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="microseconds")
+    timestamp = timestamp.replace("+00:00", "Z")
+    print(f"{timestamp} {raw_line.rstrip()}", flush=True)
+
+raise SystemExit(child.wait())
+' "${interval_ms}" > "${log_path}" 2>&1 &
+  tegrastats_pid="$!"
+}
+
 tegrastats_pid=""
 cleanup() {
   if [[ -n "${tegrastats_pid}" ]] && kill -0 "${tegrastats_pid}" >/dev/null 2>&1; then
@@ -56,8 +97,7 @@ if [[ "${skip_tegrastats}" == "1" ]]; then
 elif command -v tegrastats >/dev/null 2>&1; then
   tegrastats_log="${EDGE_VLM_TEGRASTATS_LOG:-outputs/tegrastats/${run_id}.log}"
   mkdir -p "$(dirname "${tegrastats_log}")"
-  tegrastats --interval "${tegrastats_interval_ms}" > "${tegrastats_log}" 2>&1 &
-  tegrastats_pid="$!"
+  start_timestamped_tegrastats "${tegrastats_interval_ms}" "${tegrastats_log}"
   export EDGE_VLM_TEGRASTATS_LOG="${tegrastats_log}"
   export EDGE_VLM_TEGRASTATS_STATUS="running"
 else
@@ -86,4 +126,3 @@ if [[ "${dry_run}" == "1" ]]; then
 fi
 
 "${python_bin}" "${benchmark_args[@]}"
-

@@ -151,10 +151,15 @@ behavior from steady-state benchmark throughput.
 For variants that complete the formal benchmark, the sweep also writes derived
 profile artifacts under `profiles/`:
 
-- `<run-id>.profile.jsonl`: one parsed `tegrastats` sample per line.
+- `<run-id>.profile.jsonl`: one parsed `tegrastats` sample per line. When
+  `tegrastats` lines carry the UTC prefix emitted by
+  `run_formal_benchmark.sh`, each record also includes `captured_at` and
+  `elapsed_s` for phase-window alignment.
 - `<run-id>.summary.json`: aggregate RAM/`lfb`, GR3D, EMC, CPU, temperature,
   power, conservative bottleneck labels, available phase timings,
-  `input_timing_summary`, and profile file pointers.
+  `input_timing_summary`, profile file pointers, and timestamp bounds
+  (`first_captured_at`, `last_captured_at`, `captured_duration_s`) when
+  available.
 
 The first profile-summary phase timings are `artifact_check_or_download` when
 the launcher emits lifecycle JSONL, `server_startup`, `formal_text`,

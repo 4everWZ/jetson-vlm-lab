@@ -47,7 +47,7 @@ Lightweight model evidence is promising but not promotable yet:
 | HunyuanOCR 1B Q8 | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded through `ggml-org/HunyuanOCR-GGUF` after the launcher-resume fix and completed formal/fake-stream records, but the guard failed because all output excerpts were repetitive exclamation-mark strings. This is not an official Tencent-owned GGUF artifact. | Do not run formal repeats for the current Q8 artifact/runtime path. Revisit only with bounded quality triage of artifact, prompt/template handling, or runtime lane. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
 | Youtu-VL-4B third-party Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard and `edge_vlm.quality_review` passed 30/30 excerpt records, but it only reached 7.502 text tok/s, 7.249 image tok/s, 9.186 s fake latency, average GR3D 19.546%, and minimum profiled `lfb` 1 with `runtime_overhead`. It is also not official Tencent support. | Role `failed_artifact` for default ranking; revisit only for a scoped artifact/runtime A/B. |
-| Tencent Hy-MT1.5/Hy-MT2 1.8B GGUF text variants | Added to the text/router lane only: Hy-MT1.5 1.25bit/2bit and Hy-MT2 1.25Bit/2Bit/Q4_K_M/Q6_K/Q8_0 are all included in the dedicated Tencent text suite by default. Low-bit rows are runtime-compatibility canaries; the 1.25bit rows fail on pinned llama.cpp with `invalid ggml type 42`, and the 2bit rows fail with tensor offset mismatches. Earlier Hy-MT2 Q4 cached smoke `tencent-hy-mt2-q4-smoke64-cached-20260531b` passed the text guard at 19.759 tok/s and 3.070 s average text latency. Full-suite run `tencent-text-smoke64-20260531T120054Z` produced valid Hy-MT2 Q4/Q6 text rows: Q4 passed at 33.541 tok/s and 1.688 s average text latency, Q6 passed at 26.287 tok/s and 2.145 s average text latency. Cached Q6 run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s and 2.144 s average text latency. Q8 full-suite row is invalidated by the pre-fix launcher cleanup/stale-port issue; fixed-harness cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s and 1.841 s average text latency. Five-trial repeat `tencent-text-repeat5-20260531a` passed Q4/Q6/Q8 at 20/20 records each: Q4 34.528 tok/s and 1.643 s latency, Q6 26.778 tok/s and 2.108 s, Q8 31.395 tok/s and 1.806 s. All valid rows used `terminate_group` shutdown with closed-port evidence. | Run `edge_vlm.quality_review` with `configs/benchmark/quality_review_policy.json`, then do human output review and route-specific translation/router checks before use; keep text rows separate from VLM image/fake-stream rows. Low-bit failures remain runtime-compatibility evidence unless a newer llama.cpp runtime can load them. |
+| Tencent Hy-MT1.5/Hy-MT2/Youtu-LLM small GGUF text variants | Added to the text/router lane only: Hy-MT1.5 1.25bit/2bit/Q4_K_M/Q6_K/Q8_0, Hy-MT2 1.25Bit/2Bit/Q4_K_M/Q6_K/Q8_0, and Youtu-LLM 2B Q8_0 are all included in the dedicated Tencent text suite by default. Low-bit rows are runtime-compatibility canaries; the 1.25bit rows fail on pinned llama.cpp with `invalid ggml type 42`, and the 2bit rows fail with tensor offset mismatches. Earlier Hy-MT2 Q4 cached smoke `tencent-hy-mt2-q4-smoke64-cached-20260531b` passed the text guard at 19.759 tok/s and 3.070 s average text latency. Full-suite run `tencent-text-smoke64-20260531T120054Z` produced valid Hy-MT2 Q4/Q6 text rows: Q4 passed at 33.541 tok/s and 1.688 s average text latency, Q6 passed at 26.287 tok/s and 2.145 s average text latency. Cached Q6 run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s and 2.144 s average text latency. Q8 full-suite row is invalidated by the pre-fix launcher cleanup/stale-port issue; fixed-harness cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s and 1.841 s average text latency. Five-trial repeat `tencent-text-repeat5-20260531a` passed Q4/Q6/Q8 at 20/20 records each: Q4 34.528 tok/s and 1.643 s latency, Q6 26.778 tok/s and 2.108 s, Q8 31.395 tok/s and 1.806 s. The newly added HY-MT1.5 Q4/Q6/Q8 and Youtu-LLM Q8 rows are executable defaults with no Jetson evidence yet. All valid rows used `terminate_group` shutdown with closed-port evidence. | Run `edge_vlm.quality_review` with `configs/benchmark/quality_review_policy.json`, then do human output review and route-specific translation/router checks before use; keep text rows separate from VLM image/fake-stream rows. Low-bit failures remain runtime-compatibility evidence unless a newer llama.cpp runtime can load them. |
 
 Structured quality review on `lightweight-repeat5-20260531T134554Z` produced
 30/30 policy passes for MiniCPM-V 4.6 Q4 and third-party Youtu Q4, and 20/30
@@ -60,12 +60,16 @@ broader role.
 
 Tencent Hub note from the 2026-05-31 refresh: the current official small GGUF
 Tencent rows such as `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF`,
-`tencent/Hy-MT1.5-1.8B-2bit-GGUF`, `tencent/Hy-MT2-1.8B-GGUF`,
-`tencent/Hy-MT2-1.8B-1.25Bit-GGUF`, and
-`tencent/Hy-MT2-1.8B-2Bit-GGUF` are text/translation models, not VLM
-candidates. They are configured for text/router benchmarks only. Low-bit rows
-stay in the dedicated text-suite default as runtime-compatibility canaries, with
-failures recorded as runtime support evidence rather than VLM ranking evidence.
+`tencent/Hy-MT1.5-1.8B-2bit-GGUF`, `tencent/HY-MT1.5-1.8B-GGUF`,
+`tencent/Hy-MT2-1.8B-GGUF`,
+`tencent/Hy-MT2-1.8B-1.25Bit-GGUF`,
+`tencent/Hy-MT2-1.8B-2Bit-GGUF`, and `tencent/Youtu-LLM-2B-GGUF` are
+text/translation or text-generation models, not VLM candidates. They are
+configured for text/router benchmarks only. Low-bit rows stay in the dedicated
+text-suite default as runtime-compatibility canaries, with failures recorded as
+runtime support evidence rather than VLM ranking evidence. The Youtu-LLM F16
+GGUF sibling is intentionally deferred from the default suite because Q8 covers
+the model with lower memory pressure.
 Latest Hy-MT1.5 1.8B Safetensors quant rows
 `tencent/Hy-MT1.5-1.8B-1.25bit` and `tencent/Hy-MT1.5-1.8B-2bit`
 are deferred because this bench lane is GGUF/llama.cpp only until a bounded
@@ -115,6 +119,10 @@ Required per-run profile data:
 - `tegrastats` parsed into structured samples for `RAM`, `SWAP`, `lfb`,
   `CPU`, `GR3D_FREQ`, `EMC_FREQ`, temperatures, `VDD_IN`, and other available
   power rails.
+- Formal-wrapper `tegrastats` logs carry a UTC timestamp prefix; derived
+  profile JSONL records expose `captured_at` and `elapsed_s`, and summaries
+  expose capture bounds so utilization samples can be aligned with lifecycle,
+  benchmark, and fake-stream windows.
 - `jetson_clocks --show`, `nvpmodel -q`, `uname -a`, Docker version, runtime
   image tag/id/digest, and llama.cpp ref.
 - Host memory snapshot before startup and before each variant.
@@ -133,8 +141,10 @@ Required per-run profile data:
 Profiling output should be machine-readable under ignored output paths, for
 example:
 
-- `outputs/profiles/<run_prefix>/profile.jsonl` for time-aligned samples.
-- `outputs/profiles/<run_prefix>/summary.json` for derived bottleneck labels.
+- `outputs/profiles/<run_prefix>/profile.jsonl` for parsed and time-aligned
+  samples.
+- `outputs/profiles/<run_prefix>/summary.json` for capture bounds and derived
+  bottleneck labels.
 - Existing sweep manifests should link to those profile files rather than copy
   sensitive environment state.
 
@@ -372,13 +382,16 @@ estimates:
 
 ## Execution Order
 
-1. Add the profiling harness and richer structured tegrastats parser.
+1. Keep the profiling harness as the next-gate source of truth: structured
+   `tegrastats` samples now include UTC capture timestamps and elapsed seconds
+   when collected through the formal wrapper.
 2. Treat `lightweight-repeat5-20260531T134554Z` as the completed fixed-policy
    5-trial repeat for SmolVLM2 256M, Qwen3-VL 2B Thinking, and Youtu Q4
    third-party CPU-mmproj. HunyuanOCR Q8 and official Youtu-VL Q8 stay excluded
    from the default repeat queue until their current guard/OOM causes change.
-3. Run the dedicated Tencent Hy-MT1.5/Hy-MT2 text/router suite separately if a
-   text-only route is useful; keep all seven rows out of VLM ranking tables,
+3. Run the dedicated Tencent Hy-MT1.5/Hy-MT2/Youtu-LLM text/router suite
+   separately if a text-only route is useful; keep all eleven default rows out
+   of VLM ranking tables,
    use `tencent-text-smoke64-20260531T120054Z` only as one-trial Q4/Q6
    full-suite evidence, use `tencent-hy-mt2-q6-smoke64-cached-20260531a` and
    `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` only as one-trial
@@ -425,6 +438,8 @@ External references checked:
 - Tencent Youtu-Parsing: https://hf.co/tencent/Youtu-Parsing
 - Tencent Hy-MT1.5 1.8B 1.25bit GGUF: https://hf.co/tencent/Hy-MT1.5-1.8B-1.25bit-GGUF
 - Tencent Hy-MT1.5 1.8B 2bit GGUF: https://hf.co/tencent/Hy-MT1.5-1.8B-2bit-GGUF
+- Tencent HY-MT1.5 1.8B GGUF: https://hf.co/tencent/HY-MT1.5-1.8B-GGUF
 - Tencent Hy-MT2 1.8B GGUF: https://hf.co/tencent/Hy-MT2-1.8B-GGUF
 - Tencent Hy-MT2 1.8B 1.25Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF
 - Tencent Hy-MT2 1.8B 2Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-2Bit-GGUF
+- Tencent Youtu-LLM 2B GGUF: https://hf.co/tencent/Youtu-LLM-2B-GGUF
