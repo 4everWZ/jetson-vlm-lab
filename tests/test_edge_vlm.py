@@ -105,6 +105,11 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertNotIn("!models/", dockerignore)
         self.assertNotIn("!outputs/", dockerignore)
 
+    def test_llama_cpp_build_artifacts_are_not_git_tracked(self):
+        gitignore = Path(".gitignore").read_text(encoding="utf-8")
+
+        self.assertIn("artifacts/", gitignore)
+
     def test_minicpm_prepare_downloads_official_prebuilt_artifacts(self):
         prepare_script = Path("scripts/wsl/prepare_minicpmv46_q4.sh").read_text(encoding="utf-8")
         config_text = Path("configs/models/minicpmv46_q4.yaml").read_text(encoding="utf-8")

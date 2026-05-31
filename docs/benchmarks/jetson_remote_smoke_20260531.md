@@ -139,6 +139,42 @@ locally on the Jetson to image id `36f3398b7885` and repo digest
 `sha256:86dd1f9dd7bd0f42940c591142279cdf6c5659317486e0b12167571c2046bffa`.
 The previous local image id `52a8ad644e41` was removed after the push.
 
+## New Canonical 10-Trial Current Defaults
+
+Run prefix: `current-defaults-d749821-clocks10-20260531a`
+
+This reran the current-defaults wrapper after the canonical image tag was
+overwritten and pulled from GHCR. The manifest records canonical runtime
+metadata:
+
+```text
+image: ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87
+image id: sha256:36f3398b7885ac62c5fcd335bde1d428a15d458997764135a555e16806e77036
+repo digest: ghcr.io/4everwz/jetson-llama-cpp@sha256:86dd1f9dd7bd0f42940c591142279cdf6c5659317486e0b12167571c2046bffa
+llama.cpp ref: d749821db3bd587932d1ed57d43626cd552c9909
+```
+
+Conditions: `JETSON_REMOTE_SYNC=0`, `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`,
+`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--min-lfb-blocks 150`, ten
+formal trials, 64 tokens, and three fake-stream frames.
+
+| Model | Preflight `lfb` | Guard | Formal success | Fake success | Startup s | Text tok/s | Image tok/s | Fake latency s | Max temp C | Avg power W |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| MiniCPM-V 4.6 Q4 | 218x4MB | yes | 60/60 | 3/3 | 6.026 | 48.782 | 47.645 | 1.657 | 57.281 | 19.375 |
+| Gemma 4 E2B-it Q4 | 223x4MB | yes | 60/60 | 3/3 | 6.020 | 12.016 | 12.948 | 5.820 | 56.937 | 16.409 |
+
+Delta versus the earlier `current-defaults-clocks10-20260531a` canonical run:
+
+| Model | Startup | Text tok/s | Image tok/s | Fake latency | Avg power |
+|---|---:|---:|---:|---:|---:|
+| MiniCPM-V 4.6 Q4 | +0.02% | -0.29% | -0.30% | +0.18% | +0.03% |
+| Gemma 4 E2B-it Q4 | +0.02% | -2.22% | -2.60% | -0.85% | -0.45% |
+
+Decision: the new canonical image is valid for continued work and model
+expansion, but the 10-trial results are not a performance promotion over the
+previous canonical run. Keep the current MiniCPM/Gemma runtime parameters, and
+use this image mainly for the newer llama.cpp multimodal/model support.
+
 ## Follow-Up
 
 Before the next promotion comparison, run the remote wrapper with
