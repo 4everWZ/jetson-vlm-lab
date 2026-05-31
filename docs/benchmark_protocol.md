@@ -366,10 +366,13 @@ events under `outputs/optimization_sweeps/<run-prefix>/lifecycle/`:
 
 The currently instrumented phase timings are `artifact_check_or_download` when
 the launcher emits lifecycle JSONL, `server_startup`, `formal_text`,
-`formal_image`, `fake_stream`, and `shutdown`. Warmup remains marked
-unavailable until server warmup events are instrumented. Gemma `-hf` runtime
-downloads that happen inside `llama-server` are labeled as not separated rather
-than guessed as launcher time.
+`formal_image`, `fake_stream`, and `shutdown`. Warmup is now classified instead
+of left as generic `not_recorded`: variants with `--no-warmup` record
+`disabled_by_variant`; variants without that flag record
+`included_in_server_startup` until server logs or runtime hooks can separate
+the internal llama.cpp warmup duration. Gemma `-hf` runtime downloads that
+happen inside `llama-server` are labeled as not separated rather than guessed
+as launcher time.
 
 Benchmark and fake-stream JSONL records include `input_timing` when the client
 path can measure it. Current fields include image byte count, MIME detection
@@ -385,12 +388,20 @@ Fake-stream JSONL records also include `stream_timing`:
 - `pre_frame_sleep_s`: time slept before starting the frame to match the fixed cadence.
 - `schedule_delay_s`: how late the frame started relative to its nominal offset.
 - `backpressure_s`: current accumulated delay from the fixed-cadence source schedule.
+- `skipped_frames_before`: number of source frames skipped immediately before this processed record.
 - `frame_elapsed_s`: local elapsed time spent processing the frame record.
 
 The fake-stream runner now schedules frame starts against the nominal stream
 clock instead of sleeping a fixed interval after each frame. This makes
 backpressure visible when model/request latency exceeds the target frame
 interval.
+
+For routing and stream-control experiments, `edge_vlm.fake_stream` also accepts
+`--skip-late-frames`. When enabled, non-final source frames whose current
+backpressure is at or above `--skip-threshold-s` are dropped before model
+inference, and the next processed record carries the accumulated
+`skipped_frames_before` count. The default threshold is the configured
+`--interval-s`, and the default behavior remains no skipping.
 
 Text-only configs set `capabilities.image=false`. The sweep planner still runs
 their formal benchmark, but it does not attach a fake-stream command even when

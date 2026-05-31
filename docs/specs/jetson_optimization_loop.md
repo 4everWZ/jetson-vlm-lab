@@ -158,10 +158,12 @@ profile artifacts under `profiles/`:
 
 The first profile-summary phase timings are `artifact_check_or_download` when
 the launcher emits lifecycle JSONL, `server_startup`, `formal_text`,
-`formal_image`, `fake_stream`, and `shutdown`. Warmup remains present in the
-summary as unavailable instead of being guessed until server warmup events are
-instrumented. Launchers that delegate artifact download to `llama-server`
-inside the runtime container emit a not-separated lifecycle record.
+`formal_image`, `fake_stream`, and `shutdown`. Warmup is classified from the
+variant command: `--no-warmup` records `disabled_by_variant`, while warmup-on
+variants record `included_in_server_startup` until server logs or runtime hooks
+can separate the internal llama.cpp warmup duration. Launchers that delegate
+artifact download to `llama-server` inside the runtime container emit a
+not-separated lifecycle record.
 
 After a promotion or comparison sweep, generate the mechanical comparison table
 before writing tracked benchmark notes:

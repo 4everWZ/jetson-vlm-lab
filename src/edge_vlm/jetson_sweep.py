@@ -228,6 +228,30 @@ def _config_supports_fake_stream(config_path: str | Path) -> bool:
     return config_supports_images(load_model_config(config_path))
 
 
+def _warmup_phase_from_args(args: Iterable[Any]) -> dict[str, Any]:
+    normalized_args = [str(arg) for arg in args]
+    if "--no-warmup" in normalized_args:
+        return {
+            "available": False,
+            "duration_s": None,
+            "reason": "disabled_by_variant",
+            "source": "sweep",
+            "details": {
+                "status": "disabled",
+                "flag": "--no-warmup",
+            },
+        }
+    return {
+        "available": False,
+        "duration_s": None,
+        "reason": "included_in_server_startup",
+        "source": "sweep",
+        "details": {
+            "status": "enabled_not_separated",
+        },
+    }
+
+
 def build_sweep_plan(
     *,
     variants_path: str | Path,
@@ -333,6 +357,9 @@ def build_sweep_plan(
                 "benchmark_env": benchmark_env,
                 "fake_stream_command": fake_stream_command if include_fake_stream and supports_fake_stream else None,
                 "fake_stream_env": server_env,
+                "phase_defaults": {
+                    "warmup": _warmup_phase_from_args(variant.get("args", [])),
+                },
                 "paths": {
                     "benchmark_jsonl": str(benchmark_jsonl),
                     "summary_md": str(summary_md),
@@ -464,7 +491,11 @@ def _missing_profile_artifact(paths: dict[str, Any], reason: str) -> dict[str, A
     }
 
 
-def _write_run_profile_artifacts(paths: dict[str, Any], server_timing: dict[str, Any]) -> dict[str, Any]:
+def _write_run_profile_artifacts(
+    paths: dict[str, Any],
+    server_timing: dict[str, Any],
+    phase_defaults: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     profile_jsonl = paths.get("profile_jsonl")
     profile_summary_json = paths.get("profile_summary_json")
     manifest_json = paths.get("manifest_json")
@@ -479,7 +510,12 @@ def _write_run_profile_artifacts(paths: dict[str, Any], server_timing: dict[str,
         return _missing_profile_artifact(paths, "missing_tegrastats_log")
     startup_seconds = server_timing.get("server_startup_seconds")
     shutdown_seconds = server_timing.get("server_shutdown_seconds")
-    phase_timings = _profile_phase_timings(paths, startup_seconds, shutdown_seconds)
+    phase_timings = _profile_phase_timings(
+        paths,
+        startup_seconds,
+        shutdown_seconds,
+        phase_defaults=phase_defaults,
+    )
     profile_summary = write_profile_artifacts(
         tegrastats_log=tegrastats_log,
         profile_jsonl_path=str(profile_jsonl),
@@ -545,7 +581,13 @@ def _phase_timings_from_lifecycle(path: str | Path | None) -> dict[str, Any]:
     return timings
 
 
-def _profile_phase_timings(paths: dict[str, Any], startup_seconds: Any, shutdown_seconds: Any = None) -> dict[str, Any]:
+def _profile_phase_timings(
+    paths: dict[str, Any],
+    startup_seconds: Any,
+    shutdown_seconds: Any = None,
+    *,
+    phase_defaults: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     benchmark_jsonl = paths.get("benchmark_jsonl")
     fake_stream_jsonl = paths.get("fake_stream_jsonl")
     lifecycle_jsonl = paths.get("lifecycle_jsonl")
@@ -567,7 +609,8 @@ def _profile_phase_timings(paths: dict[str, Any], startup_seconds: Any, shutdown
         if isinstance(fake_stream_jsonl, str)
         else None
     )
-    timings = _phase_timings_from_lifecycle(lifecycle_jsonl if isinstance(lifecycle_jsonl, str) else None)
+    timings = dict(phase_defaults or {})
+    timings.update(_phase_timings_from_lifecycle(lifecycle_jsonl if isinstance(lifecycle_jsonl, str) else None))
     timings.update(
         {
             "server_startup": _phase_entry(
@@ -740,7 +783,19 @@ def run_sweep(
                 result_entry.update(shutdown_timing)
                 result_entry["server_returncode"] = server.poll()
                 if result_entry.get("server_ready") is True:
-                    profile_artifact = _write_run_profile_artifacts(paths, {**server_timing, **shutdown_timing})
+                    phase_defaults = variant_plan.get("phase_defaults")
+                    if not isinstance(phase_defaults, dict):
+                        variant = variant_plan.get("variant") if isinstance(variant_plan.get("variant"), dict) else {}
+                        phase_defaults = {
+                            "warmup": _warmup_phase_from_args(
+                                variant.get("args", []) if isinstance(variant, dict) else []
+                            ),
+                        }
+                    profile_artifact = _write_run_profile_artifacts(
+                        paths,
+                        {**server_timing, **shutdown_timing},
+                        phase_defaults=phase_defaults,
+                    )
                     result_entry.update(profile_artifact)
     if benchmark_paths:
         build_optimization_report(

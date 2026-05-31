@@ -103,6 +103,9 @@ Required per-run profile data:
   GGUF launchers through `EDGE_VLM_LAUNCH_PHASE_LOG`. Runtime-internal `-hf`
   downloads are labeled not separated until that path is replaced or parsed from
   runtime logs.
+- Warmup policy recorded from variant args. `--no-warmup` rows are marked
+  disabled; warmup-on rows are marked as included in server startup until
+  runtime logs or hooks can split the internal llama.cpp warmup duration.
 
 Profiling output should be machine-readable under ignored output paths, for
 example:
@@ -227,14 +230,18 @@ Instrument the client/input path separately:
 - Fake-stream scheduling delay and backpressure. Implemented in
   `stream_timing.schedule_delay_s`, `stream_timing.backpressure_s`, and
   `stream_timing.pre_frame_sleep_s` using fixed-cadence frame scheduling.
+- Explicit late-frame skipping for stream-control experiments. Implemented as
+  `edge_vlm.fake_stream --skip-late-frames`; skipped source frames are not sent
+  to the model, and the next processed record reports
+  `stream_timing.skipped_frames_before`.
 
 Routing policy candidates:
 
 - Use a fast low-end VLM for simple frame descriptions or low-risk triage.
 - Fall back to MiniCPM or another reference model when guard terms fail, output
   is too short/repetitive, or the route is quality-sensitive.
-- Add frame skipping or interval adaptation when fake-stream latency exceeds
-  the target frame interval.
+- Use explicit frame skipping when fake-stream latency exceeds the target frame
+  interval; interval adaptation remains a separate follow-up.
 - Keep text-only small models out of image routes unless a text-only stage is
   explicitly added after image understanding.
 

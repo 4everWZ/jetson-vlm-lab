@@ -1103,6 +1103,11 @@ class EdgeVlmContractsTest(unittest.TestCase):
             variant_plan["server_env"]["EDGE_VLM_LAUNCH_PHASE_LOG"],
             variant_plan["paths"]["lifecycle_jsonl"],
         )
+        warmup_phase = variant_plan["phase_defaults"]["warmup"]
+        self.assertFalse(warmup_phase["available"])
+        self.assertEqual(warmup_phase["reason"], "disabled_by_variant")
+        self.assertEqual(warmup_phase["source"], "sweep")
+        self.assertEqual(warmup_phase["details"]["flag"], "--no-warmup")
         fake_command = variant_plan["fake_stream_command"]
         self.assertEqual(fake_command[fake_command.index("--max-frames") + 1], "3")
 
@@ -1330,7 +1335,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 "port": 18080,
                 "variants": [
                     {
-                        "variant": {"id": "unit-variant"},
+                        "variant": {"id": "unit-variant", "args": []},
                         "run_id": "unit-run",
                         "server_command": ["bash", "server.sh"],
                         "server_env": {},
@@ -1488,6 +1493,11 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["formal_image"]["duration_s"], 2.0)
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["fake_stream"]["duration_s"], 1.5)
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["shutdown"]["duration_s"], 0.75)
+        warmup_phase = result["results"][0]["profile_summary"]["phase_timings"]["warmup"]
+        self.assertFalse(warmup_phase["available"])
+        self.assertEqual(warmup_phase["reason"], "included_in_server_startup")
+        self.assertEqual(warmup_phase["source"], "sweep")
+        self.assertEqual(warmup_phase["details"]["status"], "enabled_not_separated")
         artifact_phase = result["results"][0]["profile_summary"]["phase_timings"]["artifact_check_or_download"]
         self.assertTrue(artifact_phase["available"])
         self.assertEqual(artifact_phase["duration_s"], 3.25)
@@ -3461,6 +3471,94 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(records[2]["stream_timing"]["pre_frame_sleep_s"], 0.0)
         self.assertEqual(records[2]["stream_timing"]["schedule_delay_s"], 0.25)
         self.assertEqual(records[2]["stream_timing"]["backpressure_s"], 0.25)
+
+    def test_fake_stream_can_skip_late_frames_without_contacting_model(self):
+        from edge_vlm.client import CompletionResult
+        from edge_vlm.fake_stream import run_fake_stream
+
+        class FakeClock:
+            def __init__(self):
+                self.now = 100.0
+                self.sleeps: list[float] = []
+
+            def perf_counter(self):
+                return self.now
+
+            def sleep(self, seconds):
+                self.sleeps.append(seconds)
+                self.now += seconds
+
+        class FakeClient:
+            def __init__(self, clock):
+                self.clock = clock
+                self.calls: list[str] = []
+                self.latencies = [2.4, 0.1, 0.1]
+
+            def complete(self, **kwargs):
+                frame_name = Path(kwargs["image_path"]).name
+                self.calls.append(frame_name)
+                latency = self.latencies[len(self.calls) - 1]
+                self.clock.now += latency
+                return CompletionResult(
+                    ok=True,
+                    text=f"{frame_name} processed with enough detail",
+                    request={},
+                    response={"dry_run": True},
+                    latency_s=latency,
+                    timings={"http_request_s": latency},
+                )
+
+        clock = FakeClock()
+        fake_client = FakeClient(clock)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            image_dir = tmp_path / "frames"
+            image_dir.mkdir()
+            for frame_id in ("001.jpg", "002.jpg", "003.jpg", "004.jpg"):
+                (image_dir / frame_id).write_bytes(b"\xff\xd8\xff\xd9")
+            output = tmp_path / "stream.jsonl"
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  image: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("edge_vlm.fake_stream.OpenAICompatClient.from_config", return_value=fake_client):
+                with patch("edge_vlm.fake_stream.time.perf_counter", side_effect=clock.perf_counter):
+                    with patch("edge_vlm.fake_stream.time.sleep", side_effect=clock.sleep):
+                        count = run_fake_stream(
+                            config_path=config,
+                            image_dir=image_dir,
+                            output_path=output,
+                            prompt="Describe this frame.",
+                            interval_s=1.0,
+                            max_frames=4,
+                            skip_late_frames=True,
+                            skip_threshold_s=1.0,
+                        )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(count, 3)
+        self.assertEqual(fake_client.calls, ["001.jpg", "003.jpg", "004.jpg"])
+        self.assertEqual([record["frame_id"] for record in records], ["001.jpg", "003.jpg", "004.jpg"])
+        self.assertEqual(records[0]["stream_timing"]["skipped_frames_before"], 0)
+        self.assertEqual(records[1]["frame_index"], 2)
+        self.assertEqual(records[1]["stream_timing"]["skipped_frames_before"], 1)
+        self.assertAlmostEqual(records[1]["stream_timing"]["schedule_delay_s"], 0.4)
+        self.assertEqual(records[2]["stream_timing"]["skipped_frames_before"], 0)
+        self.assertEqual(clock.sleeps, [0.5])
 
 
 if __name__ == "__main__":

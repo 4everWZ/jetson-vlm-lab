@@ -32,7 +32,7 @@ def _stream_timing_for_frame(
     stream_started: float,
     frame_index: int,
     interval_s: float,
-) -> tuple[float, dict[str, float]]:
+) -> tuple[float, dict[str, Any]]:
     scheduled_offset_s = frame_index * interval_s if interval_s > 0 else 0.0
     scheduled_start = stream_started + scheduled_offset_s
     before_sleep = time.perf_counter()
@@ -52,6 +52,39 @@ def _stream_timing_for_frame(
     }
 
 
+def _current_schedule_delay(
+    *,
+    stream_started: float,
+    frame_index: int,
+    interval_s: float,
+) -> float:
+    if interval_s <= 0:
+        return 0.0
+    scheduled_start = stream_started + (frame_index * interval_s)
+    return max(0.0, time.perf_counter() - scheduled_start)
+
+
+def _should_skip_late_frame(
+    *,
+    stream_started: float,
+    frame_index: int,
+    interval_s: float,
+    has_future_frame: bool,
+    skip_late_frames: bool,
+    skip_threshold_s: float | None,
+) -> bool:
+    if not skip_late_frames or interval_s <= 0 or not has_future_frame:
+        return False
+    threshold = skip_threshold_s if skip_threshold_s is not None else interval_s
+    if threshold < 0:
+        raise ValueError("skip_threshold_s must be >= 0")
+    return _current_schedule_delay(
+        stream_started=stream_started,
+        frame_index=frame_index,
+        interval_s=interval_s,
+    ) >= threshold
+
+
 def run_fake_stream(
     *,
     config_path: str | Path,
@@ -64,6 +97,8 @@ def run_fake_stream(
     stop_on_error: bool = False,
     max_tokens: int = 128,
     temperature: float = 0.2,
+    skip_late_frames: bool = False,
+    skip_threshold_s: float | None = None,
 ) -> int:
     config = load_model_config(config_path)
     if not config_supports_images(config):
@@ -76,13 +111,26 @@ def run_fake_stream(
     output.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     stream_started = time.perf_counter()
+    skipped_frames_before = 0
     with output.open("a", encoding="utf-8") as handle:
         for index, frame in enumerate(frames):
+            if _should_skip_late_frame(
+                stream_started=stream_started,
+                frame_index=index,
+                interval_s=interval_s,
+                has_future_frame=index < len(frames) - 1,
+                skip_late_frames=skip_late_frames,
+                skip_threshold_s=skip_threshold_s,
+            ):
+                skipped_frames_before += 1
+                continue
             frame_started_mono, stream_timing = _stream_timing_for_frame(
                 stream_started=stream_started,
                 frame_index=index,
                 interval_s=interval_s,
             )
+            stream_timing["skipped_frames_before"] = skipped_frames_before
+            skipped_frames_before = 0
             started_wall = datetime.now(timezone.utc)
             try:
                 result = client.complete(
@@ -153,6 +201,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stop-on-error", action="store_true")
     parser.add_argument("--max-tokens", type=int, default=128)
     parser.add_argument("--temperature", type=float, default=0.2)
+    parser.add_argument(
+        "--skip-late-frames",
+        action="store_true",
+        help="Drop non-final source frames when backpressure exceeds the skip threshold.",
+    )
+    parser.add_argument(
+        "--skip-threshold-s",
+        type=float,
+        default=None,
+        help="Backpressure threshold for --skip-late-frames; defaults to --interval-s.",
+    )
     args = parser.parse_args(argv)
     count = run_fake_stream(
         config_path=args.config,
@@ -165,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
         stop_on_error=args.stop_on_error,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
+        skip_late_frames=args.skip_late_frames,
+        skip_threshold_s=args.skip_threshold_s,
     )
     print(json.dumps({"frames_written": count, "output": args.output}, ensure_ascii=False))
     return 0

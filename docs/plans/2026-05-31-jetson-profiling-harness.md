@@ -46,7 +46,10 @@ requirements remain explicit follow-up tasks:
   startup checks are separated.
 - `shutdown` is now measured by the sweep after benchmark and fake-stream work
   when terminating the server process.
-- Instrument `warmup` instead of leaving it as `not_recorded`.
+- `warmup` is now classified from variant args: `--no-warmup` records
+  `disabled_by_variant`, and warmup-on variants record
+  `included_in_server_startup` until internal llama.cpp warmup can be separated
+  from server readiness.
 - Input-pipeline timing for image read, MIME detection, base64 encoding, JSON
   serialization, and HTTP request/response is implemented in the client path.
   Fake-stream scheduling/backpressure timing is implemented as `stream_timing`.
