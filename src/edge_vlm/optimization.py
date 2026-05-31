@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from .jetson_profile import summarize_tegrastats_log as summarize_jetson_profile_log
+
 
 @dataclass(frozen=True)
 class RunSummary:
@@ -58,15 +60,15 @@ class SweepComparisonRow:
     fake_stream_avg_latency_s: float | None
     max_temp_c: float | None
     avg_power_w: float | None
+    avg_gr3d_util_pct: float | None
+    avg_emc_util_pct: float | None
+    min_lfb_free_blocks: int | None
+    bottleneck_labels: tuple[str, ...]
     guard_failures: tuple[str, ...]
     delta_text_tokens_per_s_pct: float | None = None
     delta_image_tokens_per_s_pct: float | None = None
     delta_startup_pct: float | None = None
     delta_fake_stream_latency_pct: float | None = None
-
-
-TEGRASTATS_TEMP_RE = re.compile(r"@([0-9]+(?:\.[0-9]+)?)C")
-TEGRASTATS_VDD_IN_RE = re.compile(r"\bVDD_IN\s+(?P<instant_mw>\d+)mW/\d+mW\b")
 
 
 def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
@@ -314,22 +316,8 @@ def _format_report(summaries: list[RunSummary]) -> str:
     return "\n".join(lines)
 
 
-def summarize_tegrastats_log(path: str | Path) -> dict[str, float | int | None]:
-    source = Path(path)
-    max_temps: list[float] = []
-    power_w: list[float] = []
-    for line in source.read_text(encoding="utf-8").splitlines():
-        temps = [float(value) for value in TEGRASTATS_TEMP_RE.findall(line)]
-        if temps:
-            max_temps.append(max(temps))
-        power_match = TEGRASTATS_VDD_IN_RE.search(line)
-        if power_match is not None:
-            power_w.append(int(power_match.group("instant_mw")) / 1000.0)
-    return {
-        "samples": max(len(max_temps), len(power_w)),
-        "max_temp_c": max(max_temps) if max_temps else None,
-        "avg_power_w": statistics.mean(power_w) if power_w else None,
-    }
+def summarize_tegrastats_log(path: str | Path) -> dict[str, Any]:
+    return summarize_jetson_profile_log(path)
 
 
 def _path_or_none(value: Any) -> Path | None:
@@ -457,11 +445,24 @@ def summarize_sweep_manifest(
             )
         tegrastats_log = _tegrastats_log_from_manifest(benchmark_manifest_path)
         tegrastats_summary = (
-            summarize_tegrastats_log(tegrastats_log)
+            summarize_jetson_profile_log(tegrastats_log)
             if tegrastats_log is not None and tegrastats_log.is_file()
-            else {"max_temp_c": None, "avg_power_w": None}
+            else {
+                "max_temp_c": None,
+                "avg_power_w": None,
+                "avg_gr3d_util_pct": None,
+                "avg_emc_util_pct": None,
+                "min_lfb_free_blocks": None,
+                "bottleneck_labels": (),
+            }
         )
         runtime = _runtime_metadata(variant_plan)
+        bottleneck_labels = tegrastats_summary.get("bottleneck_labels")
+        labels = (
+            tuple(str(label) for label in bottleneck_labels)
+            if isinstance(bottleneck_labels, list)
+            else ()
+        )
         rows.append(
             SweepComparisonRow(
                 source=str(source),
@@ -499,6 +500,22 @@ def summarize_sweep_manifest(
                     if isinstance(tegrastats_summary.get("avg_power_w"), (int, float))
                     else None
                 ),
+                avg_gr3d_util_pct=(
+                    float(tegrastats_summary["avg_gr3d_util_pct"])
+                    if isinstance(tegrastats_summary.get("avg_gr3d_util_pct"), (int, float))
+                    else None
+                ),
+                avg_emc_util_pct=(
+                    float(tegrastats_summary["avg_emc_util_pct"])
+                    if isinstance(tegrastats_summary.get("avg_emc_util_pct"), (int, float))
+                    else None
+                ),
+                min_lfb_free_blocks=(
+                    int(tegrastats_summary["min_lfb_free_blocks"])
+                    if isinstance(tegrastats_summary.get("min_lfb_free_blocks"), int)
+                    else None
+                ),
+                bottleneck_labels=labels,
                 guard_failures=summary.guard_failures if summary is not None else ("missing_benchmark_jsonl",),
             )
         )
@@ -534,13 +551,13 @@ def _format_sweep_comparison_report(rows: list[SweepComparisonRow]) -> str:
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower.",
         "",
-        "| Model | Variant | Run prefix | Runtime | Preflight lfb | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
-        "|---|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Model | Variant | Run prefix | Runtime | Preflight lfb | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
+        "|---|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
     ]
     for row in rows:
         failures = ", ".join(row.guard_failures)
         lines.append(
-            "| {model} | `{variant}` | {run_prefix} | {runtime} | {lfb} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {run_prefix} | {runtime} | {lfb} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 run_prefix=row.run_prefix,
@@ -562,6 +579,10 @@ def _format_sweep_comparison_report(rows: list[SweepComparisonRow]) -> str:
                 fake_latency=_fmt(row.fake_stream_avg_latency_s),
                 max_temp=_fmt(row.max_temp_c),
                 avg_power=_fmt(row.avg_power_w),
+                avg_gr3d=_fmt(row.avg_gr3d_util_pct),
+                avg_emc=_fmt(row.avg_emc_util_pct),
+                min_lfb="" if row.min_lfb_free_blocks is None else row.min_lfb_free_blocks,
+                bottlenecks=", ".join(row.bottleneck_labels),
                 text_delta=_fmt_pct(row.delta_text_tokens_per_s_pct),
                 image_delta=_fmt_pct(row.delta_image_tokens_per_s_pct),
                 startup_delta=_fmt_pct(row.delta_startup_pct),

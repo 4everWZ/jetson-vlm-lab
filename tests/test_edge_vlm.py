@@ -870,12 +870,12 @@ class EdgeVlmContractsTest(unittest.TestCase):
                         [
                             (
                                 "05-31-2026 RAM 2000/7620MB (lfb 200x4MB) "
-                                "GR3D_FREQ 80% cpu@50.0C gpu@51.0C tj@51.0C "
+                                "GR3D_FREQ 80%@[1020] EMC_FREQ 82%@3199 cpu@50.0C gpu@51.0C tj@51.0C "
                                 f"VDD_IN {int(power_w * 1000)}mW/{int(power_w * 1000)}mW"
                             ),
                             (
                                 "05-31-2026 RAM 2100/7620MB (lfb 180x4MB) "
-                                "GR3D_FREQ 90% cpu@52.0C gpu@54.5C tj@54.5C "
+                                "GR3D_FREQ 90%@[1020] EMC_FREQ 84%@3199 cpu@52.0C gpu@54.5C tj@54.5C "
                                 f"VDD_IN {int((power_w + 1) * 1000)}mW/{int((power_w + 1) * 1000)}mW"
                             ),
                         ]
@@ -975,8 +975,15 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(rows[1].delta_image_tokens_per_s_pct, -12.5)
         self.assertAlmostEqual(rows[1].delta_fake_stream_latency_pct, -11.111111, places=5)
         self.assertIn("| Model | Variant | Run prefix | Runtime | Preflight lfb |", report_text)
+        self.assertIn("Avg GR3D %", report_text)
+        self.assertIn("Avg EMC %", report_text)
+        self.assertIn("Bottlenecks", report_text)
+        self.assertIn("gpu_compute", report_text)
+        self.assertEqual(rows[0].avg_gr3d_util_pct, 85.0)
+        self.assertEqual(rows[0].avg_emc_util_pct, 83.0)
+        self.assertEqual(rows[0].min_lfb_free_blocks, 180)
         self.assertIn("ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be", report_text)
-        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
+        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
         self.assertIn("Baseline rows use `0.00%` deltas", report_text)
 
     def test_jetson_sweep_dry_run_writes_reproducible_variant_plan(self):
