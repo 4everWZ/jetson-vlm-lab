@@ -1608,6 +1608,48 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("gpu_compute", summary["bottleneck_labels"])
         self.assertIn("emc_memory_bandwidth", summary["bottleneck_labels"])
 
+    def test_jetson_profile_writes_profile_jsonl_and_phase_summary(self):
+        from edge_vlm.jetson_profile import write_profile_artifacts
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log = tmp_path / "tegrastats.log"
+            profile_jsonl = tmp_path / "profile.jsonl"
+            summary_json = tmp_path / "summary.json"
+            log.write_text(
+                "\n".join(
+                    [
+                        "RAM 2000/7620MB (lfb 200x4MB) CPU [40%@1728] GR3D_FREQ 12%@[1020] EMC_FREQ 31%@3199 gpu@54.0C VDD_IN 8000mW/7000mW",
+                        "RAM 2200/7620MB (lfb 160x4MB) CPU [45%@1728] GR3D_FREQ 18%@[1020] EMC_FREQ 36%@3199 gpu@58.0C VDD_IN 9000mW/8000mW",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = write_profile_artifacts(
+                tegrastats_log=log,
+                profile_jsonl_path=profile_jsonl,
+                summary_path=summary_json,
+                phase_timings={"server_startup": {"available": True, "duration_s": 35.0}},
+                profile_files={"jetson_clocks": "outputs/benchmarks/unit.profile/jetson-clocks.txt"},
+            )
+            profile_records = [json.loads(line) for line in profile_jsonl.read_text(encoding="utf-8").splitlines()]
+            summary_record = json.loads(summary_json.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(profile_records), 2)
+        self.assertEqual(profile_records[0]["sample_index"], 0)
+        self.assertEqual(profile_records[0]["sample"]["ram"]["used_mb"], 2000)
+        self.assertEqual(summary["samples"], 2)
+        self.assertEqual(summary["phase_timings"]["server_startup"]["duration_s"], 35.0)
+        self.assertFalse(summary["phase_timings"]["artifact_check_or_download"]["available"])
+        self.assertIn("startup_or_download", summary["bottleneck_labels"])
+        self.assertEqual(
+            summary["profile_files"]["jetson_clocks"],
+            "outputs/benchmarks/unit.profile/jetson-clocks.txt",
+        )
+        self.assertEqual(summary_record, summary)
+
     def test_next_phase_spec_orders_infra_before_model_expansion_and_lists_tencent_youtu_vl(self):
         spec = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
 

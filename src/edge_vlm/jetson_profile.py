@@ -24,6 +24,15 @@ ENGINE_RE = re.compile(
 )
 TEMP_RE = re.compile(r"\b(?P<name>[A-Za-z0-9_]+)@(?P<temp>[0-9]+(?:\.[0-9]+)?)C\b")
 POWER_RE = re.compile(r"\b(?P<rail>VDD_[A-Z0-9_]+)\s+(?P<instant>\d+)mW/(?P<average>\d+)mW\b")
+REQUIRED_PHASES = (
+    "artifact_check_or_download",
+    "server_startup",
+    "warmup",
+    "formal_text",
+    "formal_image",
+    "fake_stream",
+    "shutdown",
+)
 
 
 def _parse_cpu_cores(raw_cores: str) -> list[dict[str, int | str | None]]:
@@ -125,8 +134,69 @@ def _round_or_none(value: float | None) -> float | None:
     return round(value, 3)
 
 
-def summarize_tegrastats_samples(samples: Iterable[dict[str, Any]]) -> dict[str, Any]:
+def _normalize_phase_timings(phase_timings: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
+    normalized = {
+        phase: {
+            "available": False,
+            "duration_s": None,
+            "reason": "not_recorded",
+        }
+        for phase in REQUIRED_PHASES
+    }
+    if not isinstance(phase_timings, dict):
+        return normalized
+    for phase, raw_value in phase_timings.items():
+        if phase not in normalized or not isinstance(raw_value, dict):
+            continue
+        available = raw_value.get("available")
+        duration = raw_value.get("duration_s")
+        normalized[phase] = {
+            "available": bool(available) if available is not None else isinstance(duration, (int, float)),
+            "duration_s": float(duration) if isinstance(duration, (int, float)) else None,
+            "reason": str(raw_value.get("reason") or "") or None,
+        }
+    return normalized
+
+
+def _derive_bottleneck_labels(
+    *,
+    avg_gr3d: float | None,
+    avg_emc: float | None,
+    max_temp: float | None,
+    avg_cpu: float | None,
+    phase_timings: dict[str, dict[str, Any]],
+) -> list[str]:
+    labels: list[str] = []
+    if avg_gr3d is not None and avg_gr3d >= 85.0:
+        labels.append("gpu_compute")
+    if avg_emc is not None and avg_emc >= 80.0:
+        labels.append("emc_memory_bandwidth")
+    if max_temp is not None and max_temp >= 80.0:
+        labels.append("power_or_thermal")
+    if avg_cpu is not None and avg_cpu >= 80.0 and (avg_gr3d is None or avg_gr3d < 50.0):
+        labels.append("cpu_prepost")
+    startup = phase_timings.get("server_startup", {})
+    artifact = phase_timings.get("artifact_check_or_download", {})
+    startup_duration = startup.get("duration_s")
+    artifact_duration = artifact.get("duration_s")
+    if (
+        isinstance(startup_duration, (int, float)) and startup_duration >= 30.0
+    ) or (
+        isinstance(artifact_duration, (int, float)) and artifact_duration >= 30.0
+    ):
+        labels.append("startup_or_download")
+    if not labels:
+        labels.append("not_identified")
+    return labels
+
+
+def summarize_tegrastats_samples(
+    samples: Iterable[dict[str, Any]],
+    *,
+    phase_timings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     parsed_samples = list(samples)
+    normalized_phases = _normalize_phase_timings(phase_timings)
     temps: list[float] = []
     vdd_in_w: list[float] = []
     gr3d_utils: list[float] = []
@@ -173,16 +243,15 @@ def summarize_tegrastats_samples(samples: Iterable[dict[str, Any]]) -> dict[str,
 
     avg_gr3d = _mean_or_none(gr3d_utils)
     avg_emc = _mean_or_none(emc_utils)
+    avg_cpu = _mean_or_none(cpu_utils)
     max_temp = max(temps) if temps else None
-    bottlenecks: list[str] = []
-    if avg_gr3d is not None and avg_gr3d >= 85.0:
-        bottlenecks.append("gpu_compute")
-    if avg_emc is not None and avg_emc >= 80.0:
-        bottlenecks.append("emc_memory_bandwidth")
-    if max_temp is not None and max_temp >= 80.0:
-        bottlenecks.append("power_or_thermal")
-    if not bottlenecks:
-        bottlenecks.append("not_identified")
+    bottlenecks = _derive_bottleneck_labels(
+        avg_gr3d=avg_gr3d,
+        avg_emc=avg_emc,
+        max_temp=max_temp,
+        avg_cpu=avg_cpu,
+        phase_timings=normalized_phases,
+    )
 
     return {
         "available": True,
@@ -195,7 +264,8 @@ def summarize_tegrastats_samples(samples: Iterable[dict[str, Any]]) -> dict[str,
         "max_emc_util_pct": max(emc_utils) if emc_utils else None,
         "min_lfb_free_blocks": min(lfb_blocks) if lfb_blocks else None,
         "max_ram_used_mb": max(ram_used) if ram_used else None,
-        "avg_cpu_util_pct": _round_or_none(_mean_or_none(cpu_utils)),
+        "avg_cpu_util_pct": _round_or_none(avg_cpu),
+        "phase_timings": normalized_phases,
         "bottleneck_labels": bottlenecks,
     }
 
@@ -208,6 +278,34 @@ def write_profile_summary(log_path: str | Path, output_path: str | Path) -> dict
     summary = summarize_tegrastats_log(log_path)
     summary["source"] = str(log_path)
     output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return summary
+
+
+def write_profile_artifacts(
+    *,
+    tegrastats_log: str | Path,
+    profile_jsonl_path: str | Path,
+    summary_path: str | Path,
+    phase_timings: dict[str, Any] | None = None,
+    profile_files: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    samples = list(iter_tegrastats_samples(tegrastats_log))
+    profile_jsonl = Path(profile_jsonl_path)
+    profile_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    with profile_jsonl.open("w", encoding="utf-8") as handle:
+        for index, sample in enumerate(samples):
+            handle.write(
+                json.dumps({"sample_index": index, "sample": sample}, ensure_ascii=False)
+                + "\n"
+            )
+
+    summary = summarize_tegrastats_samples(samples, phase_timings=phase_timings)
+    summary["source"] = str(tegrastats_log)
+    summary["profile_jsonl"] = str(profile_jsonl)
+    summary["profile_files"] = dict(profile_files or {})
+    output = Path(summary_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return summary
