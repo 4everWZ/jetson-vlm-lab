@@ -497,11 +497,13 @@ Observed one-trial full-suite evidence is recorded in
 `tencent-text-smoke64-20260531T120054Z`: Hy-MT2 Q4 passed at 33.541 tok/s and
 1.688 s average text latency, Hy-MT2 Q6 passed at 26.287 tok/s and 2.145 s
 average text latency, and Q8 full-suite row is invalidated by the pre-fix
-launcher cleanup/stale-port issue. The fixed sweep harness now starts launcher
+launcher cleanup/stale-port issue. The fixed-harness cached Q8 rerun
+`tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s and
+1.841 s average text latency with `terminate_group` shutdown. The fixed sweep harness now starts launcher
 processes in their own process group, terminates the group, rejects a variant
 with `server_port_still_open_before_start` when `/v1/models` is already served
 on the target port, and records whether the server port closes after shutdown.
-Rerun Q8 cached before reporting it.
+Keep the invalidated full-suite Q8 row separate from this cached rerun.
 
 ## llama.cpp Runtime Image Builds
 

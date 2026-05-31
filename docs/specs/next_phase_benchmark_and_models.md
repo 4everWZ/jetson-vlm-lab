@@ -95,7 +95,7 @@ they can be tested as text/router candidates without polluting VLM rankings:
 | Hy-MT2 1.8B 2Bit | `configs/models/tencent_hy_mt2_1p8b_2bit.yaml` | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf`; default text-suite runtime canary failed on pinned llama.cpp with tensor offset `203248672` |
 | Hy-MT2 1.8B Q4_K_M | `configs/models/tencent_hy_mt2_1p8b_q4.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q4_K_M.gguf`; cached Jetson smoke `tencent-hy-mt2-q4-smoke64-cached-20260531b` passed text guard at 19.759 tok/s, and full-suite run `tencent-text-smoke64-20260531T120054Z` passed at 33.541 tok/s |
 | Hy-MT2 1.8B Q6_K | `configs/models/tencent_hy_mt2_1p8b_q6.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q6_K.gguf`; full-suite run `tencent-text-smoke64-20260531T120054Z` passed at 26.287 tok/s |
-| Hy-MT2 1.8B Q8_0 | `configs/models/tencent_hy_mt2_1p8b_q8.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q8_0.gguf`; Q8 full-suite row is invalidated by the pre-fix launcher cleanup/stale-port issue and needs a cached rerun |
+| Hy-MT2 1.8B Q8_0 | `configs/models/tencent_hy_mt2_1p8b_q8.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q8_0.gguf`; Q8 full-suite row is invalidated by the pre-fix launcher cleanup/stale-port issue, but cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s with `terminate_group` shutdown |
 
 These variants use `scripts/jetson/run_hf_gguf_llama_docker.sh`,
 `configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
@@ -108,7 +108,8 @@ The sweep planner also skips fake-stream for them because the configs are
 text-only. Treat their results as a separate text/router study; the current Q4
 smoke and `tencent-text-smoke64-20260531T120054Z` Q4/Q6 rows are useful
 evidence for the lane, not a VLM ranking row. Q8 full-suite row is invalidated
-until a cached rerun proves it with the fixed harness.
+but the cached rerun is valid one-trial text/router evidence with the fixed
+harness.
 
 ## Phase 3: llama.cpp Acceleration Sweep
 
