@@ -26,4 +26,4 @@ capabilities:
   audio: false
 
 notes:
-  status: Load-path evidence only. Uses ggml-org's GGUF quantization of Tencent HunyuanOCR 1B with Q8_0 model and mmproj files downloaded to MODEL_DIR before local -m/--mmproj launch. This is a Tencent-base GGUF route, not an official Tencent-owned GGUF artifact; the cached Jetson smoke loaded but failed the guard with repetitive punctuation output, so do not rank or repeat without quality triage.
+  status: Load-path evidence only. Uses ggml-org's GGUF quantization of Tencent HunyuanOCR 1B with Q8_0 model and mmproj files downloaded to MODEL_DIR before local -m/--mmproj launch. This is a Tencent-base GGUF route, not an official Tencent-owned GGUF artifact; the Jetson smoke loaded after launcher-resume recovery but failed the guard with repetitive punctuation output, so do not rank or repeat without quality triage.
