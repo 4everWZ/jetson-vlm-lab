@@ -327,6 +327,22 @@ delta columns against the selected baseline variant. Copy only the defensible
 summary rows into tracked benchmark docs; keep raw generated reports under
 ignored `outputs/`.
 
+To refresh the current MiniCPM/Gemma default reference in one step, use:
+
+```bash
+scripts/jetson/run_remote_current_defaults_suite.sh
+```
+
+The wrapper runs the selected defaults for both target models with
+`JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`,
+`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--trial-count 10`,
+`--fake-stream-max-frames 3`, and `--min-lfb-blocks 150`, then runs the
+mechanical comparison report against both baseline variants. Override
+`JETSON_CURRENT_DEFAULTS_RUN_PREFIX` to make the output path stable, or override
+`JETSON_CURRENT_DEFAULTS_TRIAL_COUNT`, `JETSON_CURRENT_DEFAULTS_MAX_TOKENS`,
+`JETSON_CURRENT_DEFAULTS_MIN_LFB_BLOCKS`, and
+`JETSON_CURRENT_DEFAULTS_WAIT_TIMEOUT_S` for scoped validation runs.
+
 ## Reporting Rules
 
 - Report dry-run logs as payload/logging validation only.

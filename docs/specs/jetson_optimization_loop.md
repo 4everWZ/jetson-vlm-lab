@@ -151,6 +151,19 @@ formal throughput/latency, fake-stream latency, max temperature, average
 the source table for tracked benchmark docs; do not hand-copy raw metrics from
 multiple JSON files when the comparison command can derive them.
 
+For the recurring current-defaults baseline refresh, prefer the wrapper:
+
+```bash
+JETSON_CURRENT_DEFAULTS_RUN_PREFIX=current-defaults-clocks10-YYYYMMDDa \
+scripts/jetson/run_remote_current_defaults_suite.sh
+```
+
+It fixes the two current default variants, enables remote max clocks and
+per-variant cache dropping, runs 10 formal trials plus the three-frame
+fake-stream sidecar, and generates `comparison.md` from the sweep manifest.
+Use this before container, llama.cpp, or model-family A/B runs so the reference
+baseline comes from the same automation path as candidates.
+
 Use `--min-lfb-blocks <N>` for promotion or repeatability sweeps. When set, the
 sweep skips a variant before server startup if parsed `lfb` free blocks are
 below the threshold and records `preflight_passed=false` plus a

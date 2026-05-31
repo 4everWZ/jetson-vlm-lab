@@ -2436,6 +2436,90 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("cannot be combined with --pre-variant-command", result.stderr)
 
+    def test_remote_current_defaults_suite_runs_locked_sweep_then_compare(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "suite.log"
+            fake_sweep = tmp_path / "run_remote_optimization_sweep.sh"
+            fake_remote = tmp_path / "remote_exec.sh"
+            fake_sweep.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'SWEEP\\n' >> \"${FAKE_SUITE_LOG:?}\"",
+                        "printf 'ENV_PREPARE=%s\\n' \"${JETSON_REMOTE_PREPARE_MAX_CLOCKS:-}\" >> \"${FAKE_SUITE_LOG}\"",
+                        "printf 'ENV_DROP=%s\\n' \"${JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT:-}\" >> \"${FAKE_SUITE_LOG}\"",
+                        "printf 'ENV_SYNC=%s\\n' \"${JETSON_REMOTE_SYNC:-}\" >> \"${FAKE_SUITE_LOG}\"",
+                        "for arg in \"$@\"; do printf 'SWEEP_ARG=%s\\n' \"$arg\" >> \"${FAKE_SUITE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'REMOTE\\n' >> \"${FAKE_SUITE_LOG:?}\"",
+                        "for arg in \"$@\"; do printf 'REMOTE_ARG=%s\\n' \"$arg\" >> \"${FAKE_SUITE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_sweep, 0o755)
+            os.chmod(fake_remote, 0o755)
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_remote_current_defaults_suite.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_CURRENT_DEFAULTS_RUN_PREFIX": "defaults-unit",
+                    "JETSON_CURRENT_DEFAULTS_TRIAL_COUNT": "7",
+                    "JETSON_CURRENT_DEFAULTS_MAX_TOKENS": "33",
+                    "JETSON_CURRENT_DEFAULTS_FAKE_STREAM_MAX_FRAMES": "2",
+                    "JETSON_CURRENT_DEFAULTS_MIN_LFB_BLOCKS": "199",
+                    "JETSON_CURRENT_DEFAULTS_WAIT_TIMEOUT_S": "123",
+                    "JETSON_REMOTE_SYNC": "0",
+                    "JETSON_REMOTE_SWEEP": str(fake_sweep),
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                    "FAKE_SUITE_LOG": str(log_file),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertIn("SWEEP\n", log_text)
+        self.assertIn("ENV_PREPARE=1\n", log_text)
+        self.assertIn("ENV_DROP=1\n", log_text)
+        self.assertIn("ENV_SYNC=0\n", log_text)
+        self.assertIn("SWEEP_ARG=--run-prefix\nSWEEP_ARG=defaults-unit\n", log_text)
+        self.assertIn("SWEEP_ARG=--variant\nSWEEP_ARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
+        self.assertIn("SWEEP_ARG=--variant\nSWEEP_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
+        self.assertIn("SWEEP_ARG=--trial-count\nSWEEP_ARG=7\n", log_text)
+        self.assertIn("SWEEP_ARG=--max-tokens\nSWEEP_ARG=33\n", log_text)
+        self.assertIn("SWEEP_ARG=--fake-stream-max-frames\nSWEEP_ARG=2\n", log_text)
+        self.assertIn("SWEEP_ARG=--min-lfb-blocks\nSWEEP_ARG=199\n", log_text)
+        self.assertIn("SWEEP_ARG=--wait-timeout-s\nSWEEP_ARG=123\n", log_text)
+        self.assertIn("REMOTE\n", log_text)
+        self.assertIn("REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.optimization\nREMOTE_ARG=compare\n", log_text)
+        self.assertIn(
+            "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/defaults-unit.manifest.json\n",
+            log_text,
+        )
+        self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
+        self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
+        self.assertIn(
+            "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/comparison.md\n",
+            log_text,
+        )
+
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
 
