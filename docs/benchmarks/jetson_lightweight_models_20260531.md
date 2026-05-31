@@ -231,9 +231,10 @@ they split into two lanes:
 |---|---|---|
 | Hy-MT1.5 1.8B 1.25bit GGUF | `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF` / `Hy-MT1.5-1.8B-1.25bit.gguf` | Added as a default text/router runtime canary; first Jetson smoke failed before server ready with `invalid ggml type 42` on the pinned llama.cpp image. |
 | Hy-MT1.5 1.8B 2bit GGUF | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
+| Hy-MT1.5 1.8B Safetensors 1.25bit/2bit | `tencent/Hy-MT1.5-1.8B-1.25bit`, `tencent/Hy-MT1.5-1.8B-2bit` | Deferred; latest non-GGUF quant rows, no selected Transformers/conversion path in the current GGUF bench lane. |
 | Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
 | Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
-| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; Q4/Q6 passed the full text-suite smoke, while the Q8 full-suite row is invalidated by the pre-fix launcher cleanup issue. Q8 cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` then passed at 30.756 tok/s with `terminate_group` shutdown. Not VLM candidates. |
+| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; Q4/Q6 passed the full text-suite smoke, Q6 cached run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s, and Q8 cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s with `terminate_group` shutdown after the invalidated Q8 full-suite row. Not VLM candidates. |
 | Hy-MT2 1.8B FP8 | `tencent/Hy-MT2-1.8B-FP8` | Deferred; Safetensors/compressed-tensors path, no low-friction GGUF launcher row. |
 | HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Jetson smoke loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs; not an official Tencent-owned GGUF artifact and not ranked. |
 | Penguin-VL-2B | `tencent/Penguin-VL-2B` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
@@ -292,17 +293,20 @@ time in startup; do not use those startup values as cached-startup evidence.
 These rows are runtime and text/router evidence only. The low-bit failures feed
 the runtime/build compatibility backlog, not VLM model ranking.
 
-Q8 cached rerun evidence:
+Hy-MT2 cached rerun evidence:
 
 | Run prefix | Preflight `lfb` | Startup s | Guard | Success | Text tok/s | Text latency s | Max temp C | Avg power W | Avg GR3D % | Min lfb blocks | Shutdown |
 |---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `tencent-hy-mt2-q6-smoke64-cached-20260531a` | 196x4MB | 4.021 | yes | 4/4 | 26.298 | 2.144 | 52.843 | 21.662 | 97.000 | 92 | `terminate_group` |
 | `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` | 177x4MB | 6.016 | yes | 4/4 | 30.756 | 1.841 | 52.812 | 22.247 | 96.857 | 52 | `terminate_group`, port closed |
 
-The cached rerun used the fixed sweep harness at commit `eed03f8`, normalized
-the completed Q8 artifact to `Hy-MT2-1.8B-Q8_0.gguf`, dropped caches before the
-variant, and recorded `server_port_closed_after_shutdown=true`. The code prompt
-output still needs human review before any route use, so treat this as one
-valid text/router smoke rather than a promotion.
+The Q6 cached run used the completed `Hy-MT2-1.8B-Q6_K.gguf` artifact and
+recorded `server_shutdown_method=terminate_group`. The Q8 cached rerun used the
+fixed sweep harness at commit `eed03f8`, normalized the completed Q8 artifact to
+`Hy-MT2-1.8B-Q8_0.gguf`, dropped caches before the variant, and recorded
+`server_port_closed_after_shutdown=true`. The code prompt outputs still need
+human review before route use, so treat these as valid text/router smokes rather
+than promotions.
 
 ## Next Model Checks
 
@@ -311,9 +315,9 @@ valid text/router smoke rather than a promotion.
    MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
 2. Run the dedicated Tencent Hy-MT1.5/Hy-MT2 text suite only as a separate
    text/router study if it becomes useful for routing or translation
-   pre/post-processing; Q4/Q6 now have one valid full-suite smoke, Q8 has one
-   valid cached rerun, repeated text runs are still pending, and low-bit
-   failures should feed the runtime/build lane, not VLM ranking.
+   pre/post-processing; Q4/Q6 now have one valid full-suite smoke, Q6/Q8 have
+   cached single-run evidence, repeated text runs are still pending, and
+   low-bit failures should feed the runtime/build lane, not VLM ranking.
 3. Add a separate Youtu Q4 GPU-mmproj/offload canary if memory allows; keep it
    distinct from the CPU-mmproj smoke and the official Tencent Q8 failure.
 4. Revisit HunyuanOCR only through a bounded quality triage of artifact,

@@ -2036,6 +2036,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
         )
         self.assertIn("tencent/Youtu-VL-4B-Instruct-GGUF", spec)
         self.assertIn("ggml-org/HunyuanOCR-GGUF", spec)
+        self.assertIn("Hy-MT1.5 1.8B Safetensors", spec)
         self.assertIn("Hy-MT1.5", spec)
         self.assertIn("SmolVLM2", spec)
         self.assertIn("Qwen3-VL-2B", spec)
@@ -2585,6 +2586,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
             self.assertIn("tencent-text-smoke64-20260531T120054Z", text)
             self.assertIn("33.541", text)
             self.assertIn("26.287", text)
+            self.assertIn("tencent-hy-mt2-q6-smoke64-cached-20260531a", text)
+            self.assertIn("26.298", text)
             self.assertIn("Q8 full-suite row is invalidated", text)
             self.assertIn("tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z", text)
             self.assertIn("30.756", text)
@@ -3559,11 +3562,14 @@ class EdgeVlmContractsTest(unittest.TestCase):
             "gemma-q4-baseline-gpu12-b512-u512-kvq8",
             "smolvlm2-256m-q8-smoke",
             "qwen3-vl-2b-thinking-q4-smoke",
-            "youtu-vl-4b-q8-smoke",
             "youtu-vl-4b-q4-thirdparty-smoke",
         ):
             self.assertIn(f"SWEEP_ARG=--variant\nSWEEP_ARG={variant_id}\n", log_text)
+        self.assertNotIn("SWEEP_ARG=--variant\nSWEEP_ARG=youtu-vl-4b-q8-smoke\n", log_text)
         self.assertNotIn("SWEEP_ARG=--variant\nSWEEP_ARG=hunyuanocr-q8-smoke\n", log_text)
+        protocol_text = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        self.assertIn("excludes HunyuanOCR and official Youtu-VL Q8", protocol_text)
+        self.assertIn("JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=youtu-vl-4b-q8-smoke", protocol_text)
         self.assertIn("SWEEP_ARG=--trial-count\nSWEEP_ARG=6\n", log_text)
         self.assertIn("SWEEP_ARG=--max-tokens\nSWEEP_ARG=44\n", log_text)
         self.assertIn("SWEEP_ARG=--fake-stream-max-frames\nSWEEP_ARG=4\n", log_text)
