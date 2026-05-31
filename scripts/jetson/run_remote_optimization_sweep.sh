@@ -80,8 +80,11 @@ cleanup() {
 }
 trap cleanup EXIT
 (
+  trap '\'''\'' PIPE
   while true; do
-    printf "%s\n" "${sudo_password}" > "${pw_fifo}" || exit 0
+    if ! printf "%s\n" "${sudo_password}" > "${pw_fifo}"; then
+      sleep 0.1
+    fi
   done
 ) &
 pw_feeder_pid="$!"
