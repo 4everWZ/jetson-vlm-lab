@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 BUILDER_IMAGE="${BUILDER_IMAGE:-dustynv/cuda:12.8-samples-r36.4.0-cu128-24.04}"
 LLAMA_CPP_REF="${LLAMA_CPP_REF:-$(git ls-remote https://github.com/ggml-org/llama.cpp.git HEAD | awk '{print $1}')}"
 BUILD_JOBS="${BUILD_JOBS:-2}"
+DOCKER_BIN="${DOCKER_BIN:-}"
 
 OUT_DIR="$PWD/artifacts/llama.cpp-install"
 
@@ -14,10 +15,19 @@ echo "LLAMA_CPP_REF=$LLAMA_CPP_REF"
 echo "BUILD_JOBS=$BUILD_JOBS"
 echo "OUT_DIR=$OUT_DIR"
 
+if [[ -n "${DOCKER_BIN}" ]]; then
+  read -r -a DOCKER_CMD <<< "${DOCKER_BIN}"
+elif docker ps >/dev/null 2>&1; then
+  DOCKER_CMD=(docker)
+else
+  DOCKER_CMD=(sudo docker)
+fi
+echo "DOCKER_CMD=${DOCKER_CMD[*]}"
+
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-sudo docker run --rm \
+"${DOCKER_CMD[@]}" run --rm \
   --runtime nvidia \
   --network host \
   --ipc host \

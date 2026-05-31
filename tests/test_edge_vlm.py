@@ -66,6 +66,35 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn('LLAMA_UBATCH_SIZE="${LLAMA_UBATCH_SIZE:-32}"', minicpm_cuda_script)
         self.assertIn('scripts/wsl/run_minicpmv46_llama.sh', minicpm_cuda_script)
 
+    def test_llama_cpp_artifact_builder_prefers_direct_docker_when_available(self):
+        artifact_builder = Path("scripts/build_llama_cpp_artifacts.sh").read_text(encoding="utf-8")
+
+        self.assertIn('DOCKER_BIN="${DOCKER_BIN:-}"', artifact_builder)
+        self.assertIn("docker ps >/dev/null 2>&1", artifact_builder)
+        self.assertIn("DOCKER_CMD=(docker)", artifact_builder)
+        self.assertIn("DOCKER_CMD=(sudo docker)", artifact_builder)
+        self.assertIn('"${DOCKER_CMD[@]}" run --rm', artifact_builder)
+
+    def test_llama_cpp_image_builder_records_ref_in_tag_and_labels(self):
+        image_builder = Path("scripts/build_llama_cpp_image.sh").read_text(encoding="utf-8")
+
+        self.assertIn('LLAMA_CPP_REF="${LLAMA_CPP_REF:-', image_builder)
+        self.assertIn('IMAGE_TAG="${IMAGE_TAG:-ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87-${LLAMA_CPP_REF:0:7}}"', image_builder)
+        self.assertIn("--build-arg", image_builder)
+        self.assertIn("LLAMA_CPP_REF=${LLAMA_CPP_REF}", image_builder)
+        self.assertIn("-f docker/llama-cpp/Dockerfile", image_builder)
+
+    def test_llama_cpp_docker_context_excludes_local_state_and_keeps_artifacts(self):
+        dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
+
+        self.assertIn("**", dockerignore)
+        self.assertIn("!.dockerignore", dockerignore)
+        self.assertIn("!docker/llama-cpp/Dockerfile", dockerignore)
+        self.assertIn("!artifacts/llama.cpp-install/**", dockerignore)
+        self.assertNotIn("!.env", dockerignore)
+        self.assertNotIn("!models/", dockerignore)
+        self.assertNotIn("!outputs/", dockerignore)
+
     def test_minicpm_prepare_downloads_official_prebuilt_artifacts(self):
         prepare_script = Path("scripts/wsl/prepare_minicpmv46_q4.sh").read_text(encoding="utf-8")
         config_text = Path("configs/models/minicpmv46_q4.yaml").read_text(encoding="utf-8")

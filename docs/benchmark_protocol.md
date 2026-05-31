@@ -347,6 +347,32 @@ mechanical comparison report against both baseline variants. Override
 `JETSON_CURRENT_DEFAULTS_MIN_LFB_BLOCKS`, and
 `JETSON_CURRENT_DEFAULTS_WAIT_TIMEOUT_S` for scoped validation runs.
 
+## llama.cpp Runtime Image Builds
+
+When testing a newer llama.cpp runtime, keep the build path artifact based:
+
+```bash
+LLAMA_CPP_REF=d749821db3bd587932d1ed57d43626cd552c9909 \
+scripts/build_llama_cpp_image.sh
+```
+
+The artifact builder compiles llama.cpp inside the CUDA builder container and
+writes only `artifacts/llama.cpp-install/`. The image builder then copies that
+install tree into the runtime image and tags the image as
+`ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87-<ref7>` by default.
+It passes only reproducibility labels (`BUILD_DATE`, `VCS_REF`, and
+`LLAMA_CPP_REF`) to Docker. The repository `.dockerignore` narrows the build
+context to the Dockerfile and `artifacts/llama.cpp-install/**`; local `.env`,
+SSH settings, model weights, caches, generated outputs, and benchmark artifacts
+are not sent to the Docker daemon and are not copied into the image.
+
+Use the resulting tag through the remote sweep wrapper:
+
+```bash
+JETSON_REMOTE_LLAMA_CPP_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87-d749821 \
+scripts/jetson/run_remote_current_defaults_suite.sh
+```
+
 ## Reporting Rules
 
 - Report dry-run logs as payload/logging validation only.

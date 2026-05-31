@@ -1,0 +1,8 @@
+**
+!.dockerignore
+!docker/
+!docker/llama-cpp/
+!docker/llama-cpp/Dockerfile
+!artifacts/
+!artifacts/llama.cpp-install/
+!artifacts/llama.cpp-install/**
