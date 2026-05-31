@@ -88,6 +88,8 @@ Outputs stay under ignored `outputs/optimization_sweeps/<run-prefix>/`:
 - `benchmarks/*.md`
 - `benchmarks/*.manifest.json`
 - `fake_stream/*.jsonl`
+- `profiles/*.profile.jsonl`
+- `profiles/*.summary.json`
 - `preflight/*.preflight.json`
 - `server_logs/*.server.log`
 - `optimization_report.md`
@@ -139,6 +141,19 @@ does not become ready records `server_wait_seconds` and keeps
 `server_startup_seconds=null`, so load-path experiments can separate startup
 behavior from steady-state benchmark throughput.
 
+For variants that complete the formal benchmark, the sweep also writes derived
+profile artifacts under `profiles/`:
+
+- `<run-id>.profile.jsonl`: one parsed `tegrastats` sample per line.
+- `<run-id>.summary.json`: aggregate RAM/`lfb`, GR3D, EMC, CPU, temperature,
+  power, conservative bottleneck labels, available phase timings, and profile
+  file pointers.
+
+The first profile-summary phase timings are `server_startup`, `formal_text`,
+`formal_image`, and `fake_stream`. Phases that are not instrumented yet, such
+as launcher artifact download/check, warmup, and shutdown, remain present in the
+summary as unavailable instead of being guessed.
+
 After a promotion or comparison sweep, generate the mechanical comparison table
 before writing tracked benchmark notes:
 
@@ -153,10 +168,11 @@ The comparison report joins the sweep manifest with each benchmark JSONL,
 fake-stream JSONL, benchmark manifest, and `tegrastats` log. It reports
 runtime image/id/ref, preflight `lfb`, trial count, startup seconds, sanity
 guard, success counts, formal throughput/latency, fake-stream latency, max
-temperature, average `VDD_IN` power, and deltas versus the per-model baseline
-variant. Treat this as the source table for tracked benchmark docs; do not
-hand-copy raw metrics from multiple JSON files when the comparison command can
-derive them.
+temperature, average `VDD_IN` power, average GR3D utilization, average EMC
+utilization, minimum profiled `lfb`, conservative bottleneck labels, and deltas
+versus the per-model baseline variant. Treat this as the source table for
+tracked benchmark docs; do not hand-copy raw metrics from multiple JSON files
+when the comparison command can derive them.
 
 For the recurring current-defaults baseline refresh, prefer the wrapper:
 

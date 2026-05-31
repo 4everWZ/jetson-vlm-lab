@@ -208,13 +208,14 @@ Purpose: reduce end-to-end latency without pretending it is model decode speed.
 
 Instrument the client/input path separately:
 
-- Image file read.
-- MIME detection.
-- Base64 encoding and data URL construction.
-- JSON serialization.
-- HTTP request/response elapsed time.
+- Image file read. Implemented in `input_timing.image_read_s`.
+- MIME detection. Implemented in `input_timing.mime_detect_s`.
+- Base64 encoding and data URL construction. Implemented in
+  `input_timing.base64_encode_s` and `input_timing.data_url_build_s`.
+- JSON serialization. Implemented in `input_timing.json_serialize_s`.
+- HTTP request/response elapsed time. Implemented in `input_timing.http_request_s`.
 - Server-reported token usage and request latency when available.
-- Fake-stream scheduling delay and backpressure.
+- Fake-stream scheduling delay and backpressure. Not yet implemented.
 
 Routing policy candidates:
 

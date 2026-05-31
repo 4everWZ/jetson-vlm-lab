@@ -40,8 +40,24 @@ The benchmark writes JSONL records with:
 - `success`
 - `error`
 - `output_excerpt`
+- `quality_terms_any`
+- `input_timing`
 
 Token counts are recorded only when the backend response exposes usage fields. If token counts are missing, `tokens` and `tokens_per_sec` remain null.
+
+`input_timing` records client-side input preparation and request overhead when
+available. Current keys include:
+
+- `image_bytes`
+- `mime_detect_s`
+- `image_read_s`
+- `base64_encode_s`
+- `data_url_build_s`
+- `payload_build_s`
+- `json_serialize_s`
+- `request_body_bytes`
+- `http_request_s`
+- `response_parse_s` for non-streaming responses when parsing completes
 
 ## Manifest Sidecar
 
@@ -327,9 +343,31 @@ The comparison report reads each sweep manifest, matching benchmark JSONL,
 fake-stream sidecar, benchmark metadata, and `tegrastats` log. It adds
 runtime image/id/llama.cpp ref, preflight `lfb`, trial count, startup time,
 guard status, success counts, throughput, latency, max temperature, average
-`VDD_IN` power, and per-model delta columns against the selected baseline
-variant. Copy only the defensible summary rows into tracked benchmark docs;
-keep raw generated reports under ignored `outputs/`.
+`VDD_IN` power, average GR3D utilization, average EMC utilization, minimum
+profiled `lfb`, conservative bottleneck labels, and per-model delta columns
+against the selected baseline variant. Copy only the defensible summary rows
+into tracked benchmark docs; keep raw generated reports under ignored
+`outputs/`.
+
+Successful sweep variants also write derived profile artifacts under
+`outputs/optimization_sweeps/<run-prefix>/profiles/`:
+
+- `<run-id>.profile.jsonl` contains parsed `tegrastats` samples.
+- `<run-id>.summary.json` contains aggregate memory, power, thermal,
+  GR3D/EMC/CPU, bottleneck labels, profile file pointers, and available phase
+  timings.
+
+The currently instrumented phase timings are `server_startup`, `formal_text`,
+`formal_image`, and `fake_stream`. Artifact download/check, warmup, and
+shutdown remain marked unavailable until launcher/server lifecycle events are
+instrumented.
+
+Benchmark and fake-stream JSONL records include `input_timing` when the client
+path can measure it. Current fields include image byte count, MIME detection
+time, image read time, base64 encoding time, data URL construction time,
+payload build time, JSON serialization time, request body size, HTTP elapsed
+time, and response parse time when applicable. Treat these as client-side
+pipeline timings; they are separate from server decode throughput.
 
 To refresh the current MiniCPM/Gemma default reference in one step, use:
 

@@ -11,10 +11,10 @@ Not implemented in the current version.
 
 ## Interfaces / Responsibilities
 
-- `edge_vlm.client.OpenAICompatClient`: Sends `/v1/chat/completions` requests and supports dry-run payload validation.
-- `edge_vlm.image_payload`: Converts local images into data URLs and builds content parts.
-- `edge_vlm.benchmark.run_benchmark`: Reads JSONL cases, writes JSONL results, can repeat full-case trials, and can write Markdown summary plus JSON manifest sidecars for the current run.
-- `edge_vlm.fake_stream.run_fake_stream`: Iterates a sorted image folder and writes one response record per frame.
+- `edge_vlm.client.OpenAICompatClient`: Sends `/v1/chat/completions` requests, supports dry-run payload validation, and reports payload/serialization/HTTP timing.
+- `edge_vlm.image_payload`: Converts local images into data URLs, builds content parts, and reports MIME/read/base64/data-URL timing.
+- `edge_vlm.benchmark.run_benchmark`: Reads JSONL cases, writes JSONL results with `input_timing`, can repeat full-case trials, and can write Markdown summary plus JSON manifest sidecars for the current run.
+- `edge_vlm.fake_stream.run_fake_stream`: Iterates a sorted image folder and writes one response record per frame, including per-frame `input_timing` when available.
 - `edge_vlm.config.load_model_config`: Loads YAML/JSON model configs with environment overrides for host and port.
 
 The benchmark treats `input_type=fake_stream` as a marker case and records an instruction to run `edge_vlm.fake_stream`. It does not expand a folder inside the normal benchmark loop.
