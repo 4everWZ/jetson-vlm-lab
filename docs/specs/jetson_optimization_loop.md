@@ -101,7 +101,9 @@ failures from parameter-incompatible failures.
 For promotion or final comparison sweeps, lock Jetson clocks before the run:
 
 ```bash
-JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 scripts/jetson/run_remote_optimization_sweep.sh \
+JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
+JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
+scripts/jetson/run_remote_optimization_sweep.sh \
   --run-prefix minicpm-promo-001 \
   --variant minicpm-q4-baseline-b128-u32-kvq8 \
   --trial-count 5 \
@@ -138,22 +140,28 @@ below the threshold and records `preflight_passed=false` plus a
 runs still execute and gather evidence.
 
 For promotion comparisons where memory fragmentation can bias later variants,
-run a preparation command before every variant preflight:
+enable the remote wrapper's page-cache preparation:
 
 ```bash
-PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
+JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
+JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
+scripts/jetson/run_remote_optimization_sweep.sh \
   --run-prefix minicpm-promo-001 \
-  --model minicpmv46-q4 \
+  --variant minicpm-q4-baseline-b128-u32-kvq8 \
   --trial-count 5 \
   --max-tokens 64 \
   --temperature 0 \
-  --min-lfb-blocks 150 \
-  --pre-variant-command "sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'"
+  --min-lfb-blocks 150
 ```
 
-The command is recorded in the dry-run plan and sweep manifest. If it returns a
-non-zero exit code, that variant is skipped before preflight or Docker startup
-and the manifest records `pre_variant_command_passed=false` plus
+The wrapper uses the sudo password from stdin to feed a per-run 0600 FIFO, then
+appends a pre-variant command shaped like
+`sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches' < /tmp/...`
+without putting the password in command-line arguments, the dry-run plan, or
+the sweep manifest. The command itself and the FIFO path are recorded in the
+dry-run plan and sweep manifest. If it returns a non-zero exit code, that
+variant is skipped before preflight or Docker startup and the manifest records
+`pre_variant_command_passed=false` plus
 `preflight_reason=pre_variant_command_failed returncode <N>`.
 
 ## Promotion Rule

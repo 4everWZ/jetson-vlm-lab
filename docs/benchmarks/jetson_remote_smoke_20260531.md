@@ -41,6 +41,7 @@ of relying only on an implicit process environment.
 | `remote-smoke-real-20260531a` | `minicpm-q4-baseline-b128-u32-kvq8` | `--pre-variant-command "sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'"` | skipped before preflight; `sudo: a password is required`, `preflight_reason=pre_variant_command_failed returncode 1` |
 | `remote-smoke-real-20260531b` | `minicpm-q4-baseline-b128-u32-kvq8` | `--min-lfb-blocks 150` | skipped before Docker; `lfb_free_blocks 88 < required 150` |
 | `remote-smoke-real-20260531c` | `minicpm-q4-baseline-b128-u32-kvq8` | no `lfb` gate, 1 trial, 64 tokens | completed formal benchmark and fake-stream sidecar |
+| `dropcache-validate-minicpm-20260531c` | `minicpm-q4-baseline-b128-u32-kvq8` | `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`, `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--min-lfb-blocks 150` | completed formal benchmark and three-frame fake-stream sidecar; manifest records `pre_variant_command_passed=true` |
 
 ## Successful Smoke Result
 
@@ -62,7 +63,10 @@ MiniCPM baseline or be used to rank batch/ubatch candidates.
 
 ## Follow-Up
 
-Before the next promotion comparison, clear page cache or otherwise restore
-contiguous free blocks, then run the remote wrapper with `--min-lfb-blocks 150`
-or stricter. The current non-interactive `sudo -n` pre-variant command fails on
-this Jetson because sudo requires a password.
+Before the next promotion comparison, run the remote wrapper with
+`JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`,
+`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, and `--min-lfb-blocks 150` or
+stricter. The earlier direct `sudo -n` pre-variant command failed on this
+Jetson because sudo requires a password; the wrapper now feeds sudo over stdin
+through a per-run FIFO so the manifest records the cache-drop command without
+recording the password.

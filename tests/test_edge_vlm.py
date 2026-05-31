@@ -2140,6 +2140,128 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("JETSON_REMOTE_PREPARE_MAX_CLOCKS requires", result.stderr)
 
+    def test_remote_optimization_sweep_can_drop_caches_before_variants_without_logging_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                        "if [[ \"${1:-}\" == \"bash\" && \"${2:-}\" == \"-lc\" ]]; then",
+                        "  IFS= read -r password_from_stdin || true",
+                        "  printf 'STDIN_BYTES=%s\\n' \"${#password_from_stdin}\" >> \"${FAKE_REMOTE_LOG}\"",
+                        "fi",
+                        "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_remote, 0o755)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--dry-run",
+                    "--variant",
+                    "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                    "JETSON_REMOTE_SYNC": "0",
+                    "JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT": "1",
+                    "JETSON_SSH_PASSWORD": "secret-password",
+                    "FAKE_REMOTE_LOG": str(log_file),
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 1)
+        self.assertIn("STDIN_BYTES=15\n", log_text)
+        self.assertIn("ARG=bash\nARG=-lc\n", log_text)
+        self.assertIn("mkfifo", log_text)
+        self.assertIn("--pre-variant-command", log_text)
+        self.assertIn("sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'", log_text)
+        self.assertIn("ARG=LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87\n", log_text)
+        self.assertIn("ARG=PYTHONPATH=src\n", log_text)
+        self.assertIn("ARG=--dry-run\n", log_text)
+        self.assertNotIn("sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'", log_text)
+        self.assertNotIn("secret-password", log_text)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+
+    def test_remote_optimization_sweep_drop_caches_requires_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_remote = Path(tmp) / "remote_exec.sh"
+            fake_remote.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            os.chmod(fake_remote, 0o755)
+
+            env = {
+                **os.environ,
+                "JETSON_REMOTE_EXEC": str(fake_remote),
+                "JETSON_REMOTE_SYNC": "0",
+                "JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT": "1",
+            }
+            env.pop("JETSON_SSH_PASSWORD", None)
+            env.pop("JETSON_REMOTE_SUDO_PASSWORD", None)
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--dry-run",
+                    "--variant",
+                    "minicpm-q4-baseline-b128-u32-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT requires", result.stderr)
+
+    def test_remote_optimization_sweep_drop_caches_rejects_existing_pre_variant_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_remote = Path(tmp) / "remote_exec.sh"
+            fake_remote.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            os.chmod(fake_remote, 0o755)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--dry-run",
+                    "--variant",
+                    "minicpm-q4-baseline-b128-u32-kvq8",
+                    "--pre-variant-command",
+                    "true",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                    "JETSON_REMOTE_SYNC": "0",
+                    "JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT": "1",
+                    "JETSON_SSH_PASSWORD": "secret-password",
+                },
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("cannot be combined with --pre-variant-command", result.stderr)
+
     def test_fake_stream_dry_run_continues_after_missing_frame(self):
         from edge_vlm.fake_stream import run_fake_stream
 

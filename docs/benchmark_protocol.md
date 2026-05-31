@@ -279,6 +279,7 @@ is updated and the pinned llama.cpp image is applied consistently:
 
 ```bash
 JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
+JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
 scripts/jetson/run_remote_optimization_sweep.sh \
   --run-prefix minicpm-promo-iso-001 \
   --variant minicpm-q4-baseline-b128-u32-kvq8 \
@@ -287,7 +288,6 @@ scripts/jetson/run_remote_optimization_sweep.sh \
   --max-tokens 64 \
   --temperature 0 \
   --min-lfb-blocks 150 \
-  --pre-variant-command "sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'" \
   --wait-timeout-s 180
 ```
 
@@ -301,6 +301,14 @@ ignored `outputs/jetson_inspect/` before launching the sweep. It reads the sudo
 password from `JETSON_REMOTE_SUDO_PASSWORD` or `JETSON_SSH_PASSWORD` in the
 ignored `.env.jetson` file and passes it over stdin; do not put passwords in
 tracked files or command-line arguments.
+Set `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1` for back-to-back promotion
+comparisons where memory fragmentation can bias later variants. The wrapper
+uses the sudo password from stdin to feed a per-run 0600 FIFO, then appends a
+recorded pre-variant command shaped like
+`sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches' < /tmp/...`.
+The manifest records the command and FIFO path, not the password. Do not
+combine this env flag with a manual `--pre-variant-command`; use the lower-level
+local sweep command only when a custom preparation command is required.
 
 ## Reporting Rules
 
