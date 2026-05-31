@@ -383,9 +383,46 @@ throughput is slightly lower and startup remains about one second slower. Keep
 Gemma `--direct-io` as an optional long-lived-server streaming candidate only;
 do not promote it to the default runtime.
 
+## Gemma GPU Offload And Flash Attention/KV Cache Combinations
+
+Commit `7a7c070` added two Gemma combination candidates that pair Flash
+Attention with lower-precision KV cache. This pass also rechecked the existing
+`N_GPU_LAYERS=16` upper-offload probe with the current three-frame fixture path.
+
+The `N_GPU_LAYERS=16` run failed before server ready even after dropping page
+cache. This reproduced the earlier scheduler assertion under a clean preflight,
+so this is a pinned-llama.cpp parameter incompatibility rather than a
+contiguous-memory miss.
+
+| Variant | Run prefix | Preflight `lfb` | Server ready | Server return code | Startup s | Evidence |
+|---|---|---:|---|---:|---:|---|
+| `gemma-q4-gpu16-b512-u512-kvq8` | `gemma-gpu16-3fake3-20260531a` | 272x4MB | no | 133 | n/a | `GGML_ASSERT(n_inputs < GGML_SCHED_MAX_SPLIT_INPUTS) failed` |
+
+The Flash Attention plus KV-cache-precision combinations both loaded and passed
+the guard, but neither is a promotion candidate.
+
+| Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `gemma-q4-baseline-gpu12-b512-u512-kq4-vq8-faon` | `gemma-kq4vq8-faon-3fake3-20260531a` | 261x4MB | 3 | yes | 18/18 | 3/3 | 7.036 | 6.038 | 5.647 | 10.606 | 11.575 | 13.400 |
+| `gemma-q4-baseline-gpu12-b512-u512-kvq4-faon` | `gemma-kvq4-faon-3fake3-20260531a` | 261x4MB | 3 | yes | 18/18 | 3/3 | 7.035 | 7.053 | 6.862 | 9.079 | 9.500 | 10.054 |
+
+Delta versus the same three-frame baseline
+`gemma-baseline-fake3-20260531i`:
+
+| Variant | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---|---:|---:|---:|---:|---:|
+| `kq4/vq8 + flash-attn` | -13.43% | -20.93% | +15.50% | +27.76% | +35.51% |
+| `kvq4 + flash-attn` | +1.12% | -3.92% | -1.13% | +4.86% | +1.67% |
+
+Decision: do not promote Flash Attention plus lower-precision KV cache as a
+Gemma default. The K-only cache reduction combined with Flash Attention is
+clearly slower. The full K/V q4 combination improves text latency slightly but
+regresses image and fake-stream latency, which is the wrong tradeoff for the VLM
+use case.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
 | MiniCPM-V 4.6 Q4 | `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial repeat did not show a `b512/u128` throughput win |
-| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads; DirectIO only as an optional long-lived streaming workload flag | Batch, Flash Attention, and DirectIO variants are tradeoffs; memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |
+| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads; DirectIO only as an optional long-lived streaming workload flag | Batch, Flash Attention, DirectIO, and Flash Attention plus lower-precision KV are tradeoffs; `N_GPU_LAYERS=16`, memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |

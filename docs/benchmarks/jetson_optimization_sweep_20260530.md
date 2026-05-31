@@ -106,6 +106,13 @@ one second. A follow-up three-frame fake-stream confirmation on commit
 `e189965` reduced that fake-stream gain to about 2.00%, while text and image
 throughput were slightly lower and startup stayed about one second slower.
 DirectIO remains optional for long-lived streaming workloads, not a default.
+A current three-frame rerun also reproduced the Gemma `N_GPU_LAYERS=16`
+scheduler assertion under high `lfb`, so the higher-offload path remains
+parameter-incompatible rather than memory-fragmentation-sensitive. Flash
+Attention combined with lower-precision KV cache is also negative: Gemma
+`kq4/vq8 + flash-attn` sharply regresses formal and fake-stream latency, while
+`kvq4 + flash-attn` only improves text latency slightly and regresses image and
+fake-stream latency.
 
 ## Next Optimization Work
 
@@ -120,9 +127,11 @@ DirectIO remains optional for long-lived streaming workloads, not a default.
 4. `--mlock`, `--no-mmap`, lower KV cache precision, `--no-cont-batching`,
    `--cache-ram 0`, `--no-cache-prompt`, `--no-host`, `--no-repack`, and
    MiniCPM DirectIO now have negative or noise-level evidence on the current
-   pinned image. For MiniCPM steady-state speed, the next high-leverage path is
-   likely lightweight model expansion unless a new confirmed llama.cpp flag
-   changes decode behavior.
+   pinned image. For Gemma, higher GPU offload and Flash Attention plus
+   lower-precision KV cache are also negative on the current pinned image. For
+   MiniCPM steady-state speed, the next high-leverage path is likely lightweight
+   model expansion unless a new confirmed llama.cpp flag changes decode
+   behavior.
 
 ## Follow-Up Validation
 
