@@ -505,6 +505,11 @@ launcher cleanup/stale-port issue. Cached Q6 run
 2.144 s average text latency with `terminate_group` shutdown. The fixed-harness
 cached Q8 rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at
 30.756 tok/s and 1.841 s average text latency with `terminate_group` shutdown.
+The 5-trial text repeat `tencent-text-repeat5-20260531a` then passed Hy-MT2 Q4,
+Q6, and Q8 at 20/20 records each: Q4 reached 34.528 tok/s and 1.643 s average
+text latency, Q6 reached 26.778 tok/s and 2.108 s, and Q8 reached 31.395 tok/s
+and 1.806 s. Low-bit rows still fail before server ready with the same
+`invalid ggml type 42` and tensor-offset errors.
 The fixed sweep harness now starts launcher processes in their own process
 group, terminates the group, rejects a variant with
 `server_port_still_open_before_start` when `/v1/models` is already served on

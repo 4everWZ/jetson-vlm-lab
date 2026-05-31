@@ -2581,6 +2581,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
         )
         model_doc = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        matrix = Path("docs/matrix_edge_vlm_workflow.md").read_text(encoding="utf-8")
 
         for text in (benchmark_doc, strategy_doc, model_doc, protocol_doc):
             self.assertIn("tencent-text-smoke64-20260531T120054Z", text)
@@ -2592,9 +2593,34 @@ class EdgeVlmContractsTest(unittest.TestCase):
             self.assertIn("tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z", text)
             self.assertIn("30.756", text)
             self.assertIn("terminate_group", text)
+            self.assertIn("tencent-text-repeat5-20260531a", text)
+            self.assertIn("34.528", text)
+            self.assertIn("31.395", text)
+            self.assertIn("26.778", text)
+            self.assertIn("20/20", text)
+        self.assertIn("tencent-text-repeat5-20260531a", matrix)
         self.assertIn("invalid ggml type 42", benchmark_doc)
         self.assertIn("offset 203248672", benchmark_doc)
         self.assertIn("server_port_still_open_before_start", protocol_doc)
+
+    def test_lightweight_formal_repeat_evidence_is_documented(self):
+        benchmark_doc = Path("docs/benchmarks/jetson_lightweight_models_20260531.md").read_text(
+            encoding="utf-8"
+        )
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(
+            encoding="utf-8"
+        )
+        model_doc = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
+        matrix = Path("docs/matrix_edge_vlm_workflow.md").read_text(encoding="utf-8")
+
+        for text in (benchmark_doc, strategy_doc, model_doc, matrix):
+            self.assertIn("lightweight-repeat5-20260531T134554Z", text)
+        for metric in ("199.847", "48.598", "34.761", "7.502"):
+            self.assertIn(metric, benchmark_doc)
+        self.assertIn("latency_floor", strategy_doc)
+        self.assertIn("balanced_candidate", strategy_doc)
+        self.assertIn("runtime_overhead", strategy_doc)
+        self.assertIn("official Youtu-VL Q8", model_doc)
 
     def test_jetson_hf_gguf_vlm_launcher_can_dry_run_model_ref(self):
         with tempfile.TemporaryDirectory() as tmp:

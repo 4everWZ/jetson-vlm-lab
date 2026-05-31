@@ -44,11 +44,11 @@ Initial candidate order:
 
 | Candidate | Purpose | Source | Initial status |
 |---|---|---|---|
-| SmolVLM2 256M | Lowest-resource image baseline and latency floor | `ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0` | Jetson 1-trial smoke passed in `smolvlm2-256m-smoke64-20260531c`; latency floor only, not a quality/default replacement |
-| Qwen3-VL-2B Thinking | New small Qwen VLM quality/speed comparison | `Qwen/Qwen3-VL-2B-Thinking-GGUF:Q4_K_M` | Jetson 1-trial cached smoke passed in `qwen3vl-2b-thinking-smoke64-cached-20260531c`; needs repeated formal run before ranking |
+| SmolVLM2 256M | Lowest-resource image baseline and latency floor | `ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0` | Jetson 1-trial smoke passed in `smolvlm2-256m-smoke64-20260531c`; 5-trial repeat `lightweight-repeat5-20260531T134554Z` passed at 199.847 text tok/s and 164.551 image tok/s, but raw text quality keeps it as latency_floor rather than default replacement |
+| Qwen3-VL-2B Thinking | New small Qwen VLM quality/speed comparison | `Qwen/Qwen3-VL-2B-Thinking-GGUF:Q4_K_M` | Jetson 1-trial cached smoke passed in `qwen3vl-2b-thinking-smoke64-cached-20260531c`; 5-trial repeat `lightweight-repeat5-20260531T134554Z` passed at 34.761 text tok/s, 34.290 image tok/s, and 1.942 s fake latency, making it the current balanced_candidate pending output review |
 | HunyuanOCR 1B Q8 | Tencent-base OCR/VLM route candidate with low model size | `ggml-org/HunyuanOCR-GGUF:Q8_0` | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs. It is a ggml-org GGUF quantization of Tencent HunyuanOCR, not an official Tencent-owned GGUF artifact; do not rank or repeat until quality triage changes the artifact, prompt/template handling, or runtime path. |
 | Tencent Youtu-VL-4B | Tencent small VLM candidate for Chinese/image reasoning comparison | `tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0` | Downloaded official Q8/BF16-mmproj artifacts, but Jetson smoke `youtu-vl-4b-q8-smoke64-20260531a` failed before server ready with CUDA OOM while allocating the 893MB mmproj buffer; defer unless a lower-bit official artifact or different backend is available |
-| Youtu-VL-4B third-party Q4 | Clearly separated low-bit experiment for Tencent Youtu base-model behavior | `mradermacher/Youtu-VL-4B-Instruct-GGUF:Q4_K_M` | Jetson 1-trial cached smoke passed in `youtu-vl-4b-q4-thirdparty-smoke64-cached-20260531b` with CPU mmproj via `--no-mmproj-offload`; not official Tencent support, not yet ranked |
+| Youtu-VL-4B third-party Q4 | Clearly separated low-bit experiment for Tencent Youtu base-model behavior | `mradermacher/Youtu-VL-4B-Instruct-GGUF:Q4_K_M` | Jetson 1-trial cached smoke passed in `youtu-vl-4b-q4-thirdparty-smoke64-cached-20260531b` with CPU mmproj via `--no-mmproj-offload`; 5-trial repeat `lightweight-repeat5-20260531T134554Z` passed but was slow at 7.502 text tok/s and 9.186 s fake latency, with `runtime_overhead` and min `lfb` 1, so it is not a default ranking row |
 | SmolVLM2 500M | Slightly larger latency/quality point if 256M is too weak | `ggml-org/SmolVLM2-500M-Video-Instruct-GGUF` | Watchlist; add after 256M establishes the path |
 | InternVL3 1B / 2B | Compact OpenGVLab comparison point | `ggml-org/InternVL3-1B-Instruct-GGUF`, `ggml-org/InternVL3-2B-Instruct-GGUF` | Candidate, not observed in this repo |
 | Moondream2 | Very small VLM behavior/latency check | `ggml-org/moondream2-20250414-GGUF` | Candidate, not observed in this repo |
@@ -73,10 +73,11 @@ First smoke order:
    keep it out of ranking and formal repeat until quality triage fixes the
    current artifact/runtime path.
 4. `youtu-vl-4b-q8-smoke` did not become a promotable smoke candidate because
-   the official Q8 model plus BF16 mmproj failed startup on Jetson with CUDA OOM.
-5. `youtu-vl-4b-q4-thirdparty-smoke` passed as a separate CPU-mmproj smoke path;
-   keep any GPU-mmproj/offload canary as a separate variant before comparing
-   throughput.
+   official Youtu-VL Q8 plus BF16 mmproj failed startup on Jetson with CUDA OOM.
+5. `youtu-vl-4b-q4-thirdparty-smoke` passed as a separate CPU-mmproj smoke path
+   and also passed `lightweight-repeat5-20260531T134554Z`, but the repeat
+   confirmed it is slow and memory-stressed. Keep any GPU-mmproj/offload canary
+   as a separate artifact/runtime variant before comparing throughput.
 
 Each smoke must pass the same preflight, startup timing, formal benchmark, and
 three-frame fake-stream path before any tuning sweep is added.
@@ -93,9 +94,9 @@ they can be tested as text/router candidates without polluting VLM rankings:
 | Hy-MT1.5 1.8B 2bit | `configs/models/tencent_hy_mt1p5_1p8b_2bit.yaml` | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf`; default text-suite runtime canary failed on pinned llama.cpp with tensor offset `203248672` |
 | Hy-MT2 1.8B 1.25Bit | `configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml` | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf`; default text-suite runtime canary |
 | Hy-MT2 1.8B 2Bit | `configs/models/tencent_hy_mt2_1p8b_2bit.yaml` | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf`; default text-suite runtime canary failed on pinned llama.cpp with tensor offset `203248672` |
-| Hy-MT2 1.8B Q4_K_M | `configs/models/tencent_hy_mt2_1p8b_q4.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q4_K_M.gguf`; cached Jetson smoke `tencent-hy-mt2-q4-smoke64-cached-20260531b` passed text guard at 19.759 tok/s, and full-suite run `tencent-text-smoke64-20260531T120054Z` passed at 33.541 tok/s |
-| Hy-MT2 1.8B Q6_K | `configs/models/tencent_hy_mt2_1p8b_q6.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q6_K.gguf`; full-suite run `tencent-text-smoke64-20260531T120054Z` passed at 26.287 tok/s, and cached run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s |
-| Hy-MT2 1.8B Q8_0 | `configs/models/tencent_hy_mt2_1p8b_q8.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q8_0.gguf`; Q8 full-suite row is invalidated by the pre-fix launcher cleanup/stale-port issue, but cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s with `terminate_group` shutdown |
+| Hy-MT2 1.8B Q4_K_M | `configs/models/tencent_hy_mt2_1p8b_q4.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q4_K_M.gguf`; cached Jetson smoke `tencent-hy-mt2-q4-smoke64-cached-20260531b` passed text guard at 19.759 tok/s, full-suite run `tencent-text-smoke64-20260531T120054Z` passed at 33.541 tok/s, and repeat `tencent-text-repeat5-20260531a` passed 20/20 at 34.528 tok/s |
+| Hy-MT2 1.8B Q6_K | `configs/models/tencent_hy_mt2_1p8b_q6.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q6_K.gguf`; full-suite run `tencent-text-smoke64-20260531T120054Z` passed at 26.287 tok/s, cached run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s, and repeat `tencent-text-repeat5-20260531a` passed 20/20 at 26.778 tok/s |
+| Hy-MT2 1.8B Q8_0 | `configs/models/tencent_hy_mt2_1p8b_q8.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q8_0.gguf`; Q8 full-suite row is invalidated by the pre-fix launcher cleanup/stale-port issue, but cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s with `terminate_group` shutdown, and repeat `tencent-text-repeat5-20260531a` passed 20/20 at 31.395 tok/s |
 
 These variants use `scripts/jetson/run_hf_gguf_llama_docker.sh`,
 `configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
@@ -106,10 +107,11 @@ cache drop, `--min-lfb-blocks`, and a mechanical comparison report with
 default set or `JETSON_TENCENT_TEXT_EXTRA_VARIANTS` to append scoped canaries.
 The sweep planner also skips fake-stream for them because the configs are
 text-only. Treat their results as a separate text/router study; the current Q4
-smoke, `tencent-text-smoke64-20260531T120054Z` Q4/Q6 rows, and the
-`tencent-hy-mt2-q6-smoke64-cached-20260531a` cached Q6 row are useful evidence
-for the lane, not a VLM ranking row. Q8 full-suite row is invalidated but the
-cached rerun is valid one-trial text/router evidence with the fixed harness.
+smoke, `tencent-text-smoke64-20260531T120054Z` Q4/Q6 rows, the
+`tencent-hy-mt2-q6-smoke64-cached-20260531a` cached Q6 row, and
+`tencent-text-repeat5-20260531a` Q4/Q6/Q8 rows are useful evidence for the lane,
+not a VLM ranking row. Q8 full-suite row is invalidated but the cached rerun and
+repeat Q8 row are valid text/router evidence with the fixed harness.
 
 Deferred latest non-GGUF Tencent text rows checked in the same refresh:
 

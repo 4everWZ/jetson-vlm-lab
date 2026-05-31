@@ -9,12 +9,12 @@ Jetson paths.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / through `f91712b`; HunyuanOCR smoke used `158f0e4`, Hy-MT1.5 text canary used `f91712b` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / through `f91712b`; HunyuanOCR smoke used `158f0e4`, Hy-MT1.5 text canary used `f91712b` |
+| Local branch / commit | `bench/formal-jetson-infra` / through `2831f8f` for VLM repeat evidence and `24481dd` for Tencent text repeat evidence; HunyuanOCR smoke used `158f0e4`, Hy-MT1.5 text canary used `f91712b` |
+| Jetson branch / commit | `bench/formal-jetson-infra` / through `2831f8f` for VLM repeat evidence and `24481dd` for Tencent text repeat evidence; HunyuanOCR smoke used `158f0e4`, Hy-MT1.5 text canary used `f91712b` |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
 | Model root | `/home/weizheng/code/jetson-vlm-lab/models` |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
-| Trial count | 1 |
+| Trial count | 1 for smoke rows; 5 for `lightweight-repeat5-20260531T134554Z` and `tencent-text-repeat5-20260531a` |
 | Max tokens | 64 for accepted smoke; 32 failed the guard |
 | Temperature | 0 |
 | Fake-stream frames | 3 |
@@ -98,7 +98,8 @@ Downloaded Qwen artifacts:
 Decision: Qwen3-VL 2B Thinking Q4 is a valid Jetson smoke candidate. It is much
 slower than SmolVLM2 256M but still substantially faster than the current
 Gemma Q4 baseline, and its sample outputs are more deliberate than SmolVLM2.
-Do not promote it without a repeated formal run and output review.
+The formal repeat below keeps it as the current 2B-class balanced candidate,
+pending human output review and route-specific quality checks.
 
 ## HunyuanOCR 1B Q8 Smoke
 
@@ -219,8 +220,50 @@ for the safety prompt.
 
 Decision: the third-party Youtu Q4 path is a valid Jetson smoke candidate under
 CPU mmproj, but it is slow and must stay separate from the official Tencent Q8
-result. Do not rank or promote it without a repeated formal run and an explicit
-GPU-mmproj/offload tuning check.
+result. The formal repeat below confirms it is not competitive as a default
+runtime row; revisit only for an explicit artifact/runtime A/B.
+
+## Fixed-Policy 5-Trial Repeat
+
+Run prefix: `lightweight-repeat5-20260531T134554Z`.
+
+The repeat used locked clocks, cache drop before each variant,
+`--trial-count 5`, `--max-tokens 64`, three fake-stream frames,
+`--min-lfb-blocks 150`, and the canonical llama.cpp image
+`ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`
+with image id `36f3398b7885` and llama.cpp ref `d749821db3bd`. The default
+repeat set intentionally excluded HunyuanOCR Q8 and official Youtu-VL Q8 after
+their guard-failure/OOM evidence; official Youtu-VL Q8 can only be rerun by
+passing it through `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS`.
+
+| Model | Variant | Preflight `lfb` | Startup s | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Avg power W | Avg GR3D % | Min lfb blocks | Bottleneck |
+|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8` | 209x4MB | 6.019 | yes | 30/30 | 3/3 | 48.598 | 46.530 | 1.317 | 1.390 | 1.655 | 19.268 | 93.727 | 71 | `gpu_compute` |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8` | 210x4MB | 6.019 | yes | 30/30 | 3/3 | 12.072 | 12.616 | 5.307 | 5.158 | 6.163 | 16.464 | 25.508 | 1 | `runtime_overhead` |
+| SmolVLM2 256M Q8 | `smolvlm2-256m-q8-smoke` | 220x4MB | 2.008 | yes | 30/30 | 3/3 | 199.847 | 164.551 | 0.321 | 0.227 | 0.462 | 16.958 | 89.143 | 220 | `gpu_compute` |
+| Qwen3-VL 2B Thinking Q4 | `qwen3-vl-2b-thinking-q4-smoke` | 220x4MB | 5.016 | yes | 30/30 | 3/3 | 34.761 | 34.290 | 1.841 | 1.869 | 1.942 | 21.750 | 96.457 | 154 | `gpu_compute` |
+| Youtu-VL 4B Q4 third-party | `youtu-vl-4b-q4-thirdparty-smoke` | 224x4MB | 7.021 | yes | 30/30 | 3/3 | 7.502 | 7.249 | 8.570 | 6.705 | 9.186 | 17.047 | 19.546 | 1 | `runtime_overhead` |
+
+Repeat conclusions:
+
+- SmolVLM2 256M Q8 is the latency floor. It is fast enough for cheap routing,
+  liveness, and harness stress, but the raw text excerpts still show weak
+  semantics such as interpreting WSL as a generic web-services layer.
+- Qwen3-VL 2B Thinking Q4 is the balanced_candidate for the next quality gate:
+  it is slower than MiniCPM-V 4.6 Q4 but far ahead of Gemma and keeps enough
+  `lfb` headroom for continued pipeline/routing experiments.
+- MiniCPM-V 4.6 Q4 remains the practical default reference row for quality and
+  speed balance until a quality review proves otherwise.
+- Gemma 4 E2B-it Q4 is not a 2B-class target in practice. The repeat reinforces
+  the decision to stop broad llama.cpp flag tuning for it: throughput is low,
+  GR3D is not saturated, and profiled `lfb` falls to one block.
+- Third-party Youtu Q4 is coherent on simple prompts but too slow, nonofficial,
+  and also reaches one profiled `lfb` block. Keep it out of default ranking
+  unless an artifact/runtime A/B has a specific reason.
+- Profiling currently separates two lanes: MiniCPM, SmolVLM2, and Qwen are
+  mostly `gpu_compute`; Gemma and Youtu Q4 show `runtime_overhead` with very
+  low profiled `lfb`, so deeper infra work should focus on memory/runtime
+  characterization rather than more llama.cpp flag sweeps.
 
 ## Tencent Small-Model Refresh
 
@@ -234,7 +277,7 @@ they split into two lanes:
 | Hy-MT1.5 1.8B Safetensors 1.25bit/2bit | `tencent/Hy-MT1.5-1.8B-1.25bit`, `tencent/Hy-MT1.5-1.8B-2bit` | Deferred; latest non-GGUF quant rows, no selected Transformers/conversion path in the current GGUF bench lane. |
 | Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
 | Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
-| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; Q4/Q6 passed the full text-suite smoke, Q6 cached run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s, and Q8 cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s with `terminate_group` shutdown after the invalidated Q8 full-suite row. Not VLM candidates. |
+| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; Q4/Q6 passed the full text-suite smoke, Q6 cached run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s, Q8 cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s, and 5-trial repeat `tencent-text-repeat5-20260531a` passed Q4/Q6/Q8 at 34.528/26.778/31.395 tok/s. Not VLM candidates. |
 | Hy-MT2 1.8B FP8 | `tencent/Hy-MT2-1.8B-FP8` | Deferred; Safetensors/compressed-tensors path, no low-friction GGUF launcher row. |
 | HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Jetson smoke loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs; not an official Tencent-owned GGUF artifact and not ranked. |
 | Penguin-VL-2B | `tencent/Penguin-VL-2B` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
@@ -308,19 +351,46 @@ fixed sweep harness at commit `eed03f8`, normalized the completed Q8 artifact to
 human review before route use, so treat these as valid text/router smokes rather
 than promotions.
 
+Tencent text-suite 5-trial repeat evidence:
+
+Run prefix: `tencent-text-repeat5-20260531a`. The repeat used all seven
+configured Hy-MT1.5/Hy-MT2 text rows, locked clocks, cache drop before each
+variant, `--trial-count 5`, `--max-tokens 64`, `--fake-stream-max-frames 0`,
+`--min-lfb-blocks 150`, and the canonical llama.cpp image
+`ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`
+with image id `36f3398b7885` and llama.cpp ref `d749821db3bd`.
+
+| Variant | Preflight `lfb` | Server ready | Guard | Success | Trials | Startup s | Text tok/s | Text latency s | Max temp C | Avg power W | Avg GR3D % | Min lfb blocks | Shutdown | Status |
+|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| `tencent-hy-mt1p5-1p8b-1p25bit-text-smoke` | 234x4MB | no | n/a | 0/0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | `already_exited`, port closed | Failed before server ready: `invalid ggml type 42`. |
+| `tencent-hy-mt1p5-1p8b-2bit-text-smoke` | 233x4MB | no | n/a | 0/0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | `already_exited`, port closed | Failed before server ready: tensor offset `203248672`, expected `203129888`. |
+| `tencent-hy-mt2-1p8b-1p25bit-text-smoke` | 232x4MB | no | n/a | 0/0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | `already_exited`, port closed | Failed before server ready: `invalid ggml type 42`. |
+| `tencent-hy-mt2-1p8b-2bit-text-smoke` | 232x4MB | no | n/a | 0/0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | `already_exited`, port closed | Failed before server ready: tensor offset `203248672`, expected `203572256`. |
+| `tencent-hy-mt2-1p8b-q4-text-smoke` | 232x4MB | yes | yes | 20/20 | 5 | 4.085 | 34.528 | 1.643 | 56.562 | 21.833 | 96.719 | 231 | `terminate_group`, port closed | Valid text/router repeat; fastest Hy-MT2 row. |
+| `tencent-hy-mt2-1p8b-q6-text-smoke` | 234x4MB | yes | yes | 20/20 | 5 | 4.014 | 26.778 | 2.108 | 59.812 | 21.987 | 97.429 | 169 | `terminate_group`, port closed | Valid text/router repeat. |
+| `tencent-hy-mt2-1p8b-q8-text-smoke` | 232x4MB | yes | yes | 20/20 | 5 | 4.013 | 31.395 | 1.806 | 60.656 | 22.541 | 95.472 | 101 | `terminate_group`, port closed | Valid text/router repeat. |
+
+The repeat keeps Q4 as the fastest Hy-MT2 text row, Q8 second, and Q6 third
+under this pinned llama.cpp image. All three profiled valid rows are
+`gpu_compute` bottlenecked. This remains text/router evidence only; route use
+still needs human output review and route-specific translation/router checks.
+
 ## Next Model Checks
 
-1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M, Qwen3-VL 2B,
-   and the Youtu Q4 third-party CPU-mmproj path before ranking them against
-   MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
-2. Run the dedicated Tencent Hy-MT1.5/Hy-MT2 text suite only as a separate
+1. Do human output review and route-specific quality checks for
+   `lightweight-repeat5-20260531T134554Z`; treat SmolVLM2 as latency_floor and
+   Qwen3-VL 2B as the balanced_candidate unless that review fails.
+2. Use profiling next: capture memory/`lfb`, CPU/GPU/EMC, phase, and input
+   pipeline evidence before selecting any deeper runtime or routing change.
+3. Run the dedicated Tencent Hy-MT1.5/Hy-MT2 text suite only as a separate
    text/router study if it becomes useful for routing or translation
    pre/post-processing; Q4/Q6 now have one valid full-suite smoke, Q6/Q8 have
-   cached single-run evidence, repeated text runs are still pending, and
-   low-bit failures should feed the runtime/build lane, not VLM ranking.
-3. Add a separate Youtu Q4 GPU-mmproj/offload canary if memory allows; keep it
+   cached single-run evidence, Q4/Q6/Q8 have valid 5-trial text repeat evidence,
+   and low-bit failures should feed the runtime/build lane, not VLM ranking.
+4. Add a separate Youtu Q4 GPU-mmproj/offload canary only if memory allows and
+   the result answers an artifact/runtime question; keep it
    distinct from the CPU-mmproj smoke and the official Tencent Q8 failure.
-4. Revisit HunyuanOCR only through a bounded quality triage of artifact,
+5. Revisit HunyuanOCR only through a bounded quality triage of artifact,
    prompt/template handling, or runtime path; do not rank the current Q8 smoke.
-5. Promote none of these candidates until a formal repeat passes
-   the guard and preserves acceptable output quality.
+6. Promote none of these candidates until formal repeat evidence and output
+   review agree on the intended role.
