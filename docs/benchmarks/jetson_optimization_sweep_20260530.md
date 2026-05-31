@@ -118,6 +118,9 @@ A max-clocks repeat on commit `62382e5` changed the practical baseline: after
 image tok/s, while Gemma baseline reached 12.199 text tok/s and 12.637 image
 tok/s. This makes locked clocks a promotion prerequisite rather than an
 optional environment detail.
+Commit `d72e253` added warmup-on comparison variants. The max-clocks 3-trial
+check kept MiniCPM warmup-on at noise-level versus the same-run baseline and
+made Gemma slower, so the defaults keep `--no-warmup`.
 
 ## Next Optimization Work
 
@@ -135,13 +138,13 @@ optional environment detail.
 4. Keep judging load-path flags with the sweep manifest startup timing fields
    added in `9a8b4e8`, separately from steady-state formal/fake metrics.
 5. `--mlock`, `--no-mmap`, lower KV cache precision, `--no-cont-batching`,
-   `--cache-ram 0`, `--no-cache-prompt`, `--no-host`, `--no-repack`, and
-   MiniCPM DirectIO now have negative or noise-level evidence on the current
-   pinned image. For Gemma, higher GPU offload and Flash Attention plus
-   lower-precision KV cache are also negative on the current pinned image. For
-   MiniCPM steady-state speed, the next high-leverage path is likely lightweight
-   model expansion unless a new confirmed llama.cpp flag changes decode
-   behavior.
+   `--cache-ram 0`, `--no-cache-prompt`, `--no-host`, `--no-repack`,
+   warmup-on, and MiniCPM DirectIO now have negative or noise-level evidence on
+   the current pinned image. For Gemma, higher GPU offload and Flash Attention
+   plus lower-precision KV cache are also negative on the current pinned image.
+   For MiniCPM steady-state speed, the next high-leverage path is likely
+   lightweight model expansion unless a new confirmed llama.cpp flag changes
+   decode behavior.
 
 ## Follow-Up Validation
 

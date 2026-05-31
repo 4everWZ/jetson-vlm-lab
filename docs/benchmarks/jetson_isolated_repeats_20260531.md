@@ -468,9 +468,43 @@ optional long-lived streaming flag: it improves three-frame fake-stream latency
 by 7.37% with nearly flat formal throughput, but still adds about one second of
 startup.
 
+## Warmup Candidates Under Max Clocks
+
+Commit `d72e253` added warmup-on comparison variants for both default models by
+removing `--no-warmup` while keeping the same context, offload, batch/ubatch,
+and q8_0 KV-cache settings. The server logs for the warmup variants include:
+
+```text
+warming up the model with an empty run - please wait ... (--no-warmup to disable)
+```
+
+Each variant below was run separately after dropping page cache, with
+`JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`, `--min-lfb-blocks 150`,
+`--fake-stream-max-frames 3`, `--trial-count 3`, `--max-tokens 64`, and
+`--temperature 0`.
+
+| Model | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8` | `minicpm-baseline-warmcmp3-clocks-20260531a` | 247x4MB | 3 | yes | 18/18 | 3/3 | 6.024 | 48.516 | 45.150 | 1.319 | 1.438 | 1.655 |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8-warmup` | `minicpm-warmup-warmcmp3-clocks-20260531a` | 252x4MB | 3 | yes | 18/18 | 3/3 | 6.023 | 48.596 | 45.208 | 1.317 | 1.436 | 1.654 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8` | `gemma-baseline-warmcmp3-clocks-20260531a` | 254x4MB | 3 | yes | 18/18 | 3/3 | 6.023 | 12.538 | 12.401 | 5.105 | 5.285 | 6.022 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-warmup` | `gemma-warmup-warmcmp3-clocks-20260531a` | 262x4MB | 3 | yes | 18/18 | 3/3 | 6.023 | 12.176 | 12.099 | 5.259 | 5.386 | 6.137 |
+
+Delta versus each same-run baseline:
+
+| Model | Startup | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---|---:|---:|---:|---:|---:|---:|
+| MiniCPM warmup | -0.00% | +0.16% | +0.13% | -0.17% | -0.19% | -0.04% |
+| Gemma warmup | +0.01% | -2.89% | -2.43% | +3.01% | +1.91% | +1.90% |
+
+Decision: keep `--no-warmup` in both defaults. MiniCPM's warmup-on result is a
+noise-level 3-trial improvement and does not justify changing the default.
+Gemma warmup-on is clearly worse across formal and fake-stream latency under
+max clocks, so it is not a promotion candidate.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
-| MiniCPM-V 4.6 Q4 | `sudo jetson_clocks` first, then `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial and max-clocks 10-trial repeats did not show a `b512/u128` formal throughput win |
-| Gemma 4 E2B-it Q4 | `sudo jetson_clocks` first, then `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `--direct-io` only for optional long-lived streaming workloads | Batch, Flash Attention, DirectIO, and Flash Attention plus lower-precision KV are tradeoffs; `N_GPU_LAYERS=16`, memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |
+| MiniCPM-V 4.6 Q4 | `sudo jetson_clocks` first, then `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache, `--no-warmup` | none ahead of baseline yet | isolated 5-trial and max-clocks 10-trial repeats did not show a `b512/u128` formal throughput win; warmup-on is noise-level in the 3-trial max-clocks check |
+| Gemma 4 E2B-it Q4 | `sudo jetson_clocks` first, then `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache, `--no-warmup` | `--direct-io` only for optional long-lived streaming workloads | Batch, Flash Attention, DirectIO, and Flash Attention plus lower-precision KV are tradeoffs; warmup-on regresses; `N_GPU_LAYERS=16`, memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |
