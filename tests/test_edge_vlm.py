@@ -1223,6 +1223,10 @@ class EdgeVlmContractsTest(unittest.TestCase):
             tmp_path = Path(tmp)
             benchmark_jsonl = tmp_path / "benchmarks" / "unit-run.jsonl"
             fake_stream_jsonl = tmp_path / "fake_stream" / "unit-run.jsonl"
+            benchmark_manifest = tmp_path / "benchmarks" / "unit-run.manifest.json"
+            tegrastats_log = tmp_path / "tegrastats" / "unit-run.log"
+            profile_jsonl = tmp_path / "profiles" / "unit-run.profile.jsonl"
+            profile_summary_json = tmp_path / "profiles" / "unit-run.summary.json"
             preflight_json = tmp_path / "preflight" / "unit-run.preflight.json"
             report = tmp_path / "report.md"
             plan = {
@@ -1240,7 +1244,10 @@ class EdgeVlmContractsTest(unittest.TestCase):
                         "fake_stream_env": {},
                         "paths": {
                             "benchmark_jsonl": str(benchmark_jsonl),
+                            "manifest_json": str(benchmark_manifest),
                             "fake_stream_jsonl": str(fake_stream_jsonl),
+                            "profile_jsonl": str(profile_jsonl),
+                            "profile_summary_json": str(profile_summary_json),
                             "server_log": str(tmp_path / "logs" / "server.log"),
                             "preflight_json": str(preflight_json),
                         },
@@ -1298,6 +1305,31 @@ class EdgeVlmContractsTest(unittest.TestCase):
                         + "\n",
                         encoding="utf-8",
                     )
+                    tegrastats_log.parent.mkdir(parents=True, exist_ok=True)
+                    tegrastats_log.write_text(
+                        "\n".join(
+                            [
+                                "RAM 2000/7620MB (lfb 200x4MB) CPU [40%@1728] GR3D_FREQ 92%@[1020] EMC_FREQ 81%@3199 gpu@54.0C VDD_IN 18000mW/17000mW",
+                                "RAM 2200/7620MB (lfb 160x4MB) CPU [45%@1728] GR3D_FREQ 88%@[1020] EMC_FREQ 86%@3199 gpu@58.0C VDD_IN 19000mW/18000mW",
+                            ]
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+                    benchmark_manifest.write_text(
+                        json.dumps(
+                            {
+                                "run_id": "unit-run",
+                                "jetson": {
+                                    "tegrastats_log": str(tegrastats_log),
+                                    "power_mode": str(tmp_path / "profile" / "nvpmodel.txt"),
+                                    "jetson_clocks": str(tmp_path / "profile" / "jetson-clocks.txt"),
+                                },
+                            }
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
                 else:
                     fake_stream_jsonl.parent.mkdir(parents=True, exist_ok=True)
                     fake_stream_jsonl.write_text(
@@ -1323,6 +1355,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
                                 result = run_sweep(plan, wait_timeout_s=1.0, report_output=report)
 
             report_text = report.read_text(encoding="utf-8")
+            profile_jsonl_exists = profile_jsonl.is_file()
+            profile_summary_json_exists = profile_summary_json.is_file()
 
         self.assertEqual(result["results"][0]["preflight"]["tegrastats"]["lfb"]["free_blocks"], 150)
         self.assertEqual(result["results"][0]["preflight_path"], str(preflight_json))
@@ -1331,6 +1365,14 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result["results"][0]["server_startup_seconds"], 2.5)
         self.assertIsInstance(result["results"][0]["server_started_at"], str)
         self.assertIsInstance(result["results"][0]["server_ready_at"], str)
+        self.assertEqual(result["results"][0]["profile_summary_path"], str(profile_summary_json))
+        self.assertEqual(result["results"][0]["profile_jsonl_path"], str(profile_jsonl))
+        self.assertTrue(profile_jsonl_exists)
+        self.assertTrue(profile_summary_json_exists)
+        self.assertEqual(result["results"][0]["profile_summary"]["samples"], 2)
+        self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["server_startup"]["duration_s"], 2.5)
+        self.assertIn("gpu_compute", result["results"][0]["profile_summary"]["bottleneck_labels"])
+        self.assertIn("emc_memory_bandwidth", result["results"][0]["profile_summary"]["bottleneck_labels"])
         self.assertIn("1.500", report_text)
         self.assertIn("Fake latency s", report_text)
 

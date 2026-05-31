@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from .jetson_profile import write_profile_artifacts
 from .optimization import build_optimization_report
 
 
@@ -195,6 +196,12 @@ def _docker_image_metadata(image: str | None) -> dict[str, Any]:
     }
 
 
+def _read_json_object(path: str | Path) -> dict[str, Any]:
+    with Path(path).open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    return data if isinstance(data, dict) else {}
+
+
 def _load_variants(path: str | Path) -> list[dict[str, Any]]:
     variants = list(_iter_jsonl(Path(path)))
     for variant in variants:
@@ -268,6 +275,8 @@ def build_sweep_plan(
         summary_md = output_base / "benchmarks" / f"{run_id}.md"
         manifest_json = output_base / "benchmarks" / f"{run_id}.manifest.json"
         profile_dir = output_base / "benchmarks" / f"{run_id}.profile"
+        profile_jsonl = output_base / "profiles" / f"{run_id}.profile.jsonl"
+        profile_summary_json = output_base / "profiles" / f"{run_id}.summary.json"
         fake_stream_jsonl = output_base / "fake_stream" / f"{run_id}.jsonl"
         server_log = log_base / f"{run_id}.server.log"
         preflight_json = output_base / "preflight" / f"{run_id}.preflight.json"
@@ -321,6 +330,8 @@ def build_sweep_plan(
                     "summary_md": str(summary_md),
                     "manifest_json": str(manifest_json),
                     "profile_dir": str(profile_dir),
+                    "profile_jsonl": str(profile_jsonl),
+                    "profile_summary_json": str(profile_summary_json),
                     "fake_stream_jsonl": str(fake_stream_jsonl),
                     "server_log": str(server_log),
                     "preflight_json": str(preflight_json),
@@ -420,6 +431,53 @@ def _not_started_server_timing() -> dict[str, Any]:
         "server_ready_at": None,
         "server_wait_seconds": None,
         "server_startup_seconds": None,
+    }
+
+
+def _missing_profile_artifact(paths: dict[str, Any], reason: str) -> dict[str, Any]:
+    return {
+        "profile_jsonl_path": str(paths.get("profile_jsonl") or ""),
+        "profile_summary_path": str(paths.get("profile_summary_json") or ""),
+        "profile_summary": {
+            "available": False,
+            "reason": reason,
+        },
+    }
+
+
+def _write_run_profile_artifacts(paths: dict[str, Any], server_timing: dict[str, Any]) -> dict[str, Any]:
+    profile_jsonl = paths.get("profile_jsonl")
+    profile_summary_json = paths.get("profile_summary_json")
+    manifest_json = paths.get("manifest_json")
+    if not profile_jsonl or not profile_summary_json:
+        return _missing_profile_artifact(paths, "missing_profile_output_path")
+    if not manifest_json or not Path(str(manifest_json)).is_file():
+        return _missing_profile_artifact(paths, "missing_benchmark_manifest")
+    manifest = _read_json_object(str(manifest_json))
+    jetson = manifest.get("jetson") if isinstance(manifest.get("jetson"), dict) else {}
+    tegrastats_log = jetson.get("tegrastats_log") if isinstance(jetson, dict) else None
+    if not isinstance(tegrastats_log, str) or not Path(tegrastats_log).is_file():
+        return _missing_profile_artifact(paths, "missing_tegrastats_log")
+    startup_seconds = server_timing.get("server_startup_seconds")
+    profile_summary = write_profile_artifacts(
+        tegrastats_log=tegrastats_log,
+        profile_jsonl_path=str(profile_jsonl),
+        summary_path=str(profile_summary_json),
+        phase_timings={
+            "server_startup": {
+                "available": isinstance(startup_seconds, (int, float)),
+                "duration_s": startup_seconds,
+            },
+        },
+        profile_files={
+            "nvpmodel": str(jetson.get("power_mode") or ""),
+            "jetson_clocks": str(jetson.get("jetson_clocks") or ""),
+        },
+    )
+    return {
+        "profile_jsonl_path": str(profile_jsonl),
+        "profile_summary_path": str(profile_summary_json),
+        "profile_summary": profile_summary,
     }
 
 
@@ -537,6 +595,7 @@ def run_sweep(
                 benchmark_paths.append(paths["benchmark_jsonl"])
             if fake_stream_returncode == 0 and Path(paths["fake_stream_jsonl"]).is_file():
                 fake_stream_paths.append(paths["fake_stream_jsonl"])
+            profile_artifact = _write_run_profile_artifacts(paths, server_timing)
             results.append(
                 {
                     "run_id": variant_plan["run_id"],
@@ -551,6 +610,7 @@ def run_sweep(
                     "preflight_reason": None,
                     **server_timing,
                     **pre_variant_result,
+                    **profile_artifact,
                 }
             )
         finally:
