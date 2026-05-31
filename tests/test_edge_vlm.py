@@ -1880,6 +1880,17 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 "mmproj_file": "mmproj-Youtu-VL-4b-Instruct-BF16.gguf",
                 "ctx_size": 2048,
             },
+            "youtu-vl-4b-q4-thirdparty": {
+                "config": "configs/models/youtu_vl_4b_q4_thirdparty.yaml",
+                "model_ref": "mradermacher/Youtu-VL-4B-Instruct-GGUF:Q4_K_M",
+                "model_file": "Youtu-VL-4B-Instruct.Q4_K_M.gguf",
+                "mmproj_file": "Youtu-VL-4B-Instruct.mmproj-Q8_0.gguf",
+                "ctx_size": 1024,
+                "n_gpu_layers": 8,
+                "batch_size": 256,
+                "ubatch_size": 256,
+                "required_arg": "--no-mmproj-offload",
+            },
         }
         variants = [
             json.loads(line)
@@ -1911,8 +1922,22 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 self.assertEqual(variant["env"]["MMPROJ_FILE"], expected_values["mmproj_file"])
                 self.assertEqual(variant["env"]["CTX_SIZE"], expected_values["ctx_size"])
                 self.assertEqual(variant["env"]["MODEL_ALIAS"], model_name)
+                if "n_gpu_layers" in expected_values:
+                    self.assertEqual(variant["env"]["N_GPU_LAYERS"], expected_values["n_gpu_layers"])
+                if "batch_size" in expected_values:
+                    self.assertEqual(variant["env"]["LLAMA_BATCH_SIZE"], expected_values["batch_size"])
+                    self.assertIn(str(expected_values["batch_size"]), variant["args"])
+                if "ubatch_size" in expected_values:
+                    self.assertEqual(variant["env"]["LLAMA_UBATCH_SIZE"], expected_values["ubatch_size"])
+                    self.assertIn(str(expected_values["ubatch_size"]), variant["args"])
+                if "required_arg" in expected_values:
+                    self.assertIn(expected_values["required_arg"], variant["args"])
                 self.assertIn("--parallel", variant["args"])
                 self.assertIn("--no-warmup", variant["args"])
+                if model_name.endswith("-thirdparty"):
+                    status = config["notes"]["status"]
+                    self.assertIn("third-party", status)
+                    self.assertIn("not an official Tencent GGUF artifact", status)
 
     def test_jetson_hf_gguf_vlm_launcher_can_dry_run_model_ref(self):
         with tempfile.TemporaryDirectory() as tmp:

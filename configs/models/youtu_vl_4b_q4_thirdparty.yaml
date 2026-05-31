@@ -1,0 +1,29 @@
+model:
+  name: youtu-vl-4b-q4-thirdparty
+  family: Youtu-VL
+  backend: llama.cpp
+  model_ref: mradermacher/Youtu-VL-4B-Instruct-GGUF:Q4_K_M
+  quantization: Q4_K_M
+
+server:
+  base_url: http://127.0.0.1:8080/v1
+  host: 127.0.0.1
+  port: 8080
+
+runtime:
+  launch_mode: hf_gguf_with_mmproj
+  ctx_size: 1024
+  n_gpu_layers: 8
+  model_ref_env: MODEL_REF
+  model_file: Youtu-VL-4B-Instruct.Q4_K_M.gguf
+  mmproj_file: Youtu-VL-4B-Instruct.mmproj-Q8_0.gguf
+  wsl_script: null
+  jetson_script: scripts/jetson/run_hf_gguf_vlm_llama_docker.sh
+
+capabilities:
+  text: true
+  image: true
+  audio: false
+
+notes:
+  status: Candidate only. Uses a third-party GGUF quantization by mradermacher for Tencent's Youtu-VL-4B-Instruct base model, with Q4_K_M weights and Q8_0 mmproj downloaded to MODEL_DIR before local -m/--mmproj launch. This is not an official Tencent GGUF artifact; the first Jetson smoke keeps the mmproj on CPU with --no-mmproj-offload because the official Q8/BF16-mmproj run failed during CUDA mmproj allocation. Keep comparisons separate from the official Q8/BF16-mmproj run until a guard-passing Jetson JSONL exists.
