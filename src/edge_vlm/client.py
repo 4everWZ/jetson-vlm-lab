@@ -8,12 +8,12 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
 from .config import config_base_url, config_model_name, config_supports_images, load_model_config
-from .image_payload import build_user_content
+from .image_payload import build_user_content_with_timing
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,7 @@ class CompletionResult:
     response: dict[str, Any] | None
     latency_s: float
     error: str | None = None
+    timings: dict[str, Any] = field(default_factory=dict)
 
 
 class OpenAICompatClient:
@@ -45,13 +46,45 @@ class OpenAICompatClient:
         stream: bool = False,
         image_path: str | Path | None = None,
     ) -> dict[str, Any]:
+        payload, _timings = self._build_chat_payload_with_timing(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=stream,
+            image_path=image_path,
+        )
+        return payload
+
+    def _build_chat_payload_with_timing(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 128,
+        temperature: float = 0.2,
+        stream: bool = False,
+        image_path: str | Path | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        payload_started = time.perf_counter()
+        content, timings = build_user_content_with_timing(prompt, image_path)
         return {
             "model": self.model,
-            "messages": [{"role": "user", "content": build_user_content(prompt, image_path)}],
+            "messages": [{"role": "user", "content": content}],
             "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": stream,
+        }, {
+            **timings,
+            "payload_build_s": time.perf_counter() - payload_started,
         }
+
+    @staticmethod
+    def _serialize_payload(request_payload: dict[str, Any], timings: dict[str, Any]) -> tuple[bytes, dict[str, Any]]:
+        updated = dict(timings)
+        serialize_started = time.perf_counter()
+        body = json.dumps(request_payload).encode("utf-8")
+        updated["json_serialize_s"] = time.perf_counter() - serialize_started
+        updated["request_body_bytes"] = len(body)
+        return body, updated
 
     def complete(
         self,
@@ -63,7 +96,7 @@ class OpenAICompatClient:
         image_path: str | Path | None = None,
         dry_run: bool = False,
     ) -> CompletionResult:
-        request_payload = self.build_chat_payload(
+        request_payload, timings = self._build_chat_payload_with_timing(
             prompt,
             max_tokens=max_tokens,
             temperature=temperature,
@@ -72,20 +105,28 @@ class OpenAICompatClient:
         )
         started = time.perf_counter()
         if dry_run:
+            _body, timings = self._serialize_payload(request_payload, timings)
+            timings["http_request_s"] = 0.0
             return CompletionResult(
                 ok=True,
                 text=f"[dry run] would POST {self.base_url}/chat/completions",
                 request=request_payload,
                 response={"dry_run": True},
                 latency_s=time.perf_counter() - started,
+                timings=timings,
             )
         if stream:
-            return self._streaming_complete(request_payload, started)
-        return self._non_streaming_complete(request_payload, started)
+            return self._streaming_complete(request_payload, started, timings)
+        return self._non_streaming_complete(request_payload, started, timings)
 
-    def _non_streaming_complete(self, request_payload: dict[str, Any], started: float) -> CompletionResult:
+    def _non_streaming_complete(
+        self,
+        request_payload: dict[str, Any],
+        started: float,
+        timings: dict[str, Any],
+    ) -> CompletionResult:
         url = f"{self.base_url}/chat/completions"
-        body = json.dumps(request_payload).encode("utf-8")
+        body, timings = self._serialize_payload(request_payload, timings)
         request = urllib.request.Request(
             url,
             data=body,
@@ -93,9 +134,12 @@ class OpenAICompatClient:
             method="POST",
         )
         try:
+            http_started = time.perf_counter()
             with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
                 raw = response.read().decode("utf-8")
+            timings["http_request_s"] = time.perf_counter() - http_started
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            timings.setdefault("http_request_s", time.perf_counter() - started)
             return CompletionResult(
                 ok=False,
                 text="",
@@ -103,19 +147,24 @@ class OpenAICompatClient:
                 response=None,
                 latency_s=time.perf_counter() - started,
                 error=str(exc),
+                timings=timings,
             )
 
         try:
+            parse_started = time.perf_counter()
             parsed = json.loads(raw)
             text = _extract_text(parsed)
+            timings["response_parse_s"] = time.perf_counter() - parse_started
             return CompletionResult(
                 ok=True,
                 text=text,
                 request=request_payload,
                 response=parsed,
                 latency_s=time.perf_counter() - started,
+                timings=timings,
             )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            timings.setdefault("response_parse_s", 0.0)
             return CompletionResult(
                 ok=False,
                 text="",
@@ -123,20 +172,28 @@ class OpenAICompatClient:
                 response={"raw": raw},
                 latency_s=time.perf_counter() - started,
                 error=f"could not parse chat response: {exc}",
+                timings=timings,
             )
 
-    def _streaming_complete(self, request_payload: dict[str, Any], started: float) -> CompletionResult:
+    def _streaming_complete(
+        self,
+        request_payload: dict[str, Any],
+        started: float,
+        timings: dict[str, Any],
+    ) -> CompletionResult:
         payload = dict(request_payload)
         payload["stream"] = True
         url = f"{self.base_url}/chat/completions"
+        body, timings = self._serialize_payload(payload, timings)
         request = urllib.request.Request(
             url,
-            data=json.dumps(payload).encode("utf-8"),
+            data=body,
             headers={"Content-Type": "application/json", "Authorization": "Bearer no-key"},
             method="POST",
         )
         chunks: list[str] = []
         try:
+            http_started = time.perf_counter()
             with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
                 for raw_line in response:
                     line = raw_line.decode("utf-8").strip()
@@ -150,7 +207,9 @@ class OpenAICompatClient:
                     text = delta.get("content") or delta.get("reasoning_content")
                     if text:
                         chunks.append(str(text))
+            timings["http_request_s"] = time.perf_counter() - http_started
         except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            timings.setdefault("http_request_s", time.perf_counter() - started)
             return CompletionResult(
                 ok=False,
                 text="".join(chunks),
@@ -158,6 +217,7 @@ class OpenAICompatClient:
                 response=None,
                 latency_s=time.perf_counter() - started,
                 error=str(exc),
+                timings=timings,
             )
         return CompletionResult(
             ok=True,
@@ -165,6 +225,7 @@ class OpenAICompatClient:
             request=payload,
             response={"stream": True},
             latency_s=time.perf_counter() - started,
+            timings=timings,
         )
 
 

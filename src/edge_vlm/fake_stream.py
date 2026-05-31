@@ -73,6 +73,7 @@ def run_fake_stream(
                     "error": str(exc),
                     "latency_s": 0.0,
                     "output_excerpt": "",
+                    "input_timing": {},
                 }
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 handle.flush()
@@ -93,6 +94,7 @@ def run_fake_stream(
                 "error": result.error,
                 "latency_s": result.latency_s,
                 "output_excerpt": result.text[:500],
+                "input_timing": dict(result.timings),
             }
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
             handle.flush()

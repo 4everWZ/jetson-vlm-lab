@@ -113,6 +113,7 @@ def _build_record(
     output_text: str,
     error: str | None,
     response: dict[str, Any] | None,
+    input_timing: dict[str, Any] | None,
     started_wall: str,
     ended_wall: str,
     latency_s: float,
@@ -141,6 +142,7 @@ def _build_record(
         "error": error,
         "output_excerpt": output_text[:500],
         "quality_terms_any": _quality_terms_any(case),
+        "input_timing": dict(input_timing or {}),
     }
 
 
@@ -301,6 +303,7 @@ def run_benchmark(
                     )
                     error = None
                     response = {"fake_stream_case": True, "image_dir": case.get("image_dir")}
+                    input_timing = {}
                     latency_s = 0.0
                     image_path = case.get("image_dir")
                 elif input_type.startswith("image") and not supports_images:
@@ -308,6 +311,7 @@ def run_benchmark(
                     output_text = ""
                     error = "case requires image input but selected config has capabilities.image=false"
                     response = None
+                    input_timing = {}
                     latency_s = 0.0
                     started_wall = ended_wall = datetime.now(timezone.utc).isoformat()
                 else:
@@ -329,6 +333,7 @@ def run_benchmark(
                         output_text = ""
                         error = str(exc)
                         response = None
+                        input_timing = {}
                         result = None
                     else:
                         latency_s = time.perf_counter() - started
@@ -337,6 +342,7 @@ def run_benchmark(
                         output_text = result.text
                         error = result.error
                         response = result.response
+                        input_timing = result.timings
                 record = _build_record(
                     config=config,
                     case=case,
@@ -348,6 +354,7 @@ def run_benchmark(
                     output_text=output_text,
                     error=error,
                     response=response,
+                    input_timing=input_timing,
                     started_wall=started_wall,
                     ended_wall=ended_wall,
                     latency_s=latency_s,

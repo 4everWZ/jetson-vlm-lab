@@ -162,6 +162,23 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(content[1]["type"], "image_url")
         self.assertTrue(content[1]["image_url"]["url"].startswith("data:image/png;base64,"))
 
+    def test_image_payload_reports_input_timing_breakdown(self):
+        from edge_vlm.image_payload import build_user_content_with_timing
+
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / "frame.png"
+            image.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+            content, timing = build_user_content_with_timing("Describe the image.", image)
+
+        self.assertEqual(content[0], {"type": "text", "text": "Describe the image."})
+        self.assertEqual(content[1]["type"], "image_url")
+        self.assertEqual(timing["image_bytes"], 8)
+        self.assertGreaterEqual(timing["mime_detect_s"], 0.0)
+        self.assertGreaterEqual(timing["image_read_s"], 0.0)
+        self.assertGreaterEqual(timing["base64_encode_s"], 0.0)
+        self.assertGreaterEqual(timing["data_url_build_s"], 0.0)
+
     def test_client_dry_run_builds_openai_chat_payload(self):
         from edge_vlm.client import OpenAICompatClient
 
@@ -173,6 +190,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result.request["max_tokens"], 16)
         self.assertEqual(result.request["messages"][0]["content"], "Say hi.")
         self.assertIn("dry run", result.text)
+        self.assertIn("payload_build_s", result.timings)
+        self.assertIn("json_serialize_s", result.timings)
 
     def test_client_extracts_reasoning_content_when_final_content_is_empty(self):
         from edge_vlm.client import _extract_text
@@ -237,6 +256,8 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(record["success"], True)
         self.assertEqual(record["device"], "wsl")
         self.assertIsInstance(record["latency_s"], float)
+        self.assertIn("input_timing", record)
+        self.assertIn("payload_build_s", record["input_timing"])
         self.assertEqual(record["quality_terms_any"], ["memory", "bandwidth"])
 
     def test_benchmark_end_time_follows_monotonic_latency_when_wall_clock_moves_backward(self):
