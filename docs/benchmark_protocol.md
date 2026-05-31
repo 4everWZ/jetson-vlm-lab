@@ -294,7 +294,11 @@ scripts/jetson/run_remote_optimization_sweep.sh \
 Set `JETSON_REMOTE_SYNC=0` to skip the initial `git pull --ff-only`, or set
 `JETSON_REMOTE_LLAMA_CPP_IMAGE` to test another pinned llama.cpp image.
 The generated sweep plan records inherited launcher environment, including the
-pinned llama.cpp image, so the plan itself contains the server image evidence.
+pinned llama.cpp image. It also records safe Docker image metadata under
+`plan.variants[].server_runtime` when `docker image inspect` is available:
+image tag, image id, repo digests, creation time, OCI source revision, base
+image, and `org.opencontainers.image.version` as the llama.cpp ref. The sweep
+does not copy container environment variables into the manifest.
 Set `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1` for promotion/comparison sweeps. The
 wrapper runs `sudo jetson_clocks` and captures `sudo jetson_clocks --show` under
 ignored `outputs/jetson_inspect/` before launching the sweep. It reads the sudo
@@ -321,11 +325,11 @@ PYTHONPATH=src python -m edge_vlm.optimization compare \
 
 The comparison report reads each sweep manifest, matching benchmark JSONL,
 fake-stream sidecar, benchmark metadata, and `tegrastats` log. It adds
-preflight `lfb`, trial count, startup time, guard status, success counts,
-throughput, latency, max temperature, average `VDD_IN` power, and per-model
-delta columns against the selected baseline variant. Copy only the defensible
-summary rows into tracked benchmark docs; keep raw generated reports under
-ignored `outputs/`.
+runtime image/id/llama.cpp ref, preflight `lfb`, trial count, startup time,
+guard status, success counts, throughput, latency, max temperature, average
+`VDD_IN` power, and per-model delta columns against the selected baseline
+variant. Copy only the defensible summary rows into tracked benchmark docs;
+keep raw generated reports under ignored `outputs/`.
 
 To refresh the current MiniCPM/Gemma default reference in one step, use:
 

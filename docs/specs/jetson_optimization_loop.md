@@ -98,6 +98,12 @@ this includes `/proc/meminfo` and a short `tegrastats` sample with parsed
 `lfb` when available. Use this to distinguish memory-state-sensitive startup
 failures from parameter-incompatible failures.
 
+Each planned variant also records `server_runtime` when the launcher environment
+contains a pinned `LLAMA_CPP_DOCKER_IMAGE` and Docker can inspect it. This
+captures the image tag, image id, repo digests, base image, source revision, and
+llama.cpp ref from OCI labels. It intentionally excludes container environment
+variables.
+
 For promotion or final comparison sweeps, lock Jetson clocks before the run:
 
 ```bash
@@ -145,11 +151,12 @@ PYTHONPATH=src python -m edge_vlm.optimization compare \
 
 The comparison report joins the sweep manifest with each benchmark JSONL,
 fake-stream JSONL, benchmark manifest, and `tegrastats` log. It reports
-preflight `lfb`, trial count, startup seconds, sanity guard, success counts,
-formal throughput/latency, fake-stream latency, max temperature, average
-`VDD_IN` power, and deltas versus the per-model baseline variant. Treat this as
-the source table for tracked benchmark docs; do not hand-copy raw metrics from
-multiple JSON files when the comparison command can derive them.
+runtime image/id/ref, preflight `lfb`, trial count, startup seconds, sanity
+guard, success counts, formal throughput/latency, fake-stream latency, max
+temperature, average `VDD_IN` power, and deltas versus the per-model baseline
+variant. Treat this as the source table for tracked benchmark docs; do not
+hand-copy raw metrics from multiple JSON files when the comparison command can
+derive them.
 
 For the recurring current-defaults baseline refresh, prefer the wrapper:
 

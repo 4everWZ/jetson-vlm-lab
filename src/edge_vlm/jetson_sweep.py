@@ -138,6 +138,63 @@ def _string_env(raw_env: dict[str, Any], base_env: dict[str, str]) -> dict[str, 
     return env
 
 
+def _docker_image_metadata(image: str | None) -> dict[str, Any]:
+    if not image:
+        return {
+            "image": None,
+            "inspect_ok": False,
+            "inspect_error": "LLAMA_CPP_DOCKER_IMAGE not set in sweep environment",
+        }
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", image],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        return {
+            "image": image,
+            "inspect_ok": False,
+            "inspect_error": "docker command not found",
+        }
+    if result.returncode != 0:
+        return {
+            "image": image,
+            "inspect_ok": False,
+            "inspect_error": _text_tail(result.stderr or result.stdout, max_chars=1000),
+        }
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        return {
+            "image": image,
+            "inspect_ok": False,
+            "inspect_error": f"invalid docker inspect JSON: {exc}",
+        }
+    if not isinstance(payload, list) or not payload or not isinstance(payload[0], dict):
+        return {
+            "image": image,
+            "inspect_ok": False,
+            "inspect_error": "docker inspect returned no image object",
+        }
+    image_obj = payload[0]
+    config = image_obj.get("Config")
+    labels = config.get("Labels") if isinstance(config, dict) else None
+    labels = labels if isinstance(labels, dict) else {}
+    return {
+        "image": image,
+        "inspect_ok": True,
+        "image_id": image_obj.get("Id"),
+        "created": image_obj.get("Created"),
+        "repo_digests": image_obj.get("RepoDigests") if isinstance(image_obj.get("RepoDigests"), list) else [],
+        "llama_cpp_ref": labels.get("org.opencontainers.image.version"),
+        "source_revision": labels.get("org.opencontainers.image.revision"),
+        "source": labels.get("org.opencontainers.image.source"),
+        "base_image": labels.get("org.opencontainers.image.base.name"),
+    }
+
+
 def _load_variants(path: str | Path) -> list[dict[str, Any]]:
     variants = list(_iter_jsonl(Path(path)))
     for variant in variants:
@@ -185,6 +242,7 @@ def build_sweep_plan(
     selected_models = set(model_filters)
     selected_variants = set(variant_filters)
     planned: list[dict[str, Any]] = []
+    runtime_by_image: dict[str | None, dict[str, Any]] = {}
     for variant in _load_variants(variants_path):
         if not _matches_filters(variant, selected_models, selected_variants):
             continue
@@ -203,6 +261,9 @@ def build_sweep_plan(
             "DOCKER_TTY": variant_env.get("DOCKER_TTY", "0"),
             "EDGE_VLM_DEVICE": variant_env.get("EDGE_VLM_DEVICE", "jetson-orin"),
         }
+        image = server_env.get("LLAMA_CPP_DOCKER_IMAGE")
+        if image not in runtime_by_image:
+            runtime_by_image[image] = _docker_image_metadata(image)
         benchmark_jsonl = output_base / "benchmarks" / f"{run_id}.jsonl"
         summary_md = output_base / "benchmarks" / f"{run_id}.md"
         manifest_json = output_base / "benchmarks" / f"{run_id}.manifest.json"
@@ -250,6 +311,7 @@ def build_sweep_plan(
                 "run_id": run_id,
                 "server_command": ["bash", str(variant["launcher"])] + [str(arg) for arg in variant.get("args", [])],
                 "server_env": server_env,
+                "server_runtime": runtime_by_image[image],
                 "benchmark_command": ["bash", "scripts/jetson/run_formal_benchmark.sh"],
                 "benchmark_env": benchmark_env,
                 "fake_stream_command": fake_stream_command if include_fake_stream else None,

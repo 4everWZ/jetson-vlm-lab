@@ -79,7 +79,8 @@ Sweep variables:
 - KV cache type
 - mmproj offload on/off
 - warmup on/off and cold-start separation
-- pinned container image / llama.cpp artifact version
+- pinned container image / llama.cpp artifact version, recorded through sweep
+  `server_runtime` image id/digest/ref metadata before comparing rows
 
 TensorRT, TensorRT-LLM, NanoLLM, Ollama, vLLM, and custom kernels stay deferred until the formal llama.cpp records show a specific bottleneck worth paying integration cost for.
 

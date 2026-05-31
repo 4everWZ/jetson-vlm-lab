@@ -855,6 +855,11 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 )
                 return {
                     "plan": {
+                        "server_runtime": {
+                            "image": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                            "image_id": "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844",
+                            "llama_cpp_ref": "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774",
+                        },
                         "paths": {
                             "benchmark_jsonl": str(benchmark_jsonl),
                             "manifest_json": str(benchmark_manifest),
@@ -919,10 +924,15 @@ class EdgeVlmContractsTest(unittest.TestCase):
             "gemma-q4-baseline-gpu12-b512-u512-kvq8",
             "gemma-q4-baseline-gpu12-b512-u512-kvq8-directio",
         ])
+        self.assertEqual(rows[0].server_image, "ghcr.io/4everwz/jetson-llama-cpp:test")
+        self.assertEqual(rows[0].server_image_id, "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844")
+        self.assertEqual(rows[0].llama_cpp_ref, "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774")
         self.assertEqual(rows[1].delta_text_tokens_per_s_pct, 20.0)
         self.assertEqual(rows[1].delta_image_tokens_per_s_pct, -12.5)
         self.assertAlmostEqual(rows[1].delta_fake_stream_latency_pct, -11.111111, places=5)
-        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | 190x4MB | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
+        self.assertIn("| Model | Variant | Run prefix | Runtime | Preflight lfb |", report_text)
+        self.assertIn("ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be", report_text)
+        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
         self.assertIn("Baseline rows use `0.00%` deltas", report_text)
 
     def test_jetson_sweep_dry_run_writes_reproducible_variant_plan(self):
@@ -1065,6 +1075,89 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(server_env["LLAMA_CPP_DOCKER_IMAGE"], "ghcr.io/4everwz/jetson-llama-cpp:test")
         self.assertEqual(server_env["LLAMA_SERVER_CMD"], "/usr/local/bin/llama-server")
         self.assertEqual(server_env["DOCKER_GPU_ARGS"], "--runtime nvidia")
+
+    def test_jetson_sweep_plan_records_docker_image_metadata(self):
+        from edge_vlm.jetson_sweep import build_sweep_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "minicpm-unit",
+                        "model": "minicpmv46-q4",
+                        "config": "configs/models/minicpmv46_q4.yaml",
+                        "launcher": "scripts/jetson/run_minicpmv46_llama_docker.sh",
+                        "env": {
+                            "MODEL_DIR": str(tmp_path / "models"),
+                            "MODEL_ALIAS": "minicpmv46-q4",
+                            "CTX_SIZE": 512,
+                            "N_GPU_LAYERS": 32,
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            inspect_payload = [
+                {
+                    "Id": "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844",
+                    "Created": "2026-05-27T13:47:04.31937282+09:30",
+                    "RepoDigests": [
+                        "ghcr.io/4everwz/jetson-llama-cpp@sha256:c39cdc50c4564f29490c69b30f601da23f4d086f99d5c4b562426dbf65fec263"
+                    ],
+                    "Config": {
+                        "Labels": {
+                            "org.opencontainers.image.version": "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774",
+                            "org.opencontainers.image.revision": "735d6e569bf8",
+                            "org.opencontainers.image.base.name": "dustynv/cuda-python:r36.4.0-cu128-24.04",
+                        }
+                    },
+                }
+            ]
+
+            with patch(
+                "edge_vlm.jetson_sweep.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    ["docker", "image", "inspect", "ghcr.io/4everwz/jetson-llama-cpp:test"],
+                    0,
+                    stdout=json.dumps(inspect_payload),
+                    stderr="",
+                ),
+            ) as docker_inspect:
+                plan = build_sweep_plan(
+                    variants_path=variants,
+                    run_prefix="unit",
+                    output_root=tmp_path / "outputs",
+                    server_log_dir=tmp_path / "logs",
+                    port=18080,
+                    trial_count=1,
+                    max_tokens=16,
+                    temperature=0,
+                    python_bin="python3",
+                    base_env={
+                        "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                    },
+                )
+
+        docker_inspect.assert_called_once_with(
+            ["docker", "image", "inspect", "ghcr.io/4everwz/jetson-llama-cpp:test"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        runtime = plan["variants"][0]["server_runtime"]
+        self.assertEqual(runtime["image"], "ghcr.io/4everwz/jetson-llama-cpp:test")
+        self.assertTrue(runtime["inspect_ok"])
+        self.assertEqual(
+            runtime["image_id"],
+            "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844",
+        )
+        self.assertEqual(runtime["repo_digests"], inspect_payload[0]["RepoDigests"])
+        self.assertEqual(runtime["llama_cpp_ref"], "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774")
+        self.assertEqual(runtime["source_revision"], "735d6e569bf8")
+        self.assertEqual(runtime["base_image"], "dustynv/cuda-python:r36.4.0-cu128-24.04")
 
     def test_jetson_sweep_run_records_preflight_and_reports_fake_stream(self):
         from edge_vlm.jetson_sweep import run_sweep

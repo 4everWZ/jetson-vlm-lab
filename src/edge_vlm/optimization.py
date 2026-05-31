@@ -40,6 +40,9 @@ class SweepComparisonRow:
     run_id: str
     variant_id: str
     model: str
+    server_image: str | None
+    server_image_id: str | None
+    llama_cpp_ref: str | None
     preflight_lfb: str
     trials: int | None
     guard_passed: bool
@@ -351,6 +354,33 @@ def _format_lfb(preflight: Any) -> str:
     return f"{free_blocks}x{block_mb}MB"
 
 
+def _runtime_metadata(variant_plan: dict[str, Any]) -> dict[str, Any]:
+    runtime = variant_plan.get("server_runtime")
+    return runtime if isinstance(runtime, dict) else {}
+
+
+def _short_ref(value: str | None, length: int = 12) -> str | None:
+    if not value:
+        return None
+    text = str(value)
+    if text.startswith("sha256:"):
+        text = text.split(":", 1)[1]
+    return text[:length]
+
+
+def _format_runtime(row: SweepComparisonRow) -> str:
+    parts = [
+        part
+        for part in (
+            row.server_image,
+            _short_ref(row.server_image_id),
+            _short_ref(row.llama_cpp_ref),
+        )
+        if part
+    ]
+    return " / ".join(parts)
+
+
 def _infer_run_prefix(run_id: str, variant_id: str, fallback: str) -> str:
     suffix = f"-{variant_id}"
     if run_id.endswith(suffix):
@@ -431,6 +461,7 @@ def summarize_sweep_manifest(
             if tegrastats_log is not None and tegrastats_log.is_file()
             else {"max_temp_c": None, "avg_power_w": None}
         )
+        runtime = _runtime_metadata(variant_plan)
         rows.append(
             SweepComparisonRow(
                 source=str(source),
@@ -438,6 +469,9 @@ def summarize_sweep_manifest(
                 run_id=run_id,
                 variant_id=variant_id,
                 model=summary.model if summary is not None else str(entry.get("model") or "unknown"),
+                server_image=str(runtime["image"]) if runtime.get("image") else None,
+                server_image_id=str(runtime["image_id"]) if runtime.get("image_id") else None,
+                llama_cpp_ref=str(runtime["llama_cpp_ref"]) if runtime.get("llama_cpp_ref") else None,
                 preflight_lfb=_format_lfb(entry.get("preflight")),
                 trials=_trial_count_from_manifest(benchmark_manifest_path),
                 guard_passed=summary.guard_passed if summary is not None else False,
@@ -500,16 +534,17 @@ def _format_sweep_comparison_report(rows: list[SweepComparisonRow]) -> str:
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower.",
         "",
-        "| Model | Variant | Run prefix | Preflight lfb | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
-        "|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Model | Variant | Run prefix | Runtime | Preflight lfb | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
+        "|---|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         failures = ", ".join(row.guard_failures)
         lines.append(
-            "| {model} | `{variant}` | {run_prefix} | {lfb} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {run_prefix} | {runtime} | {lfb} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 run_prefix=row.run_prefix,
+                runtime=_format_runtime(row),
                 lfb=row.preflight_lfb,
                 trials="" if row.trials is None else row.trials,
                 guard="yes" if row.guard_passed else f"no ({failures})",
