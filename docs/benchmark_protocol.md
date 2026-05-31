@@ -350,17 +350,22 @@ into tracked benchmark docs; keep raw generated reports under ignored
 `outputs/`.
 
 Successful sweep variants also write derived profile artifacts under
-`outputs/optimization_sweeps/<run-prefix>/profiles/`:
+`outputs/optimization_sweeps/<run-prefix>/profiles/` and launcher lifecycle
+events under `outputs/optimization_sweeps/<run-prefix>/lifecycle/`:
 
 - `<run-id>.profile.jsonl` contains parsed `tegrastats` samples.
 - `<run-id>.summary.json` contains aggregate memory, power, thermal,
   GR3D/EMC/CPU, bottleneck labels, profile file pointers, and available phase
   timings.
+- `<run-id>.lifecycle.jsonl` contains optional launcher phase records emitted
+  through `EDGE_VLM_LAUNCH_PHASE_LOG`.
 
-The currently instrumented phase timings are `server_startup`, `formal_text`,
-`formal_image`, and `fake_stream`. Artifact download/check, warmup, and
-shutdown remain marked unavailable until launcher/server lifecycle events are
-instrumented.
+The currently instrumented phase timings are `artifact_check_or_download` when
+the launcher emits lifecycle JSONL, `server_startup`, `formal_text`,
+`formal_image`, and `fake_stream`. Warmup and shutdown remain marked
+unavailable until server lifecycle events are instrumented. Gemma `-hf` runtime
+downloads that happen inside `llama-server` are labeled as not separated rather
+than guessed as launcher time.
 
 Benchmark and fake-stream JSONL records include `input_timing` when the client
 path can measure it. Current fields include image byte count, MIME detection
@@ -369,10 +374,31 @@ payload build time, JSON serialization time, request body size, HTTP elapsed
 time, and response parse time when applicable. Treat these as client-side
 pipeline timings; they are separate from server decode throughput.
 
+Fake-stream JSONL records also include `stream_timing`:
+
+- `interval_s`: configured source-frame interval.
+- `scheduled_offset_s`: nominal frame offset from stream start.
+- `pre_frame_sleep_s`: time slept before starting the frame to match the fixed cadence.
+- `schedule_delay_s`: how late the frame started relative to its nominal offset.
+- `backpressure_s`: current accumulated delay from the fixed-cadence source schedule.
+- `frame_elapsed_s`: local elapsed time spent processing the frame record.
+
+The fake-stream runner now schedules frame starts against the nominal stream
+clock instead of sleeping a fixed interval after each frame. This makes
+backpressure visible when model/request latency exceeds the target frame
+interval.
+
 To refresh the current MiniCPM/Gemma default reference in one step, use:
 
 ```bash
 scripts/jetson/run_remote_current_defaults_suite.sh
+```
+
+To run the fixed-policy lightweight model ladder with the current MiniCPM and
+Gemma baselines plus SmolVLM2, Qwen3-VL 2B, and Tencent/Youtu candidates, use:
+
+```bash
+scripts/jetson/run_remote_lightweight_model_suite.sh
 ```
 
 The wrapper runs the selected defaults for both target models with

@@ -1098,6 +1098,11 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("--cache-type-k", variant_plan["server_command"])
         self.assertTrue(variant_plan["paths"]["benchmark_jsonl"].endswith("unit-sweep-minicpm-unit.jsonl"))
         self.assertTrue(variant_plan["paths"]["preflight_json"].endswith("unit-sweep-minicpm-unit.preflight.json"))
+        self.assertTrue(variant_plan["paths"]["lifecycle_jsonl"].endswith("unit-sweep-minicpm-unit.lifecycle.jsonl"))
+        self.assertEqual(
+            variant_plan["server_env"]["EDGE_VLM_LAUNCH_PHASE_LOG"],
+            variant_plan["paths"]["lifecycle_jsonl"],
+        )
         fake_command = variant_plan["fake_stream_command"]
         self.assertEqual(fake_command[fake_command.index("--max-frames") + 1], "3")
 
@@ -1255,6 +1260,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
             tegrastats_log = tmp_path / "tegrastats" / "unit-run.log"
             profile_jsonl = tmp_path / "profiles" / "unit-run.profile.jsonl"
             profile_summary_json = tmp_path / "profiles" / "unit-run.summary.json"
+            lifecycle_jsonl = tmp_path / "lifecycle" / "unit-run.lifecycle.jsonl"
             preflight_json = tmp_path / "preflight" / "unit-run.preflight.json"
             report = tmp_path / "report.md"
             plan = {
@@ -1276,6 +1282,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
                             "fake_stream_jsonl": str(fake_stream_jsonl),
                             "profile_jsonl": str(profile_jsonl),
                             "profile_summary_json": str(profile_summary_json),
+                            "lifecycle_jsonl": str(lifecycle_jsonl),
                             "server_log": str(tmp_path / "logs" / "server.log"),
                             "preflight_json": str(preflight_json),
                         },
@@ -1294,6 +1301,21 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 }
                 Path(path).parent.mkdir(parents=True, exist_ok=True)
                 Path(path).write_text(json.dumps(sample), encoding="utf-8")
+                lifecycle_jsonl.parent.mkdir(parents=True, exist_ok=True)
+                lifecycle_jsonl.write_text(
+                    json.dumps(
+                        {
+                            "phase": "artifact_check_or_download",
+                            "available": True,
+                            "duration_s": 3.25,
+                            "reason": None,
+                            "source": "launcher",
+                            "details": {"status": "downloaded_or_checked"},
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
                 return sample
 
             def fake_run(command, **_kwargs):
@@ -1402,7 +1424,11 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["formal_text"]["duration_s"], 1.0)
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["formal_image"]["duration_s"], 2.0)
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["fake_stream"]["duration_s"], 1.5)
-        self.assertFalse(result["results"][0]["profile_summary"]["phase_timings"]["artifact_check_or_download"]["available"])
+        artifact_phase = result["results"][0]["profile_summary"]["phase_timings"]["artifact_check_or_download"]
+        self.assertTrue(artifact_phase["available"])
+        self.assertEqual(artifact_phase["duration_s"], 3.25)
+        self.assertEqual(artifact_phase["source"], "launcher")
+        self.assertEqual(artifact_phase["details"]["status"], "downloaded_or_checked")
         self.assertIn("gpu_compute", result["results"][0]["profile_summary"]["bottleneck_labels"])
         self.assertIn("emc_memory_bandwidth", result["results"][0]["profile_summary"]["bottleneck_labels"])
         self.assertIn("1.500", report_text)
@@ -2329,6 +2355,22 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("docker run", result.stdout)
         self.assertNotIn("-it", result.stdout)
 
+    def test_jetson_launchers_record_optional_artifact_phase_logs(self):
+        phase_helper = Path("scripts/jetson/phase_logging.sh").read_text(encoding="utf-8")
+        self.assertIn("EDGE_VLM_LAUNCH_PHASE_LOG", phase_helper)
+        self.assertIn("write_launch_phase", phase_helper)
+        launcher_paths = [
+            Path("scripts/jetson/run_minicpmv46_llama_docker.sh"),
+            Path("scripts/jetson/run_gemma4_e2b_llama_docker.sh"),
+            Path("scripts/jetson/run_hf_gguf_vlm_llama_docker.sh"),
+        ]
+
+        for launcher_path in launcher_paths:
+            launcher = launcher_path.read_text(encoding="utf-8")
+            self.assertIn("phase_logging.sh", launcher, str(launcher_path))
+            self.assertIn("artifact_check_or_download", launcher, str(launcher_path))
+            self.assertIn("write_launch_phase", launcher, str(launcher_path))
+
     def test_jetson_remote_exec_dry_run_sources_ignored_env_without_exposing_password(self):
         with tempfile.TemporaryDirectory() as tmp:
             env_file = Path(tmp) / ".env.jetson"
@@ -2863,6 +2905,97 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/comparison.md\n",
+            log_text,
+        )
+
+    def test_remote_lightweight_model_suite_runs_baselines_and_candidates_then_compare(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "suite.log"
+            fake_sweep = tmp_path / "run_remote_optimization_sweep.sh"
+            fake_remote = tmp_path / "remote_exec.sh"
+            fake_sweep.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'SWEEP\\n' >> \"${FAKE_SUITE_LOG:?}\"",
+                        "printf 'ENV_PREPARE=%s\\n' \"${JETSON_REMOTE_PREPARE_MAX_CLOCKS:-}\" >> \"${FAKE_SUITE_LOG}\"",
+                        "printf 'ENV_DROP=%s\\n' \"${JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT:-}\" >> \"${FAKE_SUITE_LOG}\"",
+                        "printf 'ENV_SYNC=%s\\n' \"${JETSON_REMOTE_SYNC:-}\" >> \"${FAKE_SUITE_LOG}\"",
+                        "for arg in \"$@\"; do printf 'SWEEP_ARG=%s\\n' \"$arg\" >> \"${FAKE_SUITE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'REMOTE\\n' >> \"${FAKE_SUITE_LOG:?}\"",
+                        "for arg in \"$@\"; do printf 'REMOTE_ARG=%s\\n' \"$arg\" >> \"${FAKE_SUITE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_sweep, 0o755)
+            os.chmod(fake_remote, 0o755)
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_remote_lightweight_model_suite.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_LIGHTWEIGHT_RUN_PREFIX": "light-unit",
+                    "JETSON_LIGHTWEIGHT_TRIAL_COUNT": "6",
+                    "JETSON_LIGHTWEIGHT_MAX_TOKENS": "44",
+                    "JETSON_LIGHTWEIGHT_FAKE_STREAM_MAX_FRAMES": "4",
+                    "JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS": "177",
+                    "JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S": "321",
+                    "JETSON_REMOTE_SYNC": "0",
+                    "JETSON_REMOTE_SWEEP": str(fake_sweep),
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                    "FAKE_SUITE_LOG": str(log_file),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertIn("SWEEP\n", log_text)
+        self.assertIn("ENV_PREPARE=1\n", log_text)
+        self.assertIn("ENV_DROP=1\n", log_text)
+        self.assertIn("ENV_SYNC=0\n", log_text)
+        self.assertIn("SWEEP_ARG=--run-prefix\nSWEEP_ARG=light-unit\n", log_text)
+        for variant_id in (
+            "minicpm-q4-baseline-b128-u32-kvq8",
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+            "smolvlm2-256m-q8-smoke",
+            "qwen3-vl-2b-thinking-q4-smoke",
+            "youtu-vl-4b-q8-smoke",
+            "youtu-vl-4b-q4-thirdparty-smoke",
+        ):
+            self.assertIn(f"SWEEP_ARG=--variant\nSWEEP_ARG={variant_id}\n", log_text)
+        self.assertIn("SWEEP_ARG=--trial-count\nSWEEP_ARG=6\n", log_text)
+        self.assertIn("SWEEP_ARG=--max-tokens\nSWEEP_ARG=44\n", log_text)
+        self.assertIn("SWEEP_ARG=--fake-stream-max-frames\nSWEEP_ARG=4\n", log_text)
+        self.assertIn("SWEEP_ARG=--min-lfb-blocks\nSWEEP_ARG=177\n", log_text)
+        self.assertIn("SWEEP_ARG=--wait-timeout-s\nSWEEP_ARG=321\n", log_text)
+        self.assertIn("REMOTE\n", log_text)
+        self.assertIn("REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.optimization\nREMOTE_ARG=compare\n", log_text)
+        self.assertIn(
+            "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/light-unit.manifest.json\n",
+            log_text,
+        )
+        self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
+        self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
+        self.assertIn(
+            "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/comparison.md\n",
             log_text,
         )
 

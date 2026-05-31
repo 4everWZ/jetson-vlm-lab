@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
-from .jetson_profile import write_profile_artifacts
+from .jetson_profile import REQUIRED_PHASES, write_profile_artifacts
 from .optimization import build_optimization_report
 
 
@@ -261,25 +261,27 @@ def build_sweep_plan(
             for key in SERVER_ENV_PASSTHROUGH_KEYS
             if key in source_env and key not in variant_env
         }
-        server_env = {
-            **inherited_server_env,
-            **variant_env,
-            "VLM_SERVER_PORT": str(port),
-            "DOCKER_TTY": variant_env.get("DOCKER_TTY", "0"),
-            "EDGE_VLM_DEVICE": variant_env.get("EDGE_VLM_DEVICE", "jetson-orin"),
-        }
-        image = server_env.get("LLAMA_CPP_DOCKER_IMAGE")
-        if image not in runtime_by_image:
-            runtime_by_image[image] = _docker_image_metadata(image)
         benchmark_jsonl = output_base / "benchmarks" / f"{run_id}.jsonl"
         summary_md = output_base / "benchmarks" / f"{run_id}.md"
         manifest_json = output_base / "benchmarks" / f"{run_id}.manifest.json"
         profile_dir = output_base / "benchmarks" / f"{run_id}.profile"
         profile_jsonl = output_base / "profiles" / f"{run_id}.profile.jsonl"
         profile_summary_json = output_base / "profiles" / f"{run_id}.summary.json"
+        lifecycle_jsonl = output_base / "lifecycle" / f"{run_id}.lifecycle.jsonl"
         fake_stream_jsonl = output_base / "fake_stream" / f"{run_id}.jsonl"
         server_log = log_base / f"{run_id}.server.log"
         preflight_json = output_base / "preflight" / f"{run_id}.preflight.json"
+        server_env = {
+            **inherited_server_env,
+            **variant_env,
+            "VLM_SERVER_PORT": str(port),
+            "DOCKER_TTY": variant_env.get("DOCKER_TTY", "0"),
+            "EDGE_VLM_DEVICE": variant_env.get("EDGE_VLM_DEVICE", "jetson-orin"),
+            "EDGE_VLM_LAUNCH_PHASE_LOG": str(lifecycle_jsonl),
+        }
+        image = server_env.get("LLAMA_CPP_DOCKER_IMAGE")
+        if image not in runtime_by_image:
+            runtime_by_image[image] = _docker_image_metadata(image)
         benchmark_env = {
             **server_env,
             "EDGE_VLM_FORMAL_RUN_ID": run_id,
@@ -332,6 +334,7 @@ def build_sweep_plan(
                     "profile_dir": str(profile_dir),
                     "profile_jsonl": str(profile_jsonl),
                     "profile_summary_json": str(profile_summary_json),
+                    "lifecycle_jsonl": str(lifecycle_jsonl),
                     "fake_stream_jsonl": str(fake_stream_jsonl),
                     "server_log": str(server_log),
                     "preflight_json": str(preflight_json),
@@ -498,9 +501,37 @@ def _phase_entry(duration: float | None, reason: str = "not_recorded") -> dict[s
     }
 
 
+def _phase_timings_from_lifecycle(path: str | Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    source = Path(path)
+    if not source.is_file():
+        return {}
+    timings: dict[str, Any] = {}
+    for record in _iter_jsonl(source):
+        phase = record.get("phase")
+        if phase not in REQUIRED_PHASES:
+            continue
+        duration = record.get("duration_s")
+        entry: dict[str, Any] = {
+            "available": bool(record.get("available")) if record.get("available") is not None else isinstance(duration, (int, float)),
+            "duration_s": float(duration) if isinstance(duration, (int, float)) else None,
+            "reason": str(record.get("reason") or "") or None,
+        }
+        source_name = record.get("source")
+        if isinstance(source_name, str) and source_name:
+            entry["source"] = source_name
+        details = record.get("details")
+        if isinstance(details, dict):
+            entry["details"] = dict(details)
+        timings[str(phase)] = entry
+    return timings
+
+
 def _profile_phase_timings(paths: dict[str, Any], startup_seconds: Any) -> dict[str, Any]:
     benchmark_jsonl = paths.get("benchmark_jsonl")
     fake_stream_jsonl = paths.get("fake_stream_jsonl")
+    lifecycle_jsonl = paths.get("lifecycle_jsonl")
     text_duration = (
         _latency_sum_from_jsonl(benchmark_jsonl, lambda record: record.get("input_type") == "text")
         if isinstance(benchmark_jsonl, str)
@@ -519,14 +550,18 @@ def _profile_phase_timings(paths: dict[str, Any], startup_seconds: Any) -> dict[
         if isinstance(fake_stream_jsonl, str)
         else None
     )
-    return {
-        "server_startup": _phase_entry(
-            float(startup_seconds) if isinstance(startup_seconds, (int, float)) else None,
-        ),
-        "formal_text": _phase_entry(text_duration),
-        "formal_image": _phase_entry(image_duration),
-        "fake_stream": _phase_entry(fake_stream_duration),
-    }
+    timings = _phase_timings_from_lifecycle(lifecycle_jsonl if isinstance(lifecycle_jsonl, str) else None)
+    timings.update(
+        {
+            "server_startup": _phase_entry(
+                float(startup_seconds) if isinstance(startup_seconds, (int, float)) else None,
+            ),
+            "formal_text": _phase_entry(text_duration),
+            "formal_image": _phase_entry(image_duration),
+            "fake_stream": _phase_entry(fake_stream_duration),
+        }
+    )
+    return timings
 
 
 def _profile_files(paths: dict[str, Any], jetson: dict[str, Any]) -> dict[str, str]:

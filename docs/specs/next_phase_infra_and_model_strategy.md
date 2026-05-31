@@ -93,8 +93,10 @@ Required per-run profile data:
   image tag/id/digest, and llama.cpp ref.
 - Host memory snapshot before startup and before each variant.
 - Startup timing separated from benchmark request timing.
-- First-run download time separated from cached startup time for Hub GGUF
-  candidates.
+- First-run download time separated from cached startup time for host-side Hub
+  GGUF launchers through `EDGE_VLM_LAUNCH_PHASE_LOG`. Runtime-internal `-hf`
+  downloads are labeled not separated until that path is replaced or parsed from
+  runtime logs.
 
 Profiling output should be machine-readable under ignored output paths, for
 example:

@@ -4,6 +4,8 @@ set -Eeuo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=resolve_llama_cpp_image.sh
 source "${script_dir}/resolve_llama_cpp_image.sh"
+# shellcheck source=phase_logging.sh
+source "${script_dir}/phase_logging.sh"
 
 image="$(resolve_llama_cpp_image)"
 model_dir="${MODEL_DIR:-/mnt/nvme/models}"
@@ -77,9 +79,21 @@ if [[ "${dry_run}" == "1" ]]; then
   exit 0
 fi
 
+artifact_phase_start_ns="$(phase_now_ns)"
 if [[ -n "${model_path}" || -n "${mmproj_path}" ]]; then
-  [[ -f "${model_path}" ]] || { echo "MODEL_PATH not found on host: ${model_path}" >&2; exit 2; }
-  [[ -f "${mmproj_path}" ]] || { echo "MMPROJ_PATH not found on host: ${mmproj_path}" >&2; exit 2; }
+  if [[ ! -f "${model_path}" ]]; then
+    write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "missing_model"
+    echo "MODEL_PATH not found on host: ${model_path}" >&2
+    exit 2
+  fi
+  if [[ ! -f "${mmproj_path}" ]]; then
+    write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "missing_mmproj"
+    echo "MMPROJ_PATH not found on host: ${mmproj_path}" >&2
+    exit 2
+  fi
+  write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "cached"
+else
+  write_launch_phase_unavailable "artifact_check_or_download" "runtime_hf_download_inside_server" "not_separated"
 fi
 
 if ! command -v docker >/dev/null 2>&1; then

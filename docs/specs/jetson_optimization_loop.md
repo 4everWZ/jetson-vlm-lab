@@ -88,6 +88,7 @@ Outputs stay under ignored `outputs/optimization_sweeps/<run-prefix>/`:
 - `benchmarks/*.md`
 - `benchmarks/*.manifest.json`
 - `fake_stream/*.jsonl`
+- `lifecycle/*.lifecycle.jsonl`
 - `profiles/*.profile.jsonl`
 - `profiles/*.summary.json`
 - `preflight/*.preflight.json`
@@ -149,10 +150,12 @@ profile artifacts under `profiles/`:
   power, conservative bottleneck labels, available phase timings, and profile
   file pointers.
 
-The first profile-summary phase timings are `server_startup`, `formal_text`,
-`formal_image`, and `fake_stream`. Phases that are not instrumented yet, such
-as launcher artifact download/check, warmup, and shutdown, remain present in the
-summary as unavailable instead of being guessed.
+The first profile-summary phase timings are `artifact_check_or_download` when
+the launcher emits lifecycle JSONL, `server_startup`, `formal_text`,
+`formal_image`, and `fake_stream`. Warmup and shutdown remain present in the
+summary as unavailable instead of being guessed until server lifecycle events
+are instrumented. Launchers that delegate artifact download to `llama-server`
+inside the runtime container emit a not-separated lifecycle record.
 
 After a promotion or comparison sweep, generate the mechanical comparison table
 before writing tracked benchmark notes:

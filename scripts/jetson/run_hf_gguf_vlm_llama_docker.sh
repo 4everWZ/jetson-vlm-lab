@@ -4,6 +4,8 @@ set -Eeuo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=resolve_llama_cpp_image.sh
 source "${script_dir}/resolve_llama_cpp_image.sh"
+# shellcheck source=phase_logging.sh
+source "${script_dir}/phase_logging.sh"
 
 image="$(resolve_llama_cpp_image)"
 model_dir="${MODEL_DIR:-/mnt/nvme/models}"
@@ -86,8 +88,14 @@ download_hf_file() {
   mv "${partial}" "${destination}"
 }
 
+artifact_phase_start_ns="$(phase_now_ns)"
+artifact_status="cached"
+if [[ ! -f "${host_model_path}" || ! -f "${host_mmproj_path}" ]]; then
+  artifact_status="downloaded_or_checked"
+fi
 download_hf_file "${model_file}" "${host_model_path}"
 download_hf_file "${mmproj_file}" "${host_mmproj_path}"
+write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "${artifact_status}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is required on Jetson for this runtime path." >&2

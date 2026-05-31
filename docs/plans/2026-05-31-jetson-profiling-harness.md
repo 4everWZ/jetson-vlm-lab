@@ -41,12 +41,13 @@ The first implementation slice covers structured `tegrastats` parsing,
 columns. It does not yet fully satisfy the whole strategy spec. These
 requirements remain explicit follow-up tasks:
 
-- Instrument `artifact_check_or_download` inside launchers so first-run
-  downloads and cached startup are separated.
+- `artifact_check_or_download` is now instrumented inside Jetson launchers via
+  `EDGE_VLM_LAUNCH_PHASE_LOG` so host-side first-run downloads and cached
+  startup checks are separated.
 - Instrument `warmup` and `shutdown` instead of leaving them as `not_recorded`.
 - Input-pipeline timing for image read, MIME detection, base64 encoding, JSON
-  serialization, and HTTP request/response is implemented in the client path;
-  fake-stream scheduling/backpressure timing remains open.
+  serialization, and HTTP request/response is implemented in the client path.
+  Fake-stream scheduling/backpressure timing is implemented as `stream_timing`.
 - Add evidence-backed `input_payload` and `runtime_overhead` labels after input
   and server-side timing data exist.
 - Add time stamps to profile JSONL records when the raw `tegrastats` line does
@@ -424,32 +425,33 @@ git push origin bench/formal-jetson-infra
 ## Task 6: Remaining Phase Timing Instrumentation
 
 **Files:**
+- Create: `scripts/jetson/phase_logging.sh`
 - Modify: `scripts/jetson/run_hf_gguf_vlm_llama_docker.sh`
 - Modify: `scripts/jetson/run_minicpmv46_llama_docker.sh`
 - Modify: `scripts/jetson/run_gemma4_e2b_llama_docker.sh`
 - Modify: `src/edge_vlm/jetson_sweep.py`
+- Modify: `src/edge_vlm/jetson_profile.py`
 - Modify: `tests/test_edge_vlm.py`
 
-- [ ] **Step 1: Add launcher phase-event tests**
+- [x] **Step 1: Add launcher phase-event tests**
 
-Add dry-run shell tests that set `EDGE_VLM_PHASE_EVENTS` to a temp file and
-verify launchers write JSONL events for `artifact_check_or_download` with
-`cached=true` when artifacts already exist.
+Add tests that require sweep plans to allocate `lifecycle/*.lifecycle.jsonl`,
+pass the path to launchers through `EDGE_VLM_LAUNCH_PHASE_LOG`, and merge an
+`artifact_check_or_download` lifecycle record into the profile summary.
 
-- [ ] **Step 2: Implement launcher phase events**
+- [x] **Step 2: Implement launcher phase events**
 
-Use a shell helper named `record_phase_event` in each launcher. Each event must
-be a one-line JSON object with `phase`, `event`, `time`, and optional `cached`.
-For launchers that only check local files, record the check around the existing
-`[[ -f ... ]]` validations.
+Use `scripts/jetson/phase_logging.sh` from each launcher. Each event is a
+one-line JSON object with `phase`, `available`, `duration_s`, `reason`,
+`source`, and `details.status`. Local artifact checks record `cached` or a
+missing-artifact status; host-side HF downloads record `downloaded_or_checked`.
 
-- [ ] **Step 3: Merge launcher phase events into profile summary**
+- [x] **Step 3: Merge launcher phase events into profile summary**
 
-Teach `run_sweep` to read `EDGE_VLM_PHASE_EVENTS` after server startup and pass
-the measured `artifact_check_or_download` duration into
-`write_profile_artifacts`.
+Teach `run_sweep` to read `lifecycle_jsonl` and pass the measured
+`artifact_check_or_download` duration into `write_profile_artifacts`.
 
-- [ ] **Step 4: Verify phase-event path**
+- [x] **Step 4: Verify phase-event path**
 
 Run:
 

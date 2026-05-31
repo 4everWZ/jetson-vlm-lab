@@ -150,11 +150,18 @@ def _normalize_phase_timings(phase_timings: dict[str, Any] | None = None) -> dic
             continue
         available = raw_value.get("available")
         duration = raw_value.get("duration_s")
-        normalized[phase] = {
+        entry: dict[str, Any] = {
             "available": bool(available) if available is not None else isinstance(duration, (int, float)),
             "duration_s": float(duration) if isinstance(duration, (int, float)) else None,
             "reason": str(raw_value.get("reason") or "") or None,
         }
+        source = raw_value.get("source")
+        if isinstance(source, str) and source:
+            entry["source"] = source
+        details = raw_value.get("details")
+        if isinstance(details, dict):
+            entry["details"] = dict(details)
+        normalized[phase] = entry
     return normalized
 
 
