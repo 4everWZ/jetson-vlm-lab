@@ -1559,6 +1559,28 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertEqual(parsed, {"free_blocks": 150, "block_mb": 4})
 
+    def test_jetson_profile_parses_core_tegrastats_fields(self):
+        from edge_vlm.jetson_profile import parse_tegrastats_line
+
+        sample = parse_tegrastats_line(
+            "05-31-2026 RAM 2100/7620MB (lfb 180x4MB) "
+            "SWAP 12/3810MB (cached 4MB) CPU [10%@1728,off,35%@1728] "
+            "GR3D_FREQ 89%@[1020] EMC_FREQ 76%@3199 "
+            "cpu@52.0C gpu@54.5C tj@55.0C "
+            "VDD_IN 17400mW/16800mW VDD_CPU_GPU_CV 8900mW/8200mW"
+        )
+
+        self.assertEqual(sample["ram"], {"used_mb": 2100, "total_mb": 7620})
+        self.assertEqual(sample["swap"], {"used_mb": 12, "total_mb": 3810, "cached_mb": 4})
+        self.assertEqual(sample["lfb"], {"free_blocks": 180, "block_mb": 4})
+        self.assertEqual(sample["cpu"]["cores"][0], {"state": "online", "util_pct": 10, "freq_mhz": 1728})
+        self.assertEqual(sample["cpu"]["cores"][1], {"state": "off", "util_pct": None, "freq_mhz": None})
+        self.assertEqual(sample["gr3d"], {"util_pct": 89, "freq_mhz": 1020})
+        self.assertEqual(sample["emc"], {"util_pct": 76, "freq_mhz": 3199})
+        self.assertEqual(sample["temps_c"]["gpu"], 54.5)
+        self.assertEqual(sample["power_mw"]["VDD_IN"], {"instant": 17400, "average": 16800})
+        self.assertEqual(sample["power_mw"]["VDD_CPU_GPU_CV"], {"instant": 8900, "average": 8200})
+
     def test_next_phase_spec_orders_infra_before_model_expansion_and_lists_tencent_youtu_vl(self):
         spec = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
 
