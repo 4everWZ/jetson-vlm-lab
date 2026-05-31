@@ -754,6 +754,177 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("Fake latency s", report_text)
         self.assertIn("fake_stream:frame_001.png:empty_output", report_text)
 
+    def test_optimization_comparison_report_adds_manifest_context_and_deltas(self):
+        from edge_vlm.optimization import build_sweep_comparison_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "gemma-compare"
+            benchmark_dir = output_root / "benchmarks"
+            fake_dir = output_root / "fake_stream"
+            benchmark_dir.mkdir(parents=True)
+            fake_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+
+            def write_run(run_prefix, variant_id, *, text_tps, image_tps, fake_latency, startup_s, lfb_blocks, power_w):
+                run_id = f"{run_prefix}-{variant_id}"
+                benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+                fake_jsonl = fake_dir / f"{run_id}.jsonl"
+                benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+                tegrastats_log = tmp_path / "outputs" / "tegrastats" / f"{run_id}.log"
+                tegrastats_log.parent.mkdir(parents=True, exist_ok=True)
+                benchmark_jsonl.write_text(
+                    "\n".join(
+                        [
+                            json.dumps(
+                                {
+                                    "model": "gemma4-e2b-it-q4",
+                                    "run_id": run_id,
+                                    "prompt_case_id": "text_case",
+                                    "input_type": "text",
+                                    "success": True,
+                                    "latency_s": 64.0 / text_tps,
+                                    "tokens": 64,
+                                    "tokens_per_sec": text_tps,
+                                    "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                                    "quality_terms_any": ["memory", "bandwidth"],
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "model": "gemma4-e2b-it-q4",
+                                    "run_id": run_id,
+                                    "prompt_case_id": "image_case",
+                                    "input_type": "image",
+                                    "success": True,
+                                    "latency_s": 64.0 / image_tps,
+                                    "tokens": 64,
+                                    "tokens_per_sec": image_tps,
+                                    "output_excerpt": "The image shows two contrasting square shapes on a background.",
+                                    "quality_terms_any": ["square", "background"],
+                                }
+                            ),
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                fake_jsonl.write_text(
+                    json.dumps(
+                        {
+                            "frame_id": "frame_001.png",
+                            "success": True,
+                            "latency_s": fake_latency,
+                            "output_excerpt": "The frame shows a simple scene with contrasting square shapes.",
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                tegrastats_log.write_text(
+                    "\n".join(
+                        [
+                            (
+                                "05-31-2026 RAM 2000/7620MB (lfb 200x4MB) "
+                                "GR3D_FREQ 80% cpu@50.0C gpu@51.0C tj@51.0C "
+                                f"VDD_IN {int(power_w * 1000)}mW/{int(power_w * 1000)}mW"
+                            ),
+                            (
+                                "05-31-2026 RAM 2100/7620MB (lfb 180x4MB) "
+                                "GR3D_FREQ 90% cpu@52.0C gpu@54.5C tj@54.5C "
+                                f"VDD_IN {int((power_w + 1) * 1000)}mW/{int((power_w + 1) * 1000)}mW"
+                            ),
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                benchmark_manifest.write_text(
+                    json.dumps(
+                        {
+                            "run_id": run_id,
+                            "benchmark": {"trial_count": 1},
+                            "cases_written": 2,
+                            "successful": 2,
+                            "failed": 0,
+                            "jetson": {"tegrastats_log": str(tegrastats_log)},
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return {
+                    "plan": {
+                        "paths": {
+                            "benchmark_jsonl": str(benchmark_jsonl),
+                            "manifest_json": str(benchmark_manifest),
+                            "fake_stream_jsonl": str(fake_jsonl),
+                        }
+                    },
+                    "result": {
+                        "run_id": run_id,
+                        "variant_id": variant_id,
+                        "preflight": {
+                            "tegrastats": {
+                                "lfb": {"free_blocks": lfb_blocks, "block_mb": 4},
+                            }
+                        },
+                        "preflight_passed": True,
+                        "server_startup_seconds": startup_s,
+                        "benchmark_returncode": 0,
+                        "fake_stream_returncode": 0,
+                    },
+                }
+
+            baseline = write_run(
+                "gemma-baseline",
+                "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+                text_tps=10.0,
+                image_tps=8.0,
+                fake_latency=9.0,
+                startup_s=5.0,
+                lfb_blocks=180,
+                power_w=10.0,
+            )
+            candidate = write_run(
+                "gemma-directio",
+                "gemma-q4-baseline-gpu12-b512-u512-kvq8-directio",
+                text_tps=12.0,
+                image_tps=7.0,
+                fake_latency=8.0,
+                startup_s=6.0,
+                lfb_blocks=190,
+                power_w=12.0,
+            )
+            manifest = output_root / "gemma-compare.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {"run_prefix": "gemma-compare", "variants": [baseline["plan"], candidate["plan"]]},
+                        "result": {"results": [baseline["result"], candidate["result"]]},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = build_sweep_comparison_report(
+                manifest_paths=[manifest],
+                output_path=report,
+                baseline_variant_ids=["gemma-q4-baseline-gpu12-b512-u512-kvq8"],
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual([row.variant_id for row in rows], [
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8-directio",
+        ])
+        self.assertEqual(rows[1].delta_text_tokens_per_s_pct, 20.0)
+        self.assertEqual(rows[1].delta_image_tokens_per_s_pct, -12.5)
+        self.assertAlmostEqual(rows[1].delta_fake_stream_latency_pct, -11.111111, places=5)
+        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | 190x4MB | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
+        self.assertIn("Baseline rows use `0.00%` deltas", report_text)
+
     def test_jetson_sweep_dry_run_writes_reproducible_variant_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

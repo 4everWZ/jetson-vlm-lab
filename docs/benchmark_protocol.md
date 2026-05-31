@@ -310,6 +310,23 @@ The manifest records the command and FIFO path, not the password. Do not
 combine this env flag with a manual `--pre-variant-command`; use the lower-level
 local sweep command only when a custom preparation command is required.
 
+Build a comparison table from one or more sweep manifests with:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.optimization compare \
+  --manifest outputs/optimization_sweeps/minicpm-promo-iso-001/minicpm-promo-iso-001.manifest.json \
+  --baseline-variant minicpm-q4-baseline-b128-u32-kvq8 \
+  --output outputs/optimization_sweeps/minicpm-promo-iso-001/comparison.md
+```
+
+The comparison report reads each sweep manifest, matching benchmark JSONL,
+fake-stream sidecar, benchmark metadata, and `tegrastats` log. It adds
+preflight `lfb`, trial count, startup time, guard status, success counts,
+throughput, latency, max temperature, average `VDD_IN` power, and per-model
+delta columns against the selected baseline variant. Copy only the defensible
+summary rows into tracked benchmark docs; keep raw generated reports under
+ignored `outputs/`.
+
 ## Reporting Rules
 
 - Report dry-run logs as payload/logging validation only.

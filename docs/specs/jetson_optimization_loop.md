@@ -133,6 +133,24 @@ does not become ready records `server_wait_seconds` and keeps
 `server_startup_seconds=null`, so load-path experiments can separate startup
 behavior from steady-state benchmark throughput.
 
+After a promotion or comparison sweep, generate the mechanical comparison table
+before writing tracked benchmark notes:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.optimization compare \
+  --manifest outputs/optimization_sweeps/minicpm-promo-001/minicpm-promo-001.manifest.json \
+  --baseline-variant minicpm-q4-baseline-b128-u32-kvq8 \
+  --output outputs/optimization_sweeps/minicpm-promo-001/comparison.md
+```
+
+The comparison report joins the sweep manifest with each benchmark JSONL,
+fake-stream JSONL, benchmark manifest, and `tegrastats` log. It reports
+preflight `lfb`, trial count, startup seconds, sanity guard, success counts,
+formal throughput/latency, fake-stream latency, max temperature, average
+`VDD_IN` power, and deltas versus the per-model baseline variant. Treat this as
+the source table for tracked benchmark docs; do not hand-copy raw metrics from
+multiple JSON files when the comparison command can derive them.
+
 Use `--min-lfb-blocks <N>` for promotion or repeatability sweeps. When set, the
 sweep skips a variant before server startup if parsed `lfb` free blocks are
 below the threshold and records `preflight_passed=false` plus a

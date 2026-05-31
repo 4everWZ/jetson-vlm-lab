@@ -33,6 +33,39 @@ class RunSummary:
     speed_score: float | None
 
 
+@dataclass
+class SweepComparisonRow:
+    source: str
+    run_prefix: str
+    run_id: str
+    variant_id: str
+    model: str
+    preflight_lfb: str
+    trials: int | None
+    guard_passed: bool
+    successful: int
+    records: int
+    fake_stream_successful: int
+    fake_stream_records: int
+    server_startup_seconds: float | None
+    text_avg_tokens_per_s: float | None
+    image_avg_tokens_per_s: float | None
+    text_avg_latency_s: float | None
+    image_avg_latency_s: float | None
+    fake_stream_avg_latency_s: float | None
+    max_temp_c: float | None
+    avg_power_w: float | None
+    guard_failures: tuple[str, ...]
+    delta_text_tokens_per_s_pct: float | None = None
+    delta_image_tokens_per_s_pct: float | None = None
+    delta_startup_pct: float | None = None
+    delta_fake_stream_latency_pct: float | None = None
+
+
+TEGRASTATS_TEMP_RE = re.compile(r"@([0-9]+(?:\.[0-9]+)?)C")
+TEGRASTATS_VDD_IN_RE = re.compile(r"\bVDD_IN\s+(?P<instant_mw>\d+)mW/\d+mW\b")
+
+
 def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
     with path.open("r", encoding="utf-8") as handle:
         for lineno, line in enumerate(handle, start=1):
@@ -46,6 +79,14 @@ def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
             if not isinstance(record, dict):
                 raise ValueError(f"{path}:{lineno}: each line must be a JSON object")
             yield record
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: expected a JSON object")
+    return data
 
 
 def _numeric_values(records: Iterable[dict[str, Any]], input_type: str, key: str) -> list[float]:
@@ -217,6 +258,16 @@ def _fmt(value: float | None) -> str:
     return "" if value is None else f"{value:.3f}"
 
 
+def _fmt_pct(value: float | None) -> str:
+    return "" if value is None else f"{value:+.2f}%"
+
+
+def _percent_delta(value: float | None, baseline: float | None) -> float | None:
+    if value is None or baseline in (None, 0):
+        return None
+    return ((value - baseline) / baseline) * 100.0
+
+
 def _format_report(summaries: list[RunSummary]) -> str:
     lines = [
         "# Edge VLM Optimization Report",
@@ -260,6 +311,256 @@ def _format_report(summaries: list[RunSummary]) -> str:
     return "\n".join(lines)
 
 
+def summarize_tegrastats_log(path: str | Path) -> dict[str, float | int | None]:
+    source = Path(path)
+    max_temps: list[float] = []
+    power_w: list[float] = []
+    for line in source.read_text(encoding="utf-8").splitlines():
+        temps = [float(value) for value in TEGRASTATS_TEMP_RE.findall(line)]
+        if temps:
+            max_temps.append(max(temps))
+        power_match = TEGRASTATS_VDD_IN_RE.search(line)
+        if power_match is not None:
+            power_w.append(int(power_match.group("instant_mw")) / 1000.0)
+    return {
+        "samples": max(len(max_temps), len(power_w)),
+        "max_temp_c": max(max_temps) if max_temps else None,
+        "avg_power_w": statistics.mean(power_w) if power_w else None,
+    }
+
+
+def _path_or_none(value: Any) -> Path | None:
+    if not isinstance(value, str) or not value:
+        return None
+    return Path(value)
+
+
+def _format_lfb(preflight: Any) -> str:
+    if not isinstance(preflight, dict):
+        return ""
+    tegrastats = preflight.get("tegrastats")
+    if not isinstance(tegrastats, dict):
+        return ""
+    lfb = tegrastats.get("lfb")
+    if not isinstance(lfb, dict):
+        return ""
+    free_blocks = lfb.get("free_blocks")
+    block_mb = lfb.get("block_mb")
+    if not isinstance(free_blocks, int) or not isinstance(block_mb, int):
+        return ""
+    return f"{free_blocks}x{block_mb}MB"
+
+
+def _infer_run_prefix(run_id: str, variant_id: str, fallback: str) -> str:
+    suffix = f"-{variant_id}"
+    if run_id.endswith(suffix):
+        return run_id[: -len(suffix)]
+    return fallback
+
+
+def _trial_count_from_manifest(path: Path | None) -> int | None:
+    if path is None or not path.is_file():
+        return None
+    data = _read_json(path)
+    benchmark = data.get("benchmark")
+    if not isinstance(benchmark, dict):
+        return None
+    trial_count = benchmark.get("trial_count")
+    return int(trial_count) if isinstance(trial_count, int) else None
+
+
+def _tegrastats_log_from_manifest(path: Path | None) -> Path | None:
+    if path is None or not path.is_file():
+        return None
+    data = _read_json(path)
+    jetson = data.get("jetson")
+    if not isinstance(jetson, dict):
+        return None
+    return _path_or_none(jetson.get("tegrastats_log"))
+
+
+def summarize_sweep_manifest(
+    manifest_path: str | Path,
+    *,
+    min_output_chars: int = 32,
+    max_repeat_ratio: float = 0.65,
+) -> list[SweepComparisonRow]:
+    source = Path(manifest_path)
+    manifest = _read_json(source)
+    plan = manifest.get("plan")
+    result = manifest.get("result")
+    if not isinstance(plan, dict) or not isinstance(result, dict):
+        raise ValueError(f"{source}: expected sweep manifest with plan and result objects")
+    plan_variants = plan.get("variants")
+    result_entries = result.get("results")
+    if not isinstance(plan_variants, list) or not isinstance(result_entries, list):
+        raise ValueError(f"{source}: expected plan.variants and result.results lists")
+    fallback_run_prefix = str(plan.get("run_prefix") or source.stem.removesuffix(".manifest"))
+    plan_by_run_id = {
+        str(variant.get("run_id")): variant
+        for variant in plan_variants
+        if isinstance(variant, dict) and variant.get("run_id") is not None
+    }
+    rows: list[SweepComparisonRow] = []
+    for index, entry in enumerate(result_entries):
+        if not isinstance(entry, dict):
+            continue
+        run_id = str(entry.get("run_id") or "")
+        variant_id = str(entry.get("variant_id") or "")
+        variant_plan = plan_by_run_id.get(run_id)
+        if variant_plan is None and index < len(plan_variants) and isinstance(plan_variants[index], dict):
+            variant_plan = plan_variants[index]
+        if variant_plan is None:
+            variant_plan = {}
+        paths = variant_plan.get("paths") if isinstance(variant_plan, dict) else None
+        paths = paths if isinstance(paths, dict) else {}
+        benchmark_path = _path_or_none(paths.get("benchmark_jsonl"))
+        benchmark_manifest_path = _path_or_none(paths.get("manifest_json"))
+        fake_stream_path = _path_or_none(paths.get("fake_stream_jsonl"))
+        summary: RunSummary | None = None
+        if benchmark_path is not None and benchmark_path.is_file():
+            summary = summarize_run(
+                benchmark_path,
+                fake_stream_path=fake_stream_path if fake_stream_path is not None and fake_stream_path.is_file() else None,
+                min_output_chars=min_output_chars,
+                max_repeat_ratio=max_repeat_ratio,
+            )
+        tegrastats_log = _tegrastats_log_from_manifest(benchmark_manifest_path)
+        tegrastats_summary = (
+            summarize_tegrastats_log(tegrastats_log)
+            if tegrastats_log is not None and tegrastats_log.is_file()
+            else {"max_temp_c": None, "avg_power_w": None}
+        )
+        rows.append(
+            SweepComparisonRow(
+                source=str(source),
+                run_prefix=_infer_run_prefix(run_id, variant_id, fallback_run_prefix),
+                run_id=run_id,
+                variant_id=variant_id,
+                model=summary.model if summary is not None else str(entry.get("model") or "unknown"),
+                preflight_lfb=_format_lfb(entry.get("preflight")),
+                trials=_trial_count_from_manifest(benchmark_manifest_path),
+                guard_passed=summary.guard_passed if summary is not None else False,
+                successful=summary.successful if summary is not None else 0,
+                records=summary.records if summary is not None else 0,
+                fake_stream_successful=summary.fake_stream_successful if summary is not None else 0,
+                fake_stream_records=summary.fake_stream_records if summary is not None else 0,
+                server_startup_seconds=(
+                    float(entry["server_startup_seconds"])
+                    if isinstance(entry.get("server_startup_seconds"), (int, float))
+                    else None
+                ),
+                text_avg_tokens_per_s=summary.text_avg_tokens_per_s if summary is not None else None,
+                image_avg_tokens_per_s=summary.image_avg_tokens_per_s if summary is not None else None,
+                text_avg_latency_s=summary.text_avg_latency_s if summary is not None else None,
+                image_avg_latency_s=summary.image_avg_latency_s if summary is not None else None,
+                fake_stream_avg_latency_s=summary.fake_stream_avg_latency_s if summary is not None else None,
+                max_temp_c=(
+                    float(tegrastats_summary["max_temp_c"])
+                    if isinstance(tegrastats_summary.get("max_temp_c"), (int, float))
+                    else None
+                ),
+                avg_power_w=(
+                    float(tegrastats_summary["avg_power_w"])
+                    if isinstance(tegrastats_summary.get("avg_power_w"), (int, float))
+                    else None
+                ),
+                guard_failures=summary.guard_failures if summary is not None else ("missing_benchmark_jsonl",),
+            )
+        )
+    return rows
+
+
+def _add_comparison_deltas(rows: list[SweepComparisonRow], baseline_variant_ids: Iterable[str]) -> None:
+    requested_baselines = set(baseline_variant_ids)
+    baselines: dict[str, SweepComparisonRow] = {}
+    for row in rows:
+        if row.model in baselines:
+            continue
+        if requested_baselines and row.variant_id not in requested_baselines:
+            continue
+        baselines[row.model] = row
+    if not requested_baselines:
+        for row in rows:
+            if row.model not in baselines and row.guard_passed:
+                baselines[row.model] = row
+    for row in rows:
+        baseline = baselines.get(row.model)
+        if baseline is None:
+            continue
+        row.delta_text_tokens_per_s_pct = _percent_delta(row.text_avg_tokens_per_s, baseline.text_avg_tokens_per_s)
+        row.delta_image_tokens_per_s_pct = _percent_delta(row.image_avg_tokens_per_s, baseline.image_avg_tokens_per_s)
+        row.delta_startup_pct = _percent_delta(row.server_startup_seconds, baseline.server_startup_seconds)
+        row.delta_fake_stream_latency_pct = _percent_delta(row.fake_stream_avg_latency_s, baseline.fake_stream_avg_latency_s)
+
+
+def _format_sweep_comparison_report(rows: list[SweepComparisonRow]) -> str:
+    lines = [
+        "# Jetson Sweep Comparison Report",
+        "",
+        "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower.",
+        "",
+        "| Model | Variant | Run prefix | Preflight lfb | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
+        "|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in rows:
+        failures = ", ".join(row.guard_failures)
+        lines.append(
+            "| {model} | `{variant}` | {run_prefix} | {lfb} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+                model=row.model,
+                variant=row.variant_id,
+                run_prefix=row.run_prefix,
+                lfb=row.preflight_lfb,
+                trials="" if row.trials is None else row.trials,
+                guard="yes" if row.guard_passed else f"no ({failures})",
+                success=f"{row.successful}/{row.records}",
+                fake_success=(
+                    f"{row.fake_stream_successful}/{row.fake_stream_records}"
+                    if row.fake_stream_records
+                    else ""
+                ),
+                startup=_fmt(row.server_startup_seconds),
+                text_tps=_fmt(row.text_avg_tokens_per_s),
+                image_tps=_fmt(row.image_avg_tokens_per_s),
+                text_latency=_fmt(row.text_avg_latency_s),
+                image_latency=_fmt(row.image_avg_latency_s),
+                fake_latency=_fmt(row.fake_stream_avg_latency_s),
+                max_temp=_fmt(row.max_temp_c),
+                avg_power=_fmt(row.avg_power_w),
+                text_delta=_fmt_pct(row.delta_text_tokens_per_s_pct),
+                image_delta=_fmt_pct(row.delta_image_tokens_per_s_pct),
+                startup_delta=_fmt_pct(row.delta_startup_pct),
+                fake_delta=_fmt_pct(row.delta_fake_stream_latency_pct),
+            )
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_sweep_comparison_report(
+    *,
+    manifest_paths: Iterable[str | Path],
+    output_path: str | Path,
+    baseline_variant_ids: Iterable[str] = (),
+    min_output_chars: int = 32,
+    max_repeat_ratio: float = 0.65,
+) -> list[SweepComparisonRow]:
+    rows: list[SweepComparisonRow] = []
+    for manifest_path in manifest_paths:
+        rows.extend(
+            summarize_sweep_manifest(
+                manifest_path,
+                min_output_chars=min_output_chars,
+                max_repeat_ratio=max_repeat_ratio,
+            )
+        )
+    _add_comparison_deltas(rows, baseline_variant_ids)
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(_format_sweep_comparison_report(rows), encoding="utf-8")
+    return rows
+
+
 def build_optimization_report(
     *,
     input_paths: Iterable[str | Path],
@@ -297,8 +598,27 @@ def main(argv: list[str] | None = None) -> int:
     report_parser.add_argument("--min-output-chars", type=int, default=32)
     report_parser.add_argument("--max-repeat-ratio", type=float, default=0.65)
     report_parser.add_argument("--fail-on-guard", action="store_true")
+    compare_parser = subparsers.add_parser("compare", help="Build a Markdown sweep comparison report from sweep manifests")
+    compare_parser.add_argument("--manifest", action="append", required=True, help="Sweep manifest path; repeatable")
+    compare_parser.add_argument("--baseline-variant", action="append", default=[], help="Variant id to use as per-model baseline; repeatable")
+    compare_parser.add_argument("--output", required=True, help="Markdown report output path")
+    compare_parser.add_argument("--min-output-chars", type=int, default=32)
+    compare_parser.add_argument("--max-repeat-ratio", type=float, default=0.65)
+    compare_parser.add_argument("--fail-on-guard", action="store_true")
     args = parser.parse_args(argv)
 
+    if args.command == "compare":
+        rows = build_sweep_comparison_report(
+            manifest_paths=args.manifest,
+            output_path=args.output,
+            baseline_variant_ids=args.baseline_variant,
+            min_output_chars=args.min_output_chars,
+            max_repeat_ratio=args.max_repeat_ratio,
+        )
+        print(json.dumps({"runs": len(rows), "output": args.output}, ensure_ascii=False))
+        if args.fail_on_guard and any(not row.guard_passed for row in rows):
+            return 1
+        return 0
     if args.command != "report":
         parser.print_help()
         return 2
