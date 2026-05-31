@@ -1581,6 +1581,33 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(sample["power_mw"]["VDD_IN"], {"instant": 17400, "average": 16800})
         self.assertEqual(sample["power_mw"]["VDD_CPU_GPU_CV"], {"instant": 8900, "average": 8200})
 
+    def test_jetson_profile_summarizes_log_and_labels_bottlenecks(self):
+        from edge_vlm.jetson_profile import summarize_tegrastats_log
+
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "tegrastats.log"
+            log.write_text(
+                "\n".join(
+                    [
+                        "RAM 2000/7620MB (lfb 200x4MB) CPU [40%@1728] GR3D_FREQ 92%@[1020] EMC_FREQ 81%@3199 gpu@54.0C VDD_IN 18000mW/17000mW",
+                        "RAM 2200/7620MB (lfb 160x4MB) CPU [45%@1728] GR3D_FREQ 88%@[1020] EMC_FREQ 86%@3199 gpu@58.0C VDD_IN 19000mW/18000mW",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = summarize_tegrastats_log(log)
+
+        self.assertEqual(summary["samples"], 2)
+        self.assertEqual(summary["min_lfb_free_blocks"], 160)
+        self.assertEqual(summary["max_temp_c"], 58.0)
+        self.assertEqual(summary["avg_power_w"], 18.5)
+        self.assertEqual(summary["avg_gr3d_util_pct"], 90.0)
+        self.assertEqual(summary["avg_emc_util_pct"], 83.5)
+        self.assertIn("gpu_compute", summary["bottleneck_labels"])
+        self.assertIn("emc_memory_bandwidth", summary["bottleneck_labels"])
+
     def test_next_phase_spec_orders_infra_before_model_expansion_and_lists_tencent_youtu_vl(self):
         spec = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
 
