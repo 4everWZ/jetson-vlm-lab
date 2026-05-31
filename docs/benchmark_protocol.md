@@ -360,7 +360,9 @@ events under `outputs/optimization_sweeps/<run-prefix>/lifecycle/`:
 - `<run-id>.profile.jsonl` contains parsed `tegrastats` samples.
 - `<run-id>.summary.json` contains aggregate memory, power, thermal,
   GR3D/EMC/CPU, bottleneck labels, profile file pointers, and available phase
-  timings.
+  timings. It also includes `input_timing_summary` aggregated from benchmark
+  and fake-stream JSONL, with payload overhead, estimated end-to-end latency,
+  request wait, request body bytes, image bytes, and per-source record counts.
 - `<run-id>.lifecycle.jsonl` contains optional launcher phase records emitted
   through `EDGE_VLM_LAUNCH_PHASE_LOG`.
 
@@ -374,6 +376,13 @@ the internal llama.cpp warmup duration. Gemma `-hf` runtime downloads that
 happen inside `llama-server` are labeled as not separated rather than guessed
 as launcher time.
 
+The `input_payload` bottleneck label is emitted only when average payload
+preparation is non-trivial and accounts for a material share of estimated
+end-to-end latency. `runtime_overhead` is emitted only when request wait
+dominates while GR3D, EMC, and CPU utilization are not saturated. Treat both as
+triage labels that choose the next investigation lane, not as proof of model
+decode speed.
+
 Benchmark and fake-stream JSONL records include `input_timing` when the client
 path can measure it. Current fields include image byte count, MIME detection
 time, image read time, base64 encoding time, data URL construction time,
@@ -384,6 +393,8 @@ pipeline timings; they are separate from server decode throughput.
 Fake-stream JSONL records also include `stream_timing`:
 
 - `interval_s`: configured source-frame interval.
+- `effective_interval_s`: source-frame interval used for this scheduled frame,
+  which can differ from `interval_s` in adaptive experiments.
 - `scheduled_offset_s`: nominal frame offset from stream start.
 - `pre_frame_sleep_s`: time slept before starting the frame to match the fixed cadence.
 - `schedule_delay_s`: how late the frame started relative to its nominal offset.
@@ -402,6 +413,19 @@ backpressure is at or above `--skip-threshold-s` are dropped before model
 inference, and the next processed record carries the accumulated
 `skipped_frames_before` count. The default threshold is the configured
 `--interval-s`, and the default behavior remains no skipping.
+
+`edge_vlm.fake_stream` also accepts `--adaptive-interval` for controlled
+stream-control experiments. When enabled, the next frame's effective interval
+is derived from the previous processed frame's local elapsed time, bounded by
+the configured base `--interval-s`, optional `--adaptive-interval-scale`, and
+optional `--adaptive-interval-max-s`. This is an explicit experiment knob; the
+default benchmark cadence remains fixed.
+
+The sweep planner can pass these fake-stream controls through with
+`--fake-stream-interval-s`, `--fake-stream-skip-late-frames`,
+`--fake-stream-skip-threshold-s`, `--fake-stream-adaptive-interval`,
+`--fake-stream-adaptive-interval-scale`, and
+`--fake-stream-adaptive-interval-max-s`.
 
 Text-only configs set `capabilities.image=false`. The sweep planner still runs
 their formal benchmark, but it does not attach a fake-stream command even when

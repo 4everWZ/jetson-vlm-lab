@@ -32,9 +32,16 @@ def _stream_timing_for_frame(
     stream_started: float,
     frame_index: int,
     interval_s: float,
+    scheduled_offset_s: float | None = None,
+    effective_interval_s: float | None = None,
 ) -> tuple[float, dict[str, Any]]:
-    scheduled_offset_s = frame_index * interval_s if interval_s > 0 else 0.0
-    scheduled_start = stream_started + scheduled_offset_s
+    actual_scheduled_offset_s = (
+        scheduled_offset_s
+        if scheduled_offset_s is not None
+        else (frame_index * interval_s if interval_s > 0 else 0.0)
+    )
+    actual_effective_interval_s = effective_interval_s if effective_interval_s is not None else interval_s
+    scheduled_start = stream_started + actual_scheduled_offset_s
     before_sleep = time.perf_counter()
     pre_frame_sleep_s = 0.0
     if interval_s > 0 and before_sleep < scheduled_start:
@@ -45,7 +52,8 @@ def _stream_timing_for_frame(
     schedule_delay_s = max(0.0, actual_start - scheduled_start) if interval_s > 0 else 0.0
     return actual_start, {
         "interval_s": interval_s,
-        "scheduled_offset_s": scheduled_offset_s,
+        "effective_interval_s": actual_effective_interval_s,
+        "scheduled_offset_s": actual_scheduled_offset_s,
         "pre_frame_sleep_s": pre_frame_sleep_s,
         "schedule_delay_s": schedule_delay_s,
         "backpressure_s": schedule_delay_s,
@@ -57,10 +65,16 @@ def _current_schedule_delay(
     stream_started: float,
     frame_index: int,
     interval_s: float,
+    scheduled_offset_s: float | None = None,
 ) -> float:
     if interval_s <= 0:
         return 0.0
-    scheduled_start = stream_started + (frame_index * interval_s)
+    actual_scheduled_offset_s = (
+        scheduled_offset_s
+        if scheduled_offset_s is not None
+        else frame_index * interval_s
+    )
+    scheduled_start = stream_started + actual_scheduled_offset_s
     return max(0.0, time.perf_counter() - scheduled_start)
 
 
@@ -72,6 +86,7 @@ def _should_skip_late_frame(
     has_future_frame: bool,
     skip_late_frames: bool,
     skip_threshold_s: float | None,
+    scheduled_offset_s: float | None = None,
 ) -> bool:
     if not skip_late_frames or interval_s <= 0 or not has_future_frame:
         return False
@@ -82,7 +97,27 @@ def _should_skip_late_frame(
         stream_started=stream_started,
         frame_index=frame_index,
         interval_s=interval_s,
+        scheduled_offset_s=scheduled_offset_s,
     ) >= threshold
+
+
+def _next_adaptive_interval(
+    *,
+    base_interval_s: float,
+    frame_elapsed_s: float,
+    scale: float,
+    max_interval_s: float | None,
+) -> float:
+    if base_interval_s <= 0:
+        return 0.0
+    if scale <= 0:
+        raise ValueError("adaptive_interval_scale must be > 0")
+    next_interval_s = max(base_interval_s, frame_elapsed_s * scale)
+    if max_interval_s is not None:
+        if max_interval_s < base_interval_s:
+            raise ValueError("adaptive_interval_max_s must be >= interval_s")
+        next_interval_s = min(next_interval_s, max_interval_s)
+    return next_interval_s
 
 
 def run_fake_stream(
@@ -99,6 +134,9 @@ def run_fake_stream(
     temperature: float = 0.2,
     skip_late_frames: bool = False,
     skip_threshold_s: float | None = None,
+    adaptive_interval: bool = False,
+    adaptive_interval_scale: float = 1.0,
+    adaptive_interval_max_s: float | None = None,
 ) -> int:
     config = load_model_config(config_path)
     if not config_supports_images(config):
@@ -112,8 +150,12 @@ def run_fake_stream(
     count = 0
     stream_started = time.perf_counter()
     skipped_frames_before = 0
+    next_scheduled_offset_s = 0.0
+    effective_interval_s = interval_s
     with output.open("a", encoding="utf-8") as handle:
         for index, frame in enumerate(frames):
+            scheduled_offset_s = next_scheduled_offset_s if adaptive_interval else None
+            current_effective_interval_s = effective_interval_s if adaptive_interval else None
             if _should_skip_late_frame(
                 stream_started=stream_started,
                 frame_index=index,
@@ -121,13 +163,18 @@ def run_fake_stream(
                 has_future_frame=index < len(frames) - 1,
                 skip_late_frames=skip_late_frames,
                 skip_threshold_s=skip_threshold_s,
+                scheduled_offset_s=scheduled_offset_s,
             ):
                 skipped_frames_before += 1
+                if adaptive_interval:
+                    next_scheduled_offset_s += effective_interval_s
                 continue
             frame_started_mono, stream_timing = _stream_timing_for_frame(
                 stream_started=stream_started,
                 frame_index=index,
                 interval_s=interval_s,
+                scheduled_offset_s=scheduled_offset_s,
+                effective_interval_s=current_effective_interval_s,
             )
             stream_timing["skipped_frames_before"] = skipped_frames_before
             skipped_frames_before = 0
@@ -141,6 +188,7 @@ def run_fake_stream(
                     dry_run=dry_run,
                 )
             except (FileNotFoundError, ValueError, OSError) as exc:
+                frame_elapsed_s = time.perf_counter() - frame_started_mono
                 started, ended = _wall_time_pair_from_latency(started_wall, 0.0)
                 record: dict[str, Any] = {
                     "frame_index": index,
@@ -155,15 +203,24 @@ def run_fake_stream(
                     "input_timing": {},
                     "stream_timing": {
                         **stream_timing,
-                        "frame_elapsed_s": time.perf_counter() - frame_started_mono,
+                        "frame_elapsed_s": frame_elapsed_s,
                     },
                 }
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 handle.flush()
                 count += 1
+                if adaptive_interval:
+                    effective_interval_s = _next_adaptive_interval(
+                        base_interval_s=interval_s,
+                        frame_elapsed_s=frame_elapsed_s,
+                        scale=adaptive_interval_scale,
+                        max_interval_s=adaptive_interval_max_s,
+                    )
+                    next_scheduled_offset_s += effective_interval_s
                 if stop_on_error:
                     break
                 continue
+            frame_elapsed_s = time.perf_counter() - frame_started_mono
             started, ended = _wall_time_pair_from_latency(started_wall, result.latency_s)
             record: dict[str, Any] = {
                 "frame_index": index,
@@ -178,12 +235,20 @@ def run_fake_stream(
                 "input_timing": dict(result.timings),
                 "stream_timing": {
                     **stream_timing,
-                    "frame_elapsed_s": time.perf_counter() - frame_started_mono,
+                    "frame_elapsed_s": frame_elapsed_s,
                 },
             }
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
             handle.flush()
             count += 1
+            if adaptive_interval:
+                effective_interval_s = _next_adaptive_interval(
+                    base_interval_s=interval_s,
+                    frame_elapsed_s=frame_elapsed_s,
+                    scale=adaptive_interval_scale,
+                    max_interval_s=adaptive_interval_max_s,
+                )
+                next_scheduled_offset_s += effective_interval_s
             if stop_on_error and not result.ok:
                 break
     return count
@@ -212,6 +277,13 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Backpressure threshold for --skip-late-frames; defaults to --interval-s.",
     )
+    parser.add_argument(
+        "--adaptive-interval",
+        action="store_true",
+        help="Adapt the next frame interval from the previous processed frame elapsed time.",
+    )
+    parser.add_argument("--adaptive-interval-scale", type=float, default=1.0)
+    parser.add_argument("--adaptive-interval-max-s", type=float, default=None)
     args = parser.parse_args(argv)
     count = run_fake_stream(
         config_path=args.config,
@@ -226,6 +298,9 @@ def main(argv: list[str] | None = None) -> int:
         temperature=args.temperature,
         skip_late_frames=args.skip_late_frames,
         skip_threshold_s=args.skip_threshold_s,
+        adaptive_interval=args.adaptive_interval,
+        adaptive_interval_scale=args.adaptive_interval_scale,
+        adaptive_interval_max_s=args.adaptive_interval_max_s,
     )
     print(json.dumps({"frames_written": count, "output": args.output}, ensure_ascii=False))
     return 0

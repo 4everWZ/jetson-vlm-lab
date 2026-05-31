@@ -106,6 +106,9 @@ Required per-run profile data:
 - Warmup policy recorded from variant args. `--no-warmup` rows are marked
   disabled; warmup-on rows are marked as included in server startup until
   runtime logs or hooks can split the internal llama.cpp warmup duration.
+- Benchmark and fake-stream `input_timing` records are summarized into profile
+  summaries so payload preparation and request-wait evidence can be compared
+  with `tegrastats` utilization in the same run artifact.
 
 Profiling output should be machine-readable under ignored output paths, for
 example:
@@ -121,6 +124,11 @@ Acceptance:
   `gpu_compute`, `emc_memory_bandwidth`, `cpu_prepost`, `power_or_thermal`,
   `startup_or_download`, `input_payload`, `runtime_overhead`, or
   `not_identified`.
+- `input_payload` requires both non-trivial average payload overhead and a
+  material payload share of estimated end-to-end latency. `runtime_overhead`
+  requires high request-wait share while GR3D, EMC, and CPU utilization are not
+  saturated. Treat both as conservative triage labels, not as decode-speed
+  proof.
 - A runtime or kernel proposal must cite a profile row showing the bottleneck it
   is meant to address.
 - Formal comparisons use `TEGR_STATS_INTERVAL_MS=200` for profiling runs unless
@@ -227,6 +235,10 @@ Instrument the client/input path separately:
 - JSON serialization. Implemented in `input_timing.json_serialize_s`.
 - HTTP request/response elapsed time. Implemented in `input_timing.http_request_s`.
 - Server-reported token usage and request latency when available.
+- Profile summaries aggregate `input_timing` from benchmark and fake-stream
+  JSONL into `input_timing_summary`, including payload overhead, estimated
+  end-to-end latency, request wait, request body bytes, image bytes, and source
+  record counts.
 - Fake-stream scheduling delay and backpressure. Implemented in
   `stream_timing.schedule_delay_s`, `stream_timing.backpressure_s`, and
   `stream_timing.pre_frame_sleep_s` using fixed-cadence frame scheduling.
@@ -234,6 +246,12 @@ Instrument the client/input path separately:
   `edge_vlm.fake_stream --skip-late-frames`; skipped source frames are not sent
   to the model, and the next processed record reports
   `stream_timing.skipped_frames_before`.
+- Adaptive fake-stream interval experiments. Implemented as
+  `edge_vlm.fake_stream --adaptive-interval`; processed records report both
+  the base `stream_timing.interval_s` and the per-frame
+  `stream_timing.effective_interval_s`. Sweeps can pass the base interval,
+  skip, and adaptive controls through with the corresponding
+  `--fake-stream-*` options.
 
 Routing policy candidates:
 
@@ -241,7 +259,10 @@ Routing policy candidates:
 - Fall back to MiniCPM or another reference model when guard terms fail, output
   is too short/repetitive, or the route is quality-sensitive.
 - Use explicit frame skipping when fake-stream latency exceeds the target frame
-  interval; interval adaptation remains a separate follow-up.
+  interval.
+- Use adaptive fake-stream intervals only as an explicitly labeled
+  stream-control experiment; do not mix adaptive cadence rows into fixed-cadence
+  ranking tables without labeling the cadence difference.
 - Keep text-only small models out of image routes unless a text-only stage is
   explicitly added after image understanding.
 
@@ -332,8 +353,9 @@ estimates:
 4. Add artifact A/B rows only for candidates that survive repeat, starting with
    mmproj placement and available quantization differences.
 5. Use profiling evidence to choose exactly one runtime lane for a smoke.
-6. Add input-pipeline timing and route-policy experiments after baseline
-   profiling can separate input overhead from server latency.
+6. Add route-policy experiments after baseline profiling can separate input
+   overhead from server latency; real camera/live input remains a later
+   validation lane after folder-based fake-stream controls are understood.
 
 ## Source References
 

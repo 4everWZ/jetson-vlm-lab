@@ -1067,6 +1067,16 @@ class EdgeVlmContractsTest(unittest.TestCase):
                     "16",
                     "--temperature",
                     "0",
+                    "--fake-stream-interval-s",
+                    "1.0",
+                    "--fake-stream-skip-late-frames",
+                    "--fake-stream-skip-threshold-s",
+                    "0.5",
+                    "--fake-stream-adaptive-interval",
+                    "--fake-stream-adaptive-interval-scale",
+                    "1.25",
+                    "--fake-stream-adaptive-interval-max-s",
+                    "3.0",
                     "--min-lfb-blocks",
                     "150",
                     "--pre-variant-command",
@@ -1110,6 +1120,12 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(warmup_phase["details"]["flag"], "--no-warmup")
         fake_command = variant_plan["fake_stream_command"]
         self.assertEqual(fake_command[fake_command.index("--max-frames") + 1], "3")
+        self.assertEqual(fake_command[fake_command.index("--interval-s") + 1], "1.0")
+        self.assertIn("--skip-late-frames", fake_command)
+        self.assertEqual(fake_command[fake_command.index("--skip-threshold-s") + 1], "0.5")
+        self.assertIn("--adaptive-interval", fake_command)
+        self.assertEqual(fake_command[fake_command.index("--adaptive-interval-scale") + 1], "1.25")
+        self.assertEqual(fake_command[fake_command.index("--adaptive-interval-max-s") + 1], "3.0")
 
     def test_jetson_sweep_plan_records_inherited_launcher_environment(self):
         from edge_vlm.jetson_sweep import build_sweep_plan
@@ -1402,6 +1418,14 @@ class EdgeVlmContractsTest(unittest.TestCase):
                                         "tokens": 64,
                                         "tokens_per_sec": 64.0,
                                         "output_excerpt": "A usable answer with enough detail.",
+                                        "input_timing": {
+                                            "image_bytes": 0,
+                                            "payload_build_s": 0.05,
+                                            "json_serialize_s": 0.02,
+                                            "http_request_s": 0.90,
+                                            "response_parse_s": 0.01,
+                                            "request_body_bytes": 500,
+                                        },
                                     }
                                 ),
                                 json.dumps(
@@ -1415,6 +1439,14 @@ class EdgeVlmContractsTest(unittest.TestCase):
                                         "tokens": 64,
                                         "tokens_per_sec": 32.0,
                                         "output_excerpt": "The image contains simple contrasting shapes.",
+                                        "input_timing": {
+                                            "image_bytes": 1000,
+                                            "payload_build_s": 0.20,
+                                            "json_serialize_s": 0.05,
+                                            "http_request_s": 1.80,
+                                            "response_parse_s": 0.02,
+                                            "request_body_bytes": 1500,
+                                        },
                                     }
                                 ),
                             ]
@@ -1457,6 +1489,14 @@ class EdgeVlmContractsTest(unittest.TestCase):
                                 "success": True,
                                 "latency_s": 1.5,
                                 "output_excerpt": "The frame shows two contrasting square shapes.",
+                                "input_timing": {
+                                    "image_bytes": 900,
+                                    "payload_build_s": 0.10,
+                                    "json_serialize_s": 0.03,
+                                    "http_request_s": 1.30,
+                                    "response_parse_s": 0.01,
+                                    "request_body_bytes": 1400,
+                                },
                             }
                         )
                         + "\n",
@@ -1503,6 +1543,14 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(artifact_phase["duration_s"], 3.25)
         self.assertEqual(artifact_phase["source"], "launcher")
         self.assertEqual(artifact_phase["details"]["status"], "downloaded_or_checked")
+        input_summary = result["results"][0]["profile_summary"]["input_timing_summary"]
+        self.assertTrue(input_summary["available"])
+        self.assertEqual(input_summary["records"], 3)
+        self.assertEqual(input_summary["records_with_latency"], 3)
+        self.assertEqual(input_summary["sources"], {"benchmark_jsonl": 2, "fake_stream_jsonl": 1})
+        self.assertEqual(input_summary["avg_payload_overhead_s"], 0.15)
+        self.assertEqual(input_summary["avg_e2e_latency_s"], 1.65)
+        self.assertEqual(input_summary["max_request_body_bytes"], 1500)
         self.assertIn("gpu_compute", result["results"][0]["profile_summary"]["bottleneck_labels"])
         self.assertIn("emc_memory_bandwidth", result["results"][0]["profile_summary"]["bottleneck_labels"])
         self.assertIn("1.500", report_text)
@@ -1781,6 +1829,82 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(summary["avg_emc_util_pct"], 83.5)
         self.assertIn("gpu_compute", summary["bottleneck_labels"])
         self.assertIn("emc_memory_bandwidth", summary["bottleneck_labels"])
+
+    def test_jetson_profile_labels_input_payload_and_runtime_overhead_from_input_timing(self):
+        from edge_vlm.jetson_profile import summarize_input_timing_records, summarize_tegrastats_samples
+
+        payload_input_summary = summarize_input_timing_records(
+            [
+                {
+                    "latency_s": 1.0,
+                    "input_timing": {
+                        "image_bytes": 1024,
+                        "payload_build_s": 0.30,
+                        "json_serialize_s": 0.10,
+                        "http_request_s": 0.80,
+                        "response_parse_s": 0.02,
+                        "request_body_bytes": 2048,
+                    },
+                },
+                {
+                    "latency_s": 1.4,
+                    "input_timing": {
+                        "image_bytes": 512,
+                        "payload_build_s": 0.20,
+                        "json_serialize_s": 0.10,
+                        "http_request_s": 1.10,
+                        "response_parse_s": 0.02,
+                        "request_body_bytes": 1024,
+                    },
+                },
+            ],
+            sources={"benchmark_jsonl": 2},
+        )
+        payload_summary = summarize_tegrastats_samples(
+            [
+                {
+                    "cpu": {"cores": [{"util_pct": 20}]},
+                    "gr3d": {"util_pct": 10},
+                    "emc": {"util_pct": 25},
+                }
+            ],
+            input_timing_summary=payload_input_summary,
+        )
+
+        runtime_input_summary = summarize_input_timing_records(
+            [
+                {
+                    "latency_s": 2.5,
+                    "input_timing": {
+                        "payload_build_s": 0.02,
+                        "json_serialize_s": 0.01,
+                        "http_request_s": 2.40,
+                        "response_parse_s": 0.01,
+                        "request_body_bytes": 640,
+                    },
+                }
+            ],
+            sources={"benchmark_jsonl": 1},
+        )
+        runtime_summary = summarize_tegrastats_samples(
+            [
+                {
+                    "cpu": {"cores": [{"util_pct": 25}]},
+                    "gr3d": {"util_pct": 12},
+                    "emc": {"util_pct": 30},
+                }
+            ],
+            input_timing_summary=runtime_input_summary,
+        )
+
+        self.assertTrue(payload_input_summary["available"])
+        self.assertEqual(payload_input_summary["records"], 2)
+        self.assertEqual(payload_input_summary["avg_payload_overhead_s"], 0.35)
+        self.assertEqual(payload_input_summary["avg_payload_overhead_ratio"], 0.226)
+        self.assertIn("input_payload", payload_summary["bottleneck_labels"])
+        self.assertNotIn("runtime_overhead", payload_summary["bottleneck_labels"])
+        self.assertIn("runtime_overhead", runtime_summary["bottleneck_labels"])
+        self.assertNotIn("input_payload", runtime_summary["bottleneck_labels"])
 
     def test_jetson_profile_writes_profile_jsonl_and_phase_summary(self):
         from edge_vlm.jetson_profile import write_profile_artifacts
@@ -3559,6 +3683,94 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertAlmostEqual(records[1]["stream_timing"]["schedule_delay_s"], 0.4)
         self.assertEqual(records[2]["stream_timing"]["skipped_frames_before"], 0)
         self.assertEqual(clock.sleeps, [0.5])
+
+    def test_fake_stream_can_adapt_interval_from_previous_frame_elapsed_time(self):
+        from edge_vlm.client import CompletionResult
+        from edge_vlm.fake_stream import run_fake_stream
+
+        class FakeClock:
+            def __init__(self):
+                self.now = 100.0
+                self.sleeps: list[float] = []
+
+            def perf_counter(self):
+                return self.now
+
+            def sleep(self, seconds):
+                self.sleeps.append(seconds)
+                self.now += seconds
+
+        class FakeClient:
+            def __init__(self, clock):
+                self.clock = clock
+                self.latencies = [1.5, 0.2, 0.2]
+                self.calls = 0
+
+            def complete(self, **_kwargs):
+                latency = self.latencies[self.calls]
+                self.calls += 1
+                self.clock.now += latency
+                return CompletionResult(
+                    ok=True,
+                    text=f"frame {self.calls} ok with enough detail",
+                    request={},
+                    response={"dry_run": True},
+                    latency_s=latency,
+                    timings={"http_request_s": latency},
+                )
+
+        clock = FakeClock()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            image_dir = tmp_path / "frames"
+            image_dir.mkdir()
+            for frame_id in ("001.jpg", "002.jpg", "003.jpg"):
+                (image_dir / frame_id).write_bytes(b"\xff\xd8\xff\xd9")
+            output = tmp_path / "stream.jsonl"
+            config = tmp_path / "model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: local-model",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  image: true",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("edge_vlm.fake_stream.OpenAICompatClient.from_config", return_value=FakeClient(clock)):
+                with patch("edge_vlm.fake_stream.time.perf_counter", side_effect=clock.perf_counter):
+                    with patch("edge_vlm.fake_stream.time.sleep", side_effect=clock.sleep):
+                        count = run_fake_stream(
+                            config_path=config,
+                            image_dir=image_dir,
+                            output_path=output,
+                            prompt="Describe this frame.",
+                            interval_s=1.0,
+                            max_frames=3,
+                            adaptive_interval=True,
+                            adaptive_interval_scale=1.0,
+                        )
+
+            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(count, 3)
+        self.assertEqual(len(clock.sleeps), 1)
+        self.assertAlmostEqual(clock.sleeps[0], 0.8)
+        self.assertEqual(records[0]["stream_timing"]["scheduled_offset_s"], 0.0)
+        self.assertEqual(records[0]["stream_timing"]["effective_interval_s"], 1.0)
+        self.assertEqual(records[1]["stream_timing"]["scheduled_offset_s"], 1.5)
+        self.assertEqual(records[1]["stream_timing"]["effective_interval_s"], 1.5)
+        self.assertEqual(records[1]["stream_timing"]["schedule_delay_s"], 0.0)
+        self.assertEqual(records[2]["stream_timing"]["scheduled_offset_s"], 2.5)
+        self.assertEqual(records[2]["stream_timing"]["effective_interval_s"], 1.0)
+        self.assertAlmostEqual(records[2]["stream_timing"]["pre_frame_sleep_s"], 0.8)
 
 
 if __name__ == "__main__":

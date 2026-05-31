@@ -153,8 +153,8 @@ profile artifacts under `profiles/`:
 
 - `<run-id>.profile.jsonl`: one parsed `tegrastats` sample per line.
 - `<run-id>.summary.json`: aggregate RAM/`lfb`, GR3D, EMC, CPU, temperature,
-  power, conservative bottleneck labels, available phase timings, and profile
-  file pointers.
+  power, conservative bottleneck labels, available phase timings,
+  `input_timing_summary`, and profile file pointers.
 
 The first profile-summary phase timings are `artifact_check_or_download` when
 the launcher emits lifecycle JSONL, `server_startup`, `formal_text`,
@@ -164,6 +164,13 @@ variants record `included_in_server_startup` until server logs or runtime hooks
 can separate the internal llama.cpp warmup duration. Launchers that delegate
 artifact download to `llama-server` inside the runtime container emit a
 not-separated lifecycle record.
+
+Profile summaries also aggregate benchmark and fake-stream `input_timing`
+records. `input_payload` is emitted only when payload preparation is both
+non-trivial and a material share of estimated end-to-end latency.
+`runtime_overhead` is emitted only when request wait dominates while GR3D, EMC,
+and CPU utilization are not saturated; it is a triage label for runtime/API
+investigation, not proof that decode kernels are slow.
 
 After a promotion or comparison sweep, generate the mechanical comparison table
 before writing tracked benchmark notes:

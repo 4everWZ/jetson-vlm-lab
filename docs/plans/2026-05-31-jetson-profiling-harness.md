@@ -52,9 +52,12 @@ requirements remain explicit follow-up tasks:
   from server readiness.
 - Input-pipeline timing for image read, MIME detection, base64 encoding, JSON
   serialization, and HTTP request/response is implemented in the client path.
-  Fake-stream scheduling/backpressure timing is implemented as `stream_timing`.
-- Add evidence-backed `input_payload` and `runtime_overhead` labels after input
-  and server-side timing data exist.
+  Fake-stream scheduling/backpressure timing, explicit late-frame skipping, and
+  adaptive interval experiments are implemented as `stream_timing`.
+- Profile summaries now aggregate benchmark/fake-stream `input_timing` and emit
+  conservative `input_payload` and `runtime_overhead` triage labels. Runtime log
+  or server-side timing hooks remain follow-up work before making deeper decode
+  attribution claims.
 - Add time stamps to profile JSONL records when the raw `tegrastats` line does
   not include a parseable timestamp.
 

@@ -33,6 +33,22 @@ REQUIRED_PHASES = (
     "fake_stream",
     "shutdown",
 )
+INPUT_TIMING_COMPONENT_KEYS = (
+    "mime_detect_s",
+    "image_read_s",
+    "base64_encode_s",
+    "data_url_build_s",
+    "payload_build_s",
+    "json_serialize_s",
+    "http_request_s",
+    "response_parse_s",
+)
+INPUT_PAYLOAD_FALLBACK_KEYS = (
+    "mime_detect_s",
+    "image_read_s",
+    "base64_encode_s",
+    "data_url_build_s",
+)
 
 
 def _parse_cpu_cores(raw_cores: str) -> list[dict[str, int | str | None]]:
@@ -134,6 +150,155 @@ def _round_or_none(value: float | None) -> float | None:
     return round(value, 3)
 
 
+def _float_or_none(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _sum_numeric_values(values: Iterable[float | None]) -> float | None:
+    total = 0.0
+    found = False
+    for value in values:
+        if value is None:
+            continue
+        total += value
+        found = True
+    return total if found else None
+
+
+def _input_payload_overhead_s(timing: dict[str, Any]) -> float | None:
+    payload_build = _float_or_none(timing.get("payload_build_s"))
+    if payload_build is None:
+        payload_build = _sum_numeric_values(
+            _float_or_none(timing.get(key)) for key in INPUT_PAYLOAD_FALLBACK_KEYS
+        )
+    json_serialize = _float_or_none(timing.get("json_serialize_s"))
+    return _sum_numeric_values((payload_build, json_serialize))
+
+
+def _normalize_input_timing_summary(input_timing_summary: dict[str, Any] | None = None) -> dict[str, Any]:
+    if not isinstance(input_timing_summary, dict):
+        return {
+            "available": False,
+            "reason": "not_recorded",
+            "records": 0,
+            "records_with_latency": 0,
+            "sources": {},
+        }
+    normalized = dict(input_timing_summary)
+    normalized.setdefault("available", bool(normalized.get("records")))
+    normalized.setdefault("reason", None if normalized.get("available") else "not_recorded")
+    normalized.setdefault("records", 0)
+    normalized.setdefault("records_with_latency", 0)
+    sources = normalized.get("sources")
+    normalized["sources"] = dict(sources) if isinstance(sources, dict) else {}
+    return normalized
+
+
+def summarize_input_timing_records(
+    records: Iterable[dict[str, Any]],
+    *,
+    sources: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    timing_records: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for record in records:
+        timing = record.get("input_timing") if isinstance(record, dict) else None
+        if isinstance(timing, dict):
+            timing_records.append((record, timing))
+
+    if not timing_records:
+        return {
+            "available": False,
+            "reason": "not_recorded",
+            "records": 0,
+            "records_with_latency": 0,
+            "sources": dict(sources or {}),
+        }
+
+    payload_overheads: list[float] = []
+    runtime_waits: list[float] = []
+    e2e_latencies: list[float] = []
+    payload_ratio_payloads: list[float] = []
+    payload_ratio_e2es: list[float] = []
+    runtime_ratio_waits: list[float] = []
+    runtime_ratio_e2es: list[float] = []
+    request_body_bytes: list[float] = []
+    image_bytes: list[float] = []
+    component_values: dict[str, list[float]] = {key: [] for key in INPUT_TIMING_COMPONENT_KEYS}
+
+    for record, timing in timing_records:
+        payload_overhead = _input_payload_overhead_s(timing)
+        if payload_overhead is not None:
+            payload_overheads.append(payload_overhead)
+
+        latency = _float_or_none(record.get("latency_s"))
+        if latency is not None:
+            e2e_latency = latency + (payload_overhead or 0.0)
+            e2e_latencies.append(e2e_latency)
+            if payload_overhead is not None:
+                payload_ratio_payloads.append(payload_overhead)
+                payload_ratio_e2es.append(e2e_latency)
+
+        runtime_wait = _float_or_none(timing.get("http_request_s"))
+        if runtime_wait is not None:
+            runtime_waits.append(runtime_wait)
+            if latency is not None:
+                runtime_ratio_waits.append(runtime_wait)
+                runtime_ratio_e2es.append(latency + (payload_overhead or 0.0))
+
+        request_body = _float_or_none(timing.get("request_body_bytes"))
+        if request_body is not None:
+            request_body_bytes.append(request_body)
+
+        image_size = _float_or_none(timing.get("image_bytes"))
+        if image_size is not None:
+            image_bytes.append(image_size)
+
+        for key in INPUT_TIMING_COMPONENT_KEYS:
+            value = _float_or_none(timing.get(key))
+            if value is not None:
+                component_values[key].append(value)
+
+    total_payload_ratio_e2e = sum(payload_ratio_e2es)
+    total_runtime_ratio_e2e = sum(runtime_ratio_e2es)
+    payload_ratio = (
+        sum(payload_ratio_payloads) / total_payload_ratio_e2e
+        if total_payload_ratio_e2e > 0 and payload_ratio_payloads
+        else None
+    )
+    runtime_wait_ratio = (
+        sum(runtime_ratio_waits) / total_runtime_ratio_e2e
+        if total_runtime_ratio_e2e > 0 and runtime_ratio_waits
+        else None
+    )
+    component_averages = {
+        key: _round_or_none(_mean_or_none(values))
+        for key, values in component_values.items()
+        if values
+    }
+
+    return {
+        "available": True,
+        "reason": None,
+        "records": len(timing_records),
+        "records_with_latency": len(e2e_latencies),
+        "sources": dict(sources or {}),
+        "avg_payload_overhead_s": _round_or_none(_mean_or_none(payload_overheads)),
+        "avg_payload_overhead_ratio": _round_or_none(payload_ratio),
+        "avg_e2e_latency_s": _round_or_none(_mean_or_none(e2e_latencies)),
+        "avg_runtime_wait_s": _round_or_none(_mean_or_none(runtime_waits)),
+        "avg_runtime_wait_ratio": _round_or_none(runtime_wait_ratio),
+        "avg_request_body_bytes": _round_or_none(_mean_or_none(request_body_bytes)),
+        "max_request_body_bytes": int(max(request_body_bytes)) if request_body_bytes else None,
+        "avg_image_bytes": _round_or_none(_mean_or_none(image_bytes)),
+        "max_image_bytes": int(max(image_bytes)) if image_bytes else None,
+        "components_avg_s": component_averages,
+    }
+
+
 def _normalize_phase_timings(phase_timings: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
     normalized = {
         phase: {
@@ -172,6 +337,7 @@ def _derive_bottleneck_labels(
     max_temp: float | None,
     avg_cpu: float | None,
     phase_timings: dict[str, dict[str, Any]],
+    input_timing_summary: dict[str, Any],
 ) -> list[str]:
     labels: list[str] = []
     if avg_gr3d is not None and avg_gr3d >= 85.0:
@@ -192,6 +358,31 @@ def _derive_bottleneck_labels(
         isinstance(artifact_duration, (int, float)) and artifact_duration >= 30.0
     ):
         labels.append("startup_or_download")
+    input_payload_labeled = False
+    if input_timing_summary.get("available") is True:
+        payload_overhead = _float_or_none(input_timing_summary.get("avg_payload_overhead_s"))
+        payload_ratio = _float_or_none(input_timing_summary.get("avg_payload_overhead_ratio"))
+        if (
+            payload_overhead is not None
+            and payload_overhead >= 0.25
+            and payload_ratio is not None
+            and payload_ratio >= 0.15
+        ):
+            labels.append("input_payload")
+            input_payload_labeled = True
+        runtime_wait = _float_or_none(input_timing_summary.get("avg_runtime_wait_s"))
+        runtime_ratio = _float_or_none(input_timing_summary.get("avg_runtime_wait_ratio"))
+        if (
+            not input_payload_labeled
+            and runtime_wait is not None
+            and runtime_wait >= 1.0
+            and runtime_ratio is not None
+            and runtime_ratio >= 0.75
+            and (avg_gr3d is None or avg_gr3d < 50.0)
+            and (avg_emc is None or avg_emc < 60.0)
+            and (avg_cpu is None or avg_cpu < 80.0)
+        ):
+            labels.append("runtime_overhead")
     if not labels:
         labels.append("not_identified")
     return labels
@@ -201,9 +392,11 @@ def summarize_tegrastats_samples(
     samples: Iterable[dict[str, Any]],
     *,
     phase_timings: dict[str, Any] | None = None,
+    input_timing_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     parsed_samples = list(samples)
     normalized_phases = _normalize_phase_timings(phase_timings)
+    normalized_input_summary = _normalize_input_timing_summary(input_timing_summary)
     temps: list[float] = []
     vdd_in_w: list[float] = []
     gr3d_utils: list[float] = []
@@ -258,6 +451,7 @@ def summarize_tegrastats_samples(
         max_temp=max_temp,
         avg_cpu=avg_cpu,
         phase_timings=normalized_phases,
+        input_timing_summary=normalized_input_summary,
     )
 
     return {
@@ -273,6 +467,7 @@ def summarize_tegrastats_samples(
         "max_ram_used_mb": max(ram_used) if ram_used else None,
         "avg_cpu_util_pct": _round_or_none(avg_cpu),
         "phase_timings": normalized_phases,
+        "input_timing_summary": normalized_input_summary,
         "bottleneck_labels": bottlenecks,
     }
 
@@ -296,6 +491,7 @@ def write_profile_artifacts(
     profile_jsonl_path: str | Path,
     summary_path: str | Path,
     phase_timings: dict[str, Any] | None = None,
+    input_timing_summary: dict[str, Any] | None = None,
     profile_files: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     samples = list(iter_tegrastats_samples(tegrastats_log))
@@ -308,7 +504,11 @@ def write_profile_artifacts(
                 + "\n"
             )
 
-    summary = summarize_tegrastats_samples(samples, phase_timings=phase_timings)
+    summary = summarize_tegrastats_samples(
+        samples,
+        phase_timings=phase_timings,
+        input_timing_summary=input_timing_summary,
+    )
     summary["source"] = str(tegrastats_log)
     summary["profile_jsonl"] = str(profile_jsonl)
     summary["profile_files"] = dict(profile_files or {})

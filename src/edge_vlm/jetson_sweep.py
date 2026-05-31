@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from .config import config_supports_images, load_model_config
-from .jetson_profile import REQUIRED_PHASES, write_profile_artifacts
+from .jetson_profile import REQUIRED_PHASES, summarize_input_timing_records, write_profile_artifacts
 from .optimization import build_optimization_report
 
 
@@ -269,6 +269,12 @@ def build_sweep_plan(
     fake_stream_image_dir: str = "data/sample_stream",
     fake_stream_prompt: str = "Describe this frame.",
     fake_stream_max_frames: int = 3,
+    fake_stream_interval_s: float = 0.0,
+    fake_stream_skip_late_frames: bool = False,
+    fake_stream_skip_threshold_s: float | None = None,
+    fake_stream_adaptive_interval: bool = False,
+    fake_stream_adaptive_interval_scale: float = 1.0,
+    fake_stream_adaptive_interval_max_s: float | None = None,
     pre_variant_command: str | None = None,
     base_env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
@@ -338,7 +344,7 @@ def build_sweep_plan(
             "--prompt",
             fake_stream_prompt,
             "--interval-s",
-            "0",
+            str(fake_stream_interval_s),
             "--max-frames",
             str(fake_stream_max_frames),
             "--max-tokens",
@@ -346,6 +352,20 @@ def build_sweep_plan(
             "--temperature",
             str(temperature),
         ]
+        if fake_stream_skip_late_frames:
+            fake_stream_command.append("--skip-late-frames")
+        if fake_stream_skip_threshold_s is not None:
+            fake_stream_command.extend(["--skip-threshold-s", str(fake_stream_skip_threshold_s)])
+        if fake_stream_adaptive_interval:
+            fake_stream_command.extend(
+                [
+                    "--adaptive-interval",
+                    "--adaptive-interval-scale",
+                    str(fake_stream_adaptive_interval_scale),
+                ]
+            )
+            if fake_stream_adaptive_interval_max_s is not None:
+                fake_stream_command.extend(["--adaptive-interval-max-s", str(fake_stream_adaptive_interval_max_s)])
         planned.append(
             {
                 "variant": variant,
@@ -521,6 +541,7 @@ def _write_run_profile_artifacts(
         profile_jsonl_path=str(profile_jsonl),
         summary_path=str(profile_summary_json),
         phase_timings=phase_timings,
+        input_timing_summary=_profile_input_timing_summary(paths),
         profile_files=_profile_files(paths, jetson),
     )
     return {
@@ -579,6 +600,24 @@ def _phase_timings_from_lifecycle(path: str | Path | None) -> dict[str, Any]:
             entry["details"] = dict(details)
         timings[str(phase)] = entry
     return timings
+
+
+def _profile_input_timing_summary(paths: dict[str, Any]) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    sources: dict[str, int] = {}
+    for key in ("benchmark_jsonl", "fake_stream_jsonl"):
+        path = paths.get(key)
+        if not isinstance(path, str) or not Path(path).is_file():
+            continue
+        source_records = [
+            record
+            for record in _iter_jsonl(Path(path))
+            if isinstance(record.get("input_timing"), dict)
+        ]
+        if source_records:
+            records.extend(source_records)
+            sources[key] = len(source_records)
+    return summarize_input_timing_records(records, sources=sources)
 
 
 def _profile_phase_timings(
@@ -827,6 +866,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fake-stream-image-dir", default="data/sample_stream")
     parser.add_argument("--fake-stream-prompt", default="Describe this frame.")
     parser.add_argument("--fake-stream-max-frames", type=int, default=3)
+    parser.add_argument("--fake-stream-interval-s", type=float, default=0.0)
+    parser.add_argument("--fake-stream-skip-late-frames", action="store_true")
+    parser.add_argument("--fake-stream-skip-threshold-s", type=float, default=None)
+    parser.add_argument("--fake-stream-adaptive-interval", action="store_true")
+    parser.add_argument("--fake-stream-adaptive-interval-scale", type=float, default=1.0)
+    parser.add_argument("--fake-stream-adaptive-interval-max-s", type=float, default=None)
     parser.add_argument("--wait-timeout-s", type=float, default=180.0)
     parser.add_argument(
         "--min-lfb-blocks",
@@ -864,6 +909,12 @@ def main(argv: list[str] | None = None) -> int:
         fake_stream_image_dir=args.fake_stream_image_dir,
         fake_stream_prompt=args.fake_stream_prompt,
         fake_stream_max_frames=args.fake_stream_max_frames,
+        fake_stream_interval_s=args.fake_stream_interval_s,
+        fake_stream_skip_late_frames=args.fake_stream_skip_late_frames,
+        fake_stream_skip_threshold_s=args.fake_stream_skip_threshold_s,
+        fake_stream_adaptive_interval=args.fake_stream_adaptive_interval,
+        fake_stream_adaptive_interval_scale=args.fake_stream_adaptive_interval_scale,
+        fake_stream_adaptive_interval_max_s=args.fake_stream_adaptive_interval_max_s,
         pre_variant_command=args.pre_variant_command,
     )
     if not plan["variants"]:
