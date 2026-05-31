@@ -25,4 +25,4 @@ capabilities:
   audio: false
 
 notes:
-  status: Text-only Tencent Hy-MT2 1.8B GGUF candidate from the 2026-05-31 refresh. Use the text/router benchmark lane only; do not compare it against image or fake-stream VLM rows.
+  status: Text-only Tencent Hy-MT2 1.8B low-bit GGUF canary from the 2026-05-31 refresh. Use only as a scoped runtime-compatibility check until the pinned llama.cpp runtime is shown to support the low-bit GGUF tensor types; do not compare it against image or fake-stream VLM rows.

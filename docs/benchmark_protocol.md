@@ -477,10 +477,13 @@ text cases through the Tencent text suite wrapper:
 scripts/jetson/run_remote_tencent_text_suite.sh
 ```
 
-The wrapper defaults to Hy-MT1.5 1.25bit/2bit and Hy-MT2
-1.25Bit/2Bit/Q4_K_M/Q6_K/Q8_0 rows, runs with locked clocks, drops caches
-before each variant, sets `--fake-stream-max-frames 0`, and writes a comparison
-report. Override `JETSON_TENCENT_TEXT_RUN_PREFIX`,
+The wrapper defaults to the current-runtime-compatible Hy-MT2 Q4_K_M/Q6_K/Q8_0
+rows, runs with locked clocks, drops caches before each variant, sets
+`--fake-stream-max-frames 0`, and writes a comparison report. The Hy-MT1.5
+low-bit rows and Hy-MT2 1.25Bit/2Bit rows stay as scoped low-bit canaries; the
+first Hy-MT1.5 1.25bit Jetson smoke failed before server ready on the pinned
+llama.cpp image with `invalid ggml type 42`. Override
+`JETSON_TENCENT_TEXT_RUN_PREFIX`,
 `JETSON_TENCENT_TEXT_TRIAL_COUNT`, `JETSON_TENCENT_TEXT_MAX_TOKENS`,
 `JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS`, `JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S`,
 `JETSON_TENCENT_TEXT_VARIANTS`, or `JETSON_TENCENT_TEXT_EXTRA_VARIANTS` for

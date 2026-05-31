@@ -9,8 +9,8 @@ Jetson paths.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / through `158f0e4` for the HunyuanOCR launcher-resume fix and smoke |
-| Jetson branch / commit | `bench/formal-jetson-infra` / through `158f0e4` for the HunyuanOCR launcher-resume fix and smoke |
+| Local branch / commit | `bench/formal-jetson-infra` / through `f91712b`; HunyuanOCR smoke used `158f0e4`, Hy-MT1.5 text canary used `f91712b` |
+| Jetson branch / commit | `bench/formal-jetson-infra` / through `f91712b`; HunyuanOCR smoke used `158f0e4`, Hy-MT1.5 text canary used `f91712b` |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
 | Model root | `/home/weizheng/code/jetson-vlm-lab/models` |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
@@ -229,11 +229,11 @@ they split into two lanes:
 
 | Model | HF source | Repo status |
 |---|---|---|
-| Hy-MT1.5 1.8B 1.25bit GGUF | `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF` / `Hy-MT1.5-1.8B-1.25bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
-| Hy-MT1.5 1.8B 2bit GGUF | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
-| Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
-| Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
-| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as text/router configs and variants; not VLM candidates. |
+| Hy-MT1.5 1.8B 1.25bit GGUF | `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF` / `Hy-MT1.5-1.8B-1.25bit.gguf` | Added as text/router runtime canary; first Jetson smoke failed before server ready with `invalid ggml type 42` on the pinned llama.cpp image. |
+| Hy-MT1.5 1.8B 2bit GGUF | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf` | Added as text/router runtime canary; keep out of default repeats until low-bit GGUF support is proven. |
+| Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as text/router low-bit canary; not in the default text suite until current-runtime support is proven. |
+| Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as text/router low-bit canary; not in the default text suite until current-runtime support is proven. |
+| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; not VLM candidates. |
 | Hy-MT2 1.8B FP8 | `tencent/Hy-MT2-1.8B-FP8` | Deferred; Safetensors/compressed-tensors path, no low-friction GGUF launcher row. |
 | HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Jetson smoke loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs; not an official Tencent-owned GGUF artifact and not ranked. |
 | Penguin-VL-2B | `tencent/Penguin-VL-2B` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
@@ -243,19 +243,30 @@ they split into two lanes:
 The executable Hy-MT1.5 and Hy-MT2 rows use
 `scripts/jetson/run_hf_gguf_llama_docker.sh`,
 `configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
-`scripts/jetson/run_remote_tencent_text_suite.sh` runs these rows with the same
-locked-clocks/cache-drop/min-lfb policy and `--fake-stream-max-frames 0`. The
-sweep planner also skips fake-stream for these rows because their configs are
-text-only. Do not compare them against SmolVLM2/Qwen/HunyuanOCR/Youtu image or
-fake-stream metrics.
+`scripts/jetson/run_remote_tencent_text_suite.sh` defaults to the Hy-MT2
+Q4/Q6/Q8 rows with the same locked-clocks/cache-drop/min-lfb policy and
+`--fake-stream-max-frames 0`. The low-bit Hy-MT1.5/Hy-MT2 rows remain available
+through explicit `JETSON_TENCENT_TEXT_VARIANTS` or
+`JETSON_TENCENT_TEXT_EXTRA_VARIANTS` overrides for runtime-compatibility
+canaries. The sweep planner also skips fake-stream for these rows because their
+configs are text-only. Do not compare them against
+SmolVLM2/Qwen/HunyuanOCR/Youtu image or fake-stream metrics.
+
+Hy-MT1.5 1.25bit canary evidence:
+
+| Run prefix | Preflight `lfb` | Server ready | Server return code | Wait s | Failure |
+|---|---:|---|---:|---:|---|
+| `tencent-hy-mt1p5-1p25bit-smoke64-20260531a` | 251x4MB | no | 1 | 2.012 | pinned llama.cpp rejected tensor type 42 while loading `blk.0.attn_k.weight` |
 
 ## Next Model Checks
 
 1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M, Qwen3-VL 2B,
    and the Youtu Q4 third-party CPU-mmproj path before ranking them against
    MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
-2. Run Hy-MT1.5/Hy-MT2 1.8B quantization rows only as a separate text/router
-   study if they become useful for routing or translation pre/post-processing.
+2. Run Hy-MT2 Q4/Q6/Q8 rows only as a separate text/router study if they become
+   useful for routing or translation pre/post-processing. Revisit Hy-MT1.5 and
+   Hy-MT2 low-bit rows only after a newer runtime or scoped canary proves
+   support for their GGUF tensor types.
 3. Add a separate Youtu Q4 GPU-mmproj/offload canary if memory allows; keep it
    distinct from the CPU-mmproj smoke and the official Tencent Q8 failure.
 4. Revisit HunyuanOCR only through a bounded quality triage of artifact,
