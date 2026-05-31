@@ -1522,6 +1522,31 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 self.assertIn("--cache-type-k", args)
                 self.assertIn("--cache-type-v", args)
 
+    def test_jetson_optimization_variants_include_warmup_candidates(self):
+        variants = [
+            json.loads(line)
+            for line in Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        by_id = {variant["id"]: variant for variant in variants}
+
+        expected = {
+            "minicpm-q4-baseline-b128-u32-kvq8-warmup": ("minicpmv46-q4", 32, 128, 32),
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8-warmup": ("gemma4-e2b-it-q4", 12, 512, 512),
+        }
+
+        for variant_id, (model, n_gpu_layers, batch_size, ubatch_size) in expected.items():
+            with self.subTest(variant_id=variant_id):
+                candidate = by_id[variant_id]
+                args = candidate["args"]
+                self.assertEqual(candidate["model"], model)
+                self.assertEqual(candidate["env"]["N_GPU_LAYERS"], n_gpu_layers)
+                self.assertEqual(candidate["env"]["LLAMA_BATCH_SIZE"], batch_size)
+                self.assertEqual(candidate["env"]["LLAMA_UBATCH_SIZE"], ubatch_size)
+                self.assertIn("--cache-type-k", args)
+                self.assertIn("--cache-type-v", args)
+                self.assertNotIn("--no-warmup", args)
+
     def test_lightweight_hf_gguf_vlm_configs_and_variants_exist(self):
         from edge_vlm.config import config_supports_images, load_model_config
 
