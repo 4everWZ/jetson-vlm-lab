@@ -1899,6 +1899,12 @@ class EdgeVlmContractsTest(unittest.TestCase):
         ]
         by_id = {variant["id"]: variant for variant in variants}
 
+        def assert_arg_value(args: list[str], flag: str, expected_value: object) -> None:
+            self.assertIn(flag, args)
+            flag_index = args.index(flag)
+            self.assertLess(flag_index + 1, len(args), f"{flag} has no value")
+            self.assertEqual(args[flag_index + 1], str(expected_value))
+
         for model_name, expected_values in expected.items():
             with self.subTest(model_name=model_name):
                 config = load_model_config(expected_values["config"])
@@ -1926,10 +1932,10 @@ class EdgeVlmContractsTest(unittest.TestCase):
                     self.assertEqual(variant["env"]["N_GPU_LAYERS"], expected_values["n_gpu_layers"])
                 if "batch_size" in expected_values:
                     self.assertEqual(variant["env"]["LLAMA_BATCH_SIZE"], expected_values["batch_size"])
-                    self.assertIn(str(expected_values["batch_size"]), variant["args"])
+                    assert_arg_value(variant["args"], "--batch-size", expected_values["batch_size"])
                 if "ubatch_size" in expected_values:
                     self.assertEqual(variant["env"]["LLAMA_UBATCH_SIZE"], expected_values["ubatch_size"])
-                    self.assertIn(str(expected_values["ubatch_size"]), variant["args"])
+                    assert_arg_value(variant["args"], "--ubatch-size", expected_values["ubatch_size"])
                 if "required_arg" in expected_values:
                     self.assertIn(expected_values["required_arg"], variant["args"])
                 self.assertIn("--parallel", variant["args"])

@@ -9,8 +9,8 @@ Jetson paths.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / through `2184f84` before this Youtu note |
-| Jetson branch / commit | `bench/formal-jetson-infra` / through `2184f84` before this Youtu note |
+| Local branch / commit | `bench/formal-jetson-infra` / through `52b390e` for the Youtu Q4 third-party note |
+| Jetson branch / commit | `bench/formal-jetson-infra` / through `52b390e` for the Youtu Q4 third-party note |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
 | Model root | `/home/weizheng/code/jetson-vlm-lab/models` |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
@@ -129,12 +129,48 @@ until a lower-bit official artifact or different backend is available. A
 third-party Q4 GGUF would be a separate research choice, not the same official
 Tencent candidate.
 
+## Youtu-VL 4B Q4 Third-Party Smoke
+
+Variant: `youtu-vl-4b-q4-thirdparty-smoke`
+
+This is not an official Tencent GGUF artifact. It uses
+`mradermacher/Youtu-VL-4B-Instruct-GGUF:Q4_K_M`, a third-party quantization of
+Tencent's Youtu-VL-4B-Instruct base model, with the Q8_0 mmproj from the same
+third-party repo. The first smoke kept the mmproj on CPU with
+`--no-mmproj-offload` because the official Tencent Q8/BF16-mmproj run failed
+during CUDA mmproj allocation. Runtime image metadata in the manifest records
+canonical image id `36f3398b7885` and llama.cpp ref `d749821db3bd`.
+
+Downloaded third-party Youtu artifacts:
+
+| File | Size |
+|---|---:|
+| `models/mradermacher/Youtu-VL-4B-Instruct-GGUF/Youtu-VL-4B-Instruct.Q4_K_M.gguf` | 3,089,819,584 bytes |
+| `models/mradermacher/Youtu-VL-4B-Instruct-GGUF/Youtu-VL-4B-Instruct.mmproj-Q8_0.gguf` | 602,557,888 bytes |
+
+| Run prefix | Preflight `lfb` | Startup s | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| `youtu-vl-4b-q4-thirdparty-smoke64-20260531a` | 233x4MB | 1124.738 | yes | 6/6 | 3/3 | 6.724 | 5.930 | 9.577 | 8.111 | 9.365 |
+| `youtu-vl-4b-q4-thirdparty-smoke64-cached-20260531b` | 239x4MB | 7.027 | yes | 6/6 | 3/3 | 6.434 | 5.884 | 9.979 | 8.162 | 9.487 |
+
+The first startup includes host-side HF downloads. The cached run is the useful
+startup datapoint for this CPU-mmproj smoke path.
+
+Sample outputs were coherent on the simple prompts and sample frames. The image
+cases correctly identified the white/dark square scene and reported no hazards
+for the safety prompt.
+
+Decision: the third-party Youtu Q4 path is a valid Jetson smoke candidate under
+CPU mmproj, but it is slow and must stay separate from the official Tencent Q8
+result. Do not rank or promote it without a repeated formal run and an explicit
+GPU-mmproj/offload tuning check.
+
 ## Next Model Checks
 
-1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M and Qwen3-VL 2B
-   before ranking them against MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
-2. Add another Tencent path only if the artifact/backend choice is explicit:
-   lower-bit official GGUF if available, otherwise a clearly marked third-party
-   quantized GGUF experiment.
+1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M, Qwen3-VL 2B, and
+   the Youtu Q4 third-party CPU-mmproj path before ranking them against
+   MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
+2. Add a separate Youtu Q4 GPU-mmproj/offload canary if memory allows; keep it
+   distinct from the CPU-mmproj smoke and the official Tencent Q8 failure.
 3. Promote none of these candidates until a formal repeat passes
    the guard and preserves acceptable output quality.
