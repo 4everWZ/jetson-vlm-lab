@@ -46,6 +46,7 @@ Initial candidate order:
 |---|---|---|---|
 | SmolVLM2 256M | Lowest-resource image baseline and latency floor | `ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0` | Jetson 1-trial smoke passed in `smolvlm2-256m-smoke64-20260531c`; latency floor only, not a quality/default replacement |
 | Qwen3-VL-2B Thinking | New small Qwen VLM quality/speed comparison | `Qwen/Qwen3-VL-2B-Thinking-GGUF:Q4_K_M` | Jetson 1-trial cached smoke passed in `qwen3vl-2b-thinking-smoke64-cached-20260531c`; needs repeated formal run before ranking |
+| HunyuanOCR 1B Q8 | Tencent-base OCR/VLM route candidate with low model size | `ggml-org/HunyuanOCR-GGUF:Q8_0` | Added as a smoke candidate from the 2026-05-31 refresh. It is a ggml-org GGUF quantization of Tencent HunyuanOCR, not an official Tencent-owned GGUF artifact; needs Jetson startup, formal benchmark, and fake-stream evidence before ranking. |
 | Tencent Youtu-VL-4B | Tencent small VLM candidate for Chinese/image reasoning comparison | `tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0` | Downloaded official Q8/BF16-mmproj artifacts, but Jetson smoke `youtu-vl-4b-q8-smoke64-20260531a` failed before server ready with CUDA OOM while allocating the 893MB mmproj buffer; defer unless a lower-bit official artifact or different backend is available |
 | Youtu-VL-4B third-party Q4 | Clearly separated low-bit experiment for Tencent Youtu base-model behavior | `mradermacher/Youtu-VL-4B-Instruct-GGUF:Q4_K_M` | Jetson 1-trial cached smoke passed in `youtu-vl-4b-q4-thirdparty-smoke64-cached-20260531b` with CPU mmproj via `--no-mmproj-offload`; not official Tencent support, not yet ranked |
 | SmolVLM2 500M | Slightly larger latency/quality point if 256M is too weak | `ggml-org/SmolVLM2-500M-Video-Instruct-GGUF` | Watchlist; add after 256M establishes the path |
@@ -68,9 +69,10 @@ First smoke order:
 
 1. `smolvlm2-256m-q8-smoke`
 2. `qwen3-vl-2b-thinking-q4-smoke`
-3. `youtu-vl-4b-q8-smoke` did not become a promotable smoke candidate because
+3. `hunyuanocr-q8-smoke`
+4. `youtu-vl-4b-q8-smoke` did not become a promotable smoke candidate because
    the official Q8 model plus BF16 mmproj failed startup on Jetson with CUDA OOM.
-4. `youtu-vl-4b-q4-thirdparty-smoke` passed as a separate CPU-mmproj smoke path;
+5. `youtu-vl-4b-q4-thirdparty-smoke` passed as a separate CPU-mmproj smoke path;
    keep any GPU-mmproj/offload canary as a separate variant before comparing
    throughput.
 
@@ -134,6 +136,8 @@ TensorRT, TensorRT-LLM, NanoLLM, Ollama, vLLM, and custom kernels stay deferred 
 - SmolVLM2 500M GGUF: https://hf.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
 - Qwen3-VL 2B Instruct GGUF: https://hf.co/ggml-org/Qwen3-VL-2B-Instruct-GGUF
 - Qwen3-VL 2B Thinking GGUF: https://hf.co/Qwen/Qwen3-VL-2B-Thinking-GGUF
+- HunyuanOCR GGUF: https://hf.co/ggml-org/HunyuanOCR-GGUF
+- Tencent HunyuanOCR base: https://hf.co/tencent/HunyuanOCR
 - Tencent Youtu-VL-4B Instruct GGUF: https://hf.co/tencent/Youtu-VL-4B-Instruct-GGUF
 - Tencent Penguin-VL-2B: https://hf.co/tencent/Penguin-VL-2B
 - Tencent HY-Embodied-0.5: https://hf.co/tencent/HY-Embodied-0.5

@@ -44,6 +44,7 @@ Lightweight model evidence is promising but not promotable yet:
 |---|---|---|
 | SmolVLM2 256M Q8 | Jetson smoke passed and is a latency floor; visible output is weaker and repetitive on simple frames. | 5-trial formal repeat, raw excerpt review, classify as latency-floor or route-only. |
 | Qwen3-VL 2B Thinking Q4 | Jetson cached smoke passed and is much faster than Gemma. | 5-trial formal repeat, raw excerpt review, compare against MiniCPM and Gemma references. |
+| HunyuanOCR 1B Q8 | Added as a Tencent-base VLM/OCR smoke candidate through `ggml-org/HunyuanOCR-GGUF`; this is not an official Tencent-owned GGUF artifact. | Jetson smoke, raw excerpt review, then decide whether it belongs in an OCR/route-only lane or general VLM ranking. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
 | Youtu-VL-4B third-party Q4 | Jetson cached smoke passed with CPU mmproj, but it is slow and not official Tencent support. | Separate CPU-mmproj and GPU-mmproj artifact A/B before any ranking. |
 | Tencent Hy-MT2 1.8B GGUF text variants | Added to the text/router lane only: 1.25Bit, 2Bit, Q4_K_M, Q6_K, and Q8_0 use local GGUF files through `scripts/jetson/run_hf_gguf_llama_docker.sh`. | 5-trial text-only repeat on `configs/benchmark/text_prompt_cases.jsonl`; do not rank against VLM image/fake-stream rows. |
@@ -56,7 +57,10 @@ candidates. They are configured for text/router benchmarks only. Newer Tencent
 small VLM-like releases such as `tencent/Penguin-VL-2B`,
 `tencent/HY-Embodied-0.5`, `tencent/HY-Embodied-0.5-X`, and
 `tencent/Youtu-Parsing` are Transformers/Safetensors/custom-code paths, not
-low-friction GGUF. They stay in the deferred runtime lane unless a GGUF or
+low-friction GGUF. `tencent/HunyuanOCR` is a 1B image-text model; the directly
+actionable low-friction route is currently `ggml-org/HunyuanOCR-GGUF`, which is
+a Tencent-base GGUF artifact rather than an official Tencent-owned GGUF repo.
+The custom-code Tencent rows stay in the deferred runtime lane unless a GGUF or
 bounded Transformers runtime is selected.
 
 ## Non-Goals
@@ -346,8 +350,9 @@ estimates:
 ## Execution Order
 
 1. Add the profiling harness and richer structured tegrastats parser.
-2. Run 5-trial formal repeats for SmolVLM2 256M, Qwen3-VL 2B Thinking, and
-   Youtu Q4 third-party CPU-mmproj under the fixed comparison policy.
+2. Run 5-trial formal repeats for SmolVLM2 256M, Qwen3-VL 2B Thinking,
+   HunyuanOCR Q8, and Youtu Q4 third-party CPU-mmproj under the fixed
+   comparison policy.
 3. Run Tencent Hy-MT2 text/router variants separately if a text-only route is
    useful; keep them out of VLM ranking tables.
 4. Add artifact A/B rows only for candidates that survive repeat, starting with
@@ -375,6 +380,8 @@ External references checked:
 - NVIDIA TensorRT-LLM docs: https://docs.nvidia.com/tensorrt-llm/
 - llama.cpp multimodal docs: https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md
 - Tencent Youtu-VL-4B GGUF: https://hf.co/tencent/Youtu-VL-4B-Instruct-GGUF
+- HunyuanOCR GGUF: https://hf.co/ggml-org/HunyuanOCR-GGUF
+- Tencent HunyuanOCR base: https://hf.co/tencent/HunyuanOCR
 - Tencent Penguin-VL-2B: https://hf.co/tencent/Penguin-VL-2B
 - Tencent HY-Embodied-0.5: https://hf.co/tencent/HY-Embodied-0.5
 - Tencent HY-Embodied-0.5-X: https://hf.co/tencent/HY-Embodied-0.5-X

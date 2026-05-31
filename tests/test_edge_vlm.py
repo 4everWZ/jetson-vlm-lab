@@ -1958,6 +1958,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
             spec.index("Phase 2: Lightweight Model Expansion"),
         )
         self.assertIn("tencent/Youtu-VL-4B-Instruct-GGUF", spec)
+        self.assertIn("ggml-org/HunyuanOCR-GGUF", spec)
         self.assertIn("SmolVLM2", spec)
         self.assertIn("Qwen3-VL-2B", spec)
 
@@ -1972,6 +1973,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("run_hf_gguf_vlm_llama_docker.sh", matrix)
         self.assertIn("SmolVLM2", matrix)
         self.assertIn("Qwen3-VL", matrix)
+        self.assertIn("HunyuanOCR", matrix)
         self.assertIn("Youtu-VL", matrix)
 
     def test_jetson_optimization_variants_include_gemma_mid_batch_candidate(self):
@@ -2274,6 +2276,15 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 "model_file": "Qwen3VL-2B-Thinking-Q4_K_M.gguf",
                 "mmproj_file": "mmproj-Qwen3VL-2B-Thinking-Q8_0.gguf",
                 "ctx_size": 1024,
+            },
+            "hunyuanocr-q8": {
+                "config": "configs/models/hunyuanocr_q8.yaml",
+                "model_ref": "ggml-org/HunyuanOCR-GGUF:Q8_0",
+                "model_file": "HunyuanOCR-Q8_0.gguf",
+                "mmproj_file": "mmproj-HunyuanOCR-Q8_0.gguf",
+                "ctx_size": 1024,
+                "batch_size": 128,
+                "ubatch_size": 32,
             },
             "youtu-vl-4b-q8": {
                 "config": "configs/models/youtu_vl_4b_q8.yaml",
@@ -3313,6 +3324,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
             "gemma-q4-baseline-gpu12-b512-u512-kvq8",
             "smolvlm2-256m-q8-smoke",
             "qwen3-vl-2b-thinking-q4-smoke",
+            "hunyuanocr-q8-smoke",
             "youtu-vl-4b-q8-smoke",
             "youtu-vl-4b-q4-thirdparty-smoke",
         ):

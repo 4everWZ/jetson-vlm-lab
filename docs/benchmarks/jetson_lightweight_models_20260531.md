@@ -175,6 +175,7 @@ they split into two lanes:
 | Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
 | Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
 | Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as text/router configs and variants; not VLM candidates. |
+| HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Added as Tencent-base VLM/OCR smoke config and variant; not an official Tencent-owned GGUF artifact. |
 | Penguin-VL-2B | `tencent/Penguin-VL-2B` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
 | HY-Embodied-0.5 / HY-Embodied-0.5-X | `tencent/HY-Embodied-0.5`, `tencent/HY-Embodied-0.5-X` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
 | Youtu-Parsing | `tencent/Youtu-Parsing` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
@@ -182,13 +183,13 @@ they split into two lanes:
 The executable Hy-MT2 rows use `scripts/jetson/run_hf_gguf_llama_docker.sh`,
 `configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
 The sweep planner skips fake-stream for these rows. Do not compare them against
-SmolVLM2/Qwen/Youtu image or fake-stream metrics.
+SmolVLM2/Qwen/HunyuanOCR/Youtu image or fake-stream metrics.
 
 ## Next Model Checks
 
-1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M, Qwen3-VL 2B, and
-   the Youtu Q4 third-party CPU-mmproj path before ranking them against
-   MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
+1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M, Qwen3-VL 2B,
+   HunyuanOCR Q8, and the Youtu Q4 third-party CPU-mmproj path before ranking
+   them against MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
 2. Run Hy-MT2 1.8B quantization rows only as a separate text/router study if
    they become useful for routing or translation pre/post-processing.
 3. Add a separate Youtu Q4 GPU-mmproj/offload canary if memory allows; keep it

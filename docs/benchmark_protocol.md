@@ -440,7 +440,8 @@ scripts/jetson/run_remote_current_defaults_suite.sh
 ```
 
 To run the fixed-policy lightweight model ladder with the current MiniCPM and
-Gemma baselines plus SmolVLM2, Qwen3-VL 2B, and Tencent/Youtu candidates, use:
+Gemma baselines plus SmolVLM2, Qwen3-VL 2B, HunyuanOCR, and Tencent/Youtu
+candidates, use:
 
 ```bash
 scripts/jetson/run_remote_lightweight_model_suite.sh
