@@ -2477,6 +2477,80 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("--batch-size 128", result.stdout)
         self.assertNotIn("-it", result.stdout)
 
+    def test_hf_gguf_launcher_accepts_completed_partial_after_resume_416(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            bin_dir = tmp_path / "bin"
+            bin_dir.mkdir()
+            docker_log = tmp_path / "docker.log"
+            fake_curl = bin_dir / "curl"
+            fake_docker = bin_dir / "docker"
+            fake_curl.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'curl: (22) The requested URL returned error: 416\\n' >&2",
+                        "exit 22",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_docker.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf '%s\\n' \"$*\" > \"${FAKE_DOCKER_LOG:?}\"",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_curl, 0o755)
+            os.chmod(fake_docker, 0o755)
+            model_dir = tmp_path / "models"
+            repo_dir = model_dir / "ggml-org" / "HunyuanOCR-GGUF"
+            repo_dir.mkdir(parents=True)
+            (repo_dir / "HunyuanOCR-Q8_0.gguf").write_bytes(b"GGUFmodel")
+            partial = repo_dir / "mmproj-HunyuanOCR-Q8_0.gguf.partial"
+            partial.write_bytes(b"GGUFmmproj")
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
+                    "--parallel",
+                    "1",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                    "FAKE_DOCKER_LOG": str(docker_log),
+                    "DOCKER_TTY": "0",
+                    "DOCKER_GPU_ARGS": "",
+                    "LLAMA_CPP_DOCKER_IMAGE": "unit/llama-cpp:test",
+                    "MODEL_DIR": str(model_dir),
+                    "MODEL_REF": "ggml-org/HunyuanOCR-GGUF:Q8_0",
+                    "MODEL_FILE": "HunyuanOCR-Q8_0.gguf",
+                    "MMPROJ_FILE": "mmproj-HunyuanOCR-Q8_0.gguf",
+                    "MODEL_ALIAS": "hunyuanocr-q8",
+                },
+            )
+
+            completed = repo_dir / "mmproj-HunyuanOCR-Q8_0.gguf"
+            docker_command = docker_log.read_text(encoding="utf-8")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(completed.is_file())
+            self.assertFalse(partial.exists())
+            self.assertIn("HTTP 416", result.stderr)
+            self.assertIn("--mmproj /models/ggml-org/HunyuanOCR-GGUF/mmproj-HunyuanOCR-Q8_0.gguf", docker_command)
+
     def test_jetson_hf_gguf_text_launcher_can_dry_run_model_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = {
