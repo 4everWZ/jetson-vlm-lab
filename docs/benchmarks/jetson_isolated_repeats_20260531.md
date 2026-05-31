@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, `62382e5` for max-clocks repeats, and `e9aa919` for the remote FIFO feeder fix plus Gemma DirectIO 10-trial confirmation |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, `62382e5` for max-clocks repeats, `e9aa919` for the remote FIFO feeder fix plus Gemma DirectIO 10-trial confirmation, and `ef0b0d6` for the current defaults suite |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, `62382e5` for max-clocks repeats, and `e9aa919` for the remote FIFO feeder fix plus Gemma DirectIO 10-trial confirmation |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, `62382e5` for max-clocks repeats, `e9aa919` for the remote FIFO feeder fix plus Gemma DirectIO 10-trial confirmation, and `ef0b0d6` for the current defaults suite |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -499,6 +499,25 @@ Decision: demote `--direct-io` from the Gemma candidate list. The longer
 same-sweep confirmation reverses the earlier 5-trial fake-stream signal and
 regresses formal text, formal image, fake-stream latency, and startup time.
 Keep the default Gemma runtime unchanged.
+
+## Current Defaults Suite
+
+This suite reran the selected defaults for both target models after the remote
+FIFO feeder fix. It used `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`,
+`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--min-lfb-blocks 150`,
+`--fake-stream-max-frames 3`, `--trial-count 10`, `--max-tokens 64`, and
+`--temperature 0`. The comparison table was generated mechanically from
+`outputs/optimization_sweeps/current-defaults-clocks10-20260531a/current-defaults-clocks10-20260531a.manifest.json`.
+
+| Model | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8` | `current-defaults-clocks10-20260531a` | 294x4MB | 10 | yes | 60/60 | 3/3 | 6.025 | 48.926 | 47.790 | 1.308 | 1.347 | 1.654 | 57.156 | 19.370 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8` | `current-defaults-clocks10-20260531a` | 280x4MB | 10 | yes | 60/60 | 3/3 | 6.019 | 12.289 | 13.294 | 5.214 | 4.869 | 5.870 | 56.687 | 16.483 |
+
+Decision: this becomes the current baseline reference for future container,
+llama.cpp, or model-family A/B runs. Both defaults passed the formal benchmark
+and three-frame fake-stream guard under locked clocks and fresh preflight memory
+state.
 
 ## Warmup Candidates Under Max Clocks
 
