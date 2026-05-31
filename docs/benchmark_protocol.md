@@ -17,6 +17,10 @@ Small non-private sample images are included under `data/sample_images/` so dry 
 
 `fake_stream_folder_sample` is a marker case in the shared prompt list. The benchmark runner records it as a reminder to use the fake-stream harness; folder iteration itself is handled by `python -m edge_vlm.fake_stream`.
 
+`configs/benchmark/text_prompt_cases.jsonl` is the text/router-only subset. It
+contains no image or fake-stream cases, and is used by text-only model variants
+such as Tencent Hy-MT2. Do not mix text/router rows into VLM rankings.
+
 ## Raw Output
 
 The benchmark writes JSONL records with:
@@ -211,7 +215,7 @@ Use `EDGE_VLM_FORMAL_DRY_RUN=1 EDGE_VLM_SKIP_TEGRASTATS=1` to validate the wrapp
 
 Use the sweep wrapper when comparing server parameter variants. It starts each
 variant, runs the formal benchmark, optionally runs the default three-frame
-fake-stream check, and builds an optimization report that excludes
+fake-stream check for image-capable configs, and builds an optimization report that excludes
 sanity-failed output from ranking. The report includes fake-stream latency and
 fake-stream guard failures when the fake-stream sidecar exists.
 
@@ -362,8 +366,8 @@ events under `outputs/optimization_sweeps/<run-prefix>/lifecycle/`:
 
 The currently instrumented phase timings are `artifact_check_or_download` when
 the launcher emits lifecycle JSONL, `server_startup`, `formal_text`,
-`formal_image`, and `fake_stream`. Warmup and shutdown remain marked
-unavailable until server lifecycle events are instrumented. Gemma `-hf` runtime
+`formal_image`, `fake_stream`, and `shutdown`. Warmup remains marked
+unavailable until server warmup events are instrumented. Gemma `-hf` runtime
 downloads that happen inside `llama-server` are labeled as not separated rather
 than guessed as launcher time.
 
@@ -388,6 +392,12 @@ clock instead of sleeping a fixed interval after each frame. This makes
 backpressure visible when model/request latency exceeds the target frame
 interval.
 
+Text-only configs set `capabilities.image=false`. The sweep planner still runs
+their formal benchmark, but it does not attach a fake-stream command even when
+fake-stream is enabled globally. Put text-only variants on
+`configs/benchmark/text_prompt_cases.jsonl` with `EDGE_VLM_CASES` in the variant
+environment.
+
 To refresh the current MiniCPM/Gemma default reference in one step, use:
 
 ```bash
@@ -403,13 +413,36 @@ scripts/jetson/run_remote_lightweight_model_suite.sh
 
 The wrapper runs the selected defaults for both target models with
 `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`,
-`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--trial-count 10`,
-`--fake-stream-max-frames 3`, and `--min-lfb-blocks 150`, then runs the
-mechanical comparison report against both baseline variants. Override
-`JETSON_CURRENT_DEFAULTS_RUN_PREFIX` to make the output path stable, or override
-`JETSON_CURRENT_DEFAULTS_TRIAL_COUNT`, `JETSON_CURRENT_DEFAULTS_MAX_TOKENS`,
-`JETSON_CURRENT_DEFAULTS_MIN_LFB_BLOCKS`, and
-`JETSON_CURRENT_DEFAULTS_WAIT_TIMEOUT_S` for scoped validation runs.
+`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--trial-count 5`,
+`--fake-stream-max-frames 3`, `--min-lfb-blocks 150`, and
+`--wait-timeout-s 600`, then runs the mechanical comparison report against both
+baseline variants. Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
+path stable, or override `JETSON_LIGHTWEIGHT_TRIAL_COUNT`,
+`JETSON_LIGHTWEIGHT_MAX_TOKENS`, `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS`,
+`JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S`, `JETSON_LIGHTWEIGHT_BASELINE_VARIANTS`,
+`JETSON_LIGHTWEIGHT_CANDIDATE_VARIANTS`, or
+`JETSON_LIGHTWEIGHT_EXTRA_VARIANTS` for scoped validation runs.
+
+For current Tencent text-only GGUF candidates, use the generic text launcher and
+text cases through the normal sweep:
+
+```bash
+PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
+  --run-prefix tencent-hy-mt2-text-001 \
+  --variant tencent-hy-mt2-1p8b-1p25bit-text-smoke \
+  --variant tencent-hy-mt2-1p8b-2bit-text-smoke \
+  --variant tencent-hy-mt2-1p8b-q4-text-smoke \
+  --variant tencent-hy-mt2-1p8b-q6-text-smoke \
+  --variant tencent-hy-mt2-1p8b-q8-text-smoke \
+  --trial-count 5 \
+  --max-tokens 64 \
+  --temperature 0 \
+  --min-lfb-blocks 150
+```
+
+Those variants use `scripts/jetson/run_hf_gguf_llama_docker.sh` and
+`configs/benchmark/text_prompt_cases.jsonl`; fake-stream is skipped because the
+configs are text-only.
 
 ## llama.cpp Runtime Image Builds
 

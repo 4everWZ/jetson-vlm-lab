@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from .config import config_supports_images, load_model_config
 from .jetson_profile import REQUIRED_PHASES, write_profile_artifacts
 from .optimization import build_optimization_report
 
@@ -223,6 +224,10 @@ def _matches_filters(variant: dict[str, Any], model_filters: set[str], variant_f
     return True
 
 
+def _config_supports_fake_stream(config_path: str | Path) -> bool:
+    return config_supports_images(load_model_config(config_path))
+
+
 def build_sweep_plan(
     *,
     variants_path: str | Path,
@@ -295,6 +300,7 @@ def build_sweep_plan(
             "EDGE_VLM_TEMPERATURE": str(temperature),
             "PYTHON_BIN": python_bin,
         }
+        supports_fake_stream = _config_supports_fake_stream(str(variant["config"]))
         fake_stream_command = [
             python_bin,
             "-m",
@@ -325,7 +331,7 @@ def build_sweep_plan(
                 "server_runtime": runtime_by_image[image],
                 "benchmark_command": ["bash", "scripts/jetson/run_formal_benchmark.sh"],
                 "benchmark_env": benchmark_env,
-                "fake_stream_command": fake_stream_command if include_fake_stream else None,
+                "fake_stream_command": fake_stream_command if include_fake_stream and supports_fake_stream else None,
                 "fake_stream_env": server_env,
                 "paths": {
                     "benchmark_jsonl": str(benchmark_jsonl),
@@ -373,15 +379,25 @@ def _wait_for_server(port: int, process: subprocess.Popen[Any], timeout_s: float
     return False
 
 
-def _terminate_process(process: subprocess.Popen[Any]) -> None:
+def _terminate_process(process: subprocess.Popen[Any]) -> dict[str, Any]:
+    shutdown_started = time.monotonic()
     if process.poll() is not None:
-        return
+        return {
+            "server_shutdown_seconds": 0.0,
+            "server_shutdown_method": "already_exited",
+        }
+    method = "terminate"
     process.terminate()
     try:
         process.wait(timeout=20)
     except subprocess.TimeoutExpired:
+        method = "kill"
         process.kill()
         process.wait(timeout=20)
+    return {
+        "server_shutdown_seconds": time.monotonic() - shutdown_started,
+        "server_shutdown_method": method,
+    }
 
 
 def _preflight_block_reason(preflight: dict[str, Any], min_lfb_blocks: int | None) -> str | None:
@@ -462,7 +478,8 @@ def _write_run_profile_artifacts(paths: dict[str, Any], server_timing: dict[str,
     if not isinstance(tegrastats_log, str) or not Path(tegrastats_log).is_file():
         return _missing_profile_artifact(paths, "missing_tegrastats_log")
     startup_seconds = server_timing.get("server_startup_seconds")
-    phase_timings = _profile_phase_timings(paths, startup_seconds)
+    shutdown_seconds = server_timing.get("server_shutdown_seconds")
+    phase_timings = _profile_phase_timings(paths, startup_seconds, shutdown_seconds)
     profile_summary = write_profile_artifacts(
         tegrastats_log=tegrastats_log,
         profile_jsonl_path=str(profile_jsonl),
@@ -528,7 +545,7 @@ def _phase_timings_from_lifecycle(path: str | Path | None) -> dict[str, Any]:
     return timings
 
 
-def _profile_phase_timings(paths: dict[str, Any], startup_seconds: Any) -> dict[str, Any]:
+def _profile_phase_timings(paths: dict[str, Any], startup_seconds: Any, shutdown_seconds: Any = None) -> dict[str, Any]:
     benchmark_jsonl = paths.get("benchmark_jsonl")
     fake_stream_jsonl = paths.get("fake_stream_jsonl")
     lifecycle_jsonl = paths.get("lifecycle_jsonl")
@@ -559,6 +576,9 @@ def _profile_phase_timings(paths: dict[str, Any], startup_seconds: Any) -> dict[
             "formal_text": _phase_entry(text_duration),
             "formal_image": _phase_entry(image_duration),
             "fake_stream": _phase_entry(fake_stream_duration),
+            "shutdown": _phase_entry(
+                float(shutdown_seconds) if isinstance(shutdown_seconds, (int, float)) else None,
+            ),
         }
     )
     return timings
@@ -650,6 +670,8 @@ def run_sweep(
             env=_merged_env(variant_plan["server_env"]),
             text=True,
         )
+        result_entry: dict[str, Any] | None = None
+        server_timing: dict[str, Any] = _not_started_server_timing()
         try:
             ready = _wait_for_server(plan["port"], server, wait_timeout_s)
             server_wait_seconds = time.monotonic() - server_wait_start
@@ -661,22 +683,21 @@ def run_sweep(
                 "server_startup_seconds": server_wait_seconds if ready else None,
             }
             if not ready:
-                results.append(
-                    {
-                        "run_id": variant_plan["run_id"],
-                        "variant_id": variant_plan["variant"]["id"],
-                        "server_ready": False,
-                        "server_returncode": server.poll(),
-                        "benchmark_returncode": None,
-                        "fake_stream_returncode": None,
-                        "preflight_path": paths["preflight_json"],
-                        "preflight": preflight,
-                        "preflight_passed": True,
-                        "preflight_reason": None,
-                        **server_timing,
-                        **pre_variant_result,
-                    }
-                )
+                result_entry = {
+                    "run_id": variant_plan["run_id"],
+                    "variant_id": variant_plan["variant"]["id"],
+                    "server_ready": False,
+                    "server_returncode": server.poll(),
+                    "benchmark_returncode": None,
+                    "fake_stream_returncode": None,
+                    "preflight_path": paths["preflight_json"],
+                    "preflight": preflight,
+                    "preflight_passed": True,
+                    "preflight_reason": None,
+                    **server_timing,
+                    **pre_variant_result,
+                }
+                results.append(result_entry)
                 continue
             benchmark_result = subprocess.run(
                 variant_plan["benchmark_command"],
@@ -697,27 +718,30 @@ def run_sweep(
                 benchmark_paths.append(paths["benchmark_jsonl"])
             if fake_stream_returncode == 0 and Path(paths["fake_stream_jsonl"]).is_file():
                 fake_stream_paths.append(paths["fake_stream_jsonl"])
-            profile_artifact = _write_run_profile_artifacts(paths, server_timing)
-            results.append(
-                {
-                    "run_id": variant_plan["run_id"],
-                    "variant_id": variant_plan["variant"]["id"],
-                    "server_ready": True,
-                    "server_returncode": server.poll(),
-                    "benchmark_returncode": benchmark_result.returncode,
-                    "fake_stream_returncode": fake_stream_returncode,
-                    "preflight_path": paths["preflight_json"],
-                    "preflight": preflight,
-                    "preflight_passed": True,
-                    "preflight_reason": None,
-                    **server_timing,
-                    **pre_variant_result,
-                    **profile_artifact,
-                }
-            )
+            result_entry = {
+                "run_id": variant_plan["run_id"],
+                "variant_id": variant_plan["variant"]["id"],
+                "server_ready": True,
+                "server_returncode": server.poll(),
+                "benchmark_returncode": benchmark_result.returncode,
+                "fake_stream_returncode": fake_stream_returncode,
+                "preflight_path": paths["preflight_json"],
+                "preflight": preflight,
+                "preflight_passed": True,
+                "preflight_reason": None,
+                **server_timing,
+                **pre_variant_result,
+            }
+            results.append(result_entry)
         finally:
-            _terminate_process(server)
+            shutdown_timing = _terminate_process(server)
             server_log.close()
+            if result_entry is not None:
+                result_entry.update(shutdown_timing)
+                result_entry["server_returncode"] = server.poll()
+                if result_entry.get("server_ready") is True:
+                    profile_artifact = _write_run_profile_artifacts(paths, {**server_timing, **shutdown_timing})
+                    result_entry.update(profile_artifact)
     if benchmark_paths:
         build_optimization_report(
             input_paths=benchmark_paths,

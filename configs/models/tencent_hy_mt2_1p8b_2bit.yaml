@@ -1,0 +1,28 @@
+model:
+  name: tencent-hy-mt2-1p8b-2bit
+  family: Tencent Hy-MT2
+  backend: llama.cpp
+  model_ref: tencent/Hy-MT2-1.8B-2Bit-GGUF:2Bit
+  quantization: 2Bit
+
+server:
+  base_url: http://127.0.0.1:8080/v1
+  host: 127.0.0.1
+  port: 8080
+
+runtime:
+  launch_mode: hf_text_gguf
+  ctx_size: 1024
+  n_gpu_layers: 99
+  model_ref_env: MODEL_REF
+  model_file: Hy-MT2-1.8B-2Bit.gguf
+  wsl_script: null
+  jetson_script: scripts/jetson/run_hf_gguf_llama_docker.sh
+
+capabilities:
+  text: true
+  image: false
+  audio: false
+
+notes:
+  status: Text-only Tencent Hy-MT2 1.8B GGUF candidate from the 2026-05-31 refresh. Use the text/router benchmark lane only; do not compare it against image or fake-stream VLM rows.

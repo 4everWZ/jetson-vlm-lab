@@ -46,12 +46,18 @@ Lightweight model evidence is promising but not promotable yet:
 | Qwen3-VL 2B Thinking Q4 | Jetson cached smoke passed and is much faster than Gemma. | 5-trial formal repeat, raw excerpt review, compare against MiniCPM and Gemma references. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
 | Youtu-VL-4B third-party Q4 | Jetson cached smoke passed with CPU mmproj, but it is slow and not official Tencent support. | Separate CPU-mmproj and GPU-mmproj artifact A/B before any ranking. |
+| Tencent Hy-MT2 1.8B GGUF text variants | Added to the text/router lane only: 1.25Bit, 2Bit, Q4_K_M, Q6_K, and Q8_0 use local GGUF files through `scripts/jetson/run_hf_gguf_llama_docker.sh`. | 5-trial text-only repeat on `configs/benchmark/text_prompt_cases.jsonl`; do not rank against VLM image/fake-stream rows. |
 
 Tencent Hub note from the 2026-05-31 refresh: the current official small GGUF
-Tencent rows such as `tencent/Hy-MT2-1.8B-GGUF` are text/translation models, not
-VLM candidates. `tencent/HY-Embodied-0.5-X` is a VLM-like Transformers/custom
-code release, not a low-friction GGUF path. It stays in the deferred runtime
-lane unless a GGUF or bounded Transformers runtime is selected.
+Tencent rows such as `tencent/Hy-MT2-1.8B-GGUF`,
+`tencent/Hy-MT2-1.8B-1.25Bit-GGUF`, and
+`tencent/Hy-MT2-1.8B-2Bit-GGUF` are text/translation models, not VLM
+candidates. They are configured for text/router benchmarks only. Newer Tencent
+small VLM-like releases such as `tencent/Penguin-VL-2B`,
+`tencent/HY-Embodied-0.5`, `tencent/HY-Embodied-0.5-X`, and
+`tencent/Youtu-Parsing` are Transformers/Safetensors/custom-code paths, not
+low-friction GGUF. They stay in the deferred runtime lane unless a GGUF or
+bounded Transformers runtime is selected.
 
 ## Non-Goals
 
@@ -130,7 +136,8 @@ Candidate policy:
 - Secondary lane: slightly larger models only when they fill a specific
   comparison role, such as official Tencent/Youtu evidence or quality anchor.
 - Text-only small models are allowed only for a separate text/router study; they
-  must not be mixed into VLM rankings.
+  must use `configs/benchmark/text_prompt_cases.jsonl` and must not be mixed
+  into VLM rankings.
 
 Repeat ladder:
 
@@ -313,10 +320,12 @@ estimates:
 1. Add the profiling harness and richer structured tegrastats parser.
 2. Run 5-trial formal repeats for SmolVLM2 256M, Qwen3-VL 2B Thinking, and
    Youtu Q4 third-party CPU-mmproj under the fixed comparison policy.
-3. Add artifact A/B rows only for candidates that survive repeat, starting with
+3. Run Tencent Hy-MT2 text/router variants separately if a text-only route is
+   useful; keep them out of VLM ranking tables.
+4. Add artifact A/B rows only for candidates that survive repeat, starting with
    mmproj placement and available quantization differences.
-4. Use profiling evidence to choose exactly one runtime lane for a smoke.
-5. Add input-pipeline timing and route-policy experiments after baseline
+5. Use profiling evidence to choose exactly one runtime lane for a smoke.
+6. Add input-pipeline timing and route-policy experiments after baseline
    profiling can separate input overhead from server latency.
 
 ## Source References
@@ -337,5 +346,10 @@ External references checked:
 - NVIDIA TensorRT-LLM docs: https://docs.nvidia.com/tensorrt-llm/
 - llama.cpp multimodal docs: https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md
 - Tencent Youtu-VL-4B GGUF: https://hf.co/tencent/Youtu-VL-4B-Instruct-GGUF
+- Tencent Penguin-VL-2B: https://hf.co/tencent/Penguin-VL-2B
+- Tencent HY-Embodied-0.5: https://hf.co/tencent/HY-Embodied-0.5
 - Tencent HY-Embodied-0.5-X: https://hf.co/tencent/HY-Embodied-0.5-X
+- Tencent Youtu-Parsing: https://hf.co/tencent/Youtu-Parsing
 - Tencent Hy-MT2 1.8B GGUF: https://hf.co/tencent/Hy-MT2-1.8B-GGUF
+- Tencent Hy-MT2 1.8B 1.25Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF
+- Tencent Hy-MT2 1.8B 2Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-2Bit-GGUF

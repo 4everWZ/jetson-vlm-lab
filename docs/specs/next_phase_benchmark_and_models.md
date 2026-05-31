@@ -52,6 +52,9 @@ Initial candidate order:
 | InternVL3 1B / 2B | Compact OpenGVLab comparison point | `ggml-org/InternVL3-1B-Instruct-GGUF`, `ggml-org/InternVL3-2B-Instruct-GGUF` | Candidate, not observed in this repo |
 | Moondream2 | Very small VLM behavior/latency check | `ggml-org/moondream2-20250414-GGUF` | Candidate, not observed in this repo |
 | Tencent HY-Embodied-0.5-X | Latest Tencent edge-oriented VLM watchlist item | `tencent/HY-Embodied-0.5-X` | Deferred: current release is Transformers/Safetensors/custom-code, not a low-friction llama.cpp GGUF candidate |
+| Tencent Penguin-VL-2B | Tencent small custom-code VLM watchlist item | `tencent/Penguin-VL-2B` | Deferred: current release is Transformers/Safetensors/custom-code, not a low-friction llama.cpp GGUF candidate |
+| Tencent HY-Embodied-0.5 | Tencent embodied VLM watchlist item | `tencent/HY-Embodied-0.5` | Deferred: current release is Transformers/Safetensors/custom-code, not a low-friction llama.cpp GGUF candidate |
+| Tencent Youtu-Parsing | Tencent 2.5B-ish Youtu VLM/custom-code watchlist item | `tencent/Youtu-Parsing` | Deferred: current release is Transformers/Safetensors/custom-code, not a low-friction llama.cpp GGUF candidate |
 
 Use the generic `scripts/jetson/run_hf_gguf_vlm_llama_docker.sh` launcher for
 Hub-hosted GGUF candidates. The launcher downloads the named GGUF and mmproj
@@ -73,6 +76,26 @@ First smoke order:
 
 Each smoke must pass the same preflight, startup timing, formal benchmark, and
 three-frame fake-stream path before any tuning sweep is added.
+
+### Text/Router Lane
+
+Tencent's newest small official GGUF rows are Hy-MT2 text/translation models,
+not VLMs. They are configured separately so they can be tested as text/router
+candidates without polluting VLM rankings:
+
+| Candidate | Config | Source file |
+|---|---|---|
+| Hy-MT2 1.8B 1.25Bit | `configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml` | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` |
+| Hy-MT2 1.8B 2Bit | `configs/models/tencent_hy_mt2_1p8b_2bit.yaml` | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` |
+| Hy-MT2 1.8B Q4_K_M | `configs/models/tencent_hy_mt2_1p8b_q4.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q4_K_M.gguf` |
+| Hy-MT2 1.8B Q6_K | `configs/models/tencent_hy_mt2_1p8b_q6.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q6_K.gguf` |
+| Hy-MT2 1.8B Q8_0 | `configs/models/tencent_hy_mt2_1p8b_q8.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q8_0.gguf` |
+
+These variants use `scripts/jetson/run_hf_gguf_llama_docker.sh`,
+`configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
+The sweep planner skips fake-stream for them even when the sweep's global
+fake-stream sidecar is enabled. Treat their results as a separate text/router
+study.
 
 ## Phase 3: llama.cpp Acceleration Sweep
 
@@ -112,7 +135,13 @@ TensorRT, TensorRT-LLM, NanoLLM, Ollama, vLLM, and custom kernels stay deferred 
 - Qwen3-VL 2B Instruct GGUF: https://hf.co/ggml-org/Qwen3-VL-2B-Instruct-GGUF
 - Qwen3-VL 2B Thinking GGUF: https://hf.co/Qwen/Qwen3-VL-2B-Thinking-GGUF
 - Tencent Youtu-VL-4B Instruct GGUF: https://hf.co/tencent/Youtu-VL-4B-Instruct-GGUF
+- Tencent Penguin-VL-2B: https://hf.co/tencent/Penguin-VL-2B
+- Tencent HY-Embodied-0.5: https://hf.co/tencent/HY-Embodied-0.5
 - Tencent HY-Embodied-0.5-X: https://hf.co/tencent/HY-Embodied-0.5-X
+- Tencent Youtu-Parsing: https://hf.co/tencent/Youtu-Parsing
+- Tencent Hy-MT2 1.8B GGUF: https://hf.co/tencent/Hy-MT2-1.8B-GGUF
+- Tencent Hy-MT2 1.8B 1.25Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF
+- Tencent Hy-MT2 1.8B 2Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-2Bit-GGUF
 - InternVL3 1B GGUF: https://hf.co/ggml-org/InternVL3-1B-Instruct-GGUF
 - InternVL3 2B GGUF: https://hf.co/ggml-org/InternVL3-2B-Instruct-GGUF
 - Moondream2 GGUF: https://hf.co/ggml-org/moondream2-20250414-GGUF

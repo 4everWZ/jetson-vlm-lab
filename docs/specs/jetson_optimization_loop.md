@@ -61,7 +61,9 @@ PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
 ```
 
 The plan records server commands, benchmark output paths, preflight output
-paths, environment overrides, and fake-stream commands. The sweep sets
+paths, environment overrides, and fake-stream commands for image-capable
+configs. Text-only configs set `capabilities.image=false`; the planner keeps
+their formal benchmark but omits the fake-stream sidecar. The sweep sets
 `DOCKER_TTY=0` so Docker can run under background automation instead of
 requiring an interactive terminal.
 Launcher-affecting inherited environment variables such as
@@ -106,6 +108,10 @@ contains a pinned `LLAMA_CPP_DOCKER_IMAGE` and Docker can inspect it. This
 captures the image tag, image id, repo digests, base image, source revision, and
 llama.cpp ref from OCI labels. It intentionally excludes container environment
 variables.
+
+Text-only model variants should set `EDGE_VLM_CASES` to
+`configs/benchmark/text_prompt_cases.jsonl` in their variant environment. Do
+not mix those rows into VLM promotion comparisons.
 
 For promotion or final comparison sweeps, lock Jetson clocks before the run:
 
@@ -152,9 +158,9 @@ profile artifacts under `profiles/`:
 
 The first profile-summary phase timings are `artifact_check_or_download` when
 the launcher emits lifecycle JSONL, `server_startup`, `formal_text`,
-`formal_image`, and `fake_stream`. Warmup and shutdown remain present in the
-summary as unavailable instead of being guessed until server lifecycle events
-are instrumented. Launchers that delegate artifact download to `llama-server`
+`formal_image`, `fake_stream`, and `shutdown`. Warmup remains present in the
+summary as unavailable instead of being guessed until server warmup events are
+instrumented. Launchers that delegate artifact download to `llama-server`
 inside the runtime container emit a not-separated lifecycle record.
 
 After a promotion or comparison sweep, generate the mechanical comparison table

@@ -44,7 +44,9 @@ requirements remain explicit follow-up tasks:
 - `artifact_check_or_download` is now instrumented inside Jetson launchers via
   `EDGE_VLM_LAUNCH_PHASE_LOG` so host-side first-run downloads and cached
   startup checks are separated.
-- Instrument `warmup` and `shutdown` instead of leaving them as `not_recorded`.
+- `shutdown` is now measured by the sweep after benchmark and fake-stream work
+  when terminating the server process.
+- Instrument `warmup` instead of leaving it as `not_recorded`.
 - Input-pipeline timing for image read, MIME detection, base64 encoding, JSON
   serialization, and HTTP request/response is implemented in the client path.
   Fake-stream scheduling/backpressure timing is implemented as `stream_timing`.

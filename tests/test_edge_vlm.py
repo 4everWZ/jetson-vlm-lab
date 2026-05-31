@@ -1153,6 +1153,68 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(server_env["LLAMA_SERVER_CMD"], "/usr/local/bin/llama-server")
         self.assertEqual(server_env["DOCKER_GPU_ARGS"], "--runtime nvidia")
 
+    def test_jetson_sweep_plan_skips_fake_stream_for_text_only_configs(self):
+        from edge_vlm.jetson_sweep import build_sweep_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            config = tmp_path / "text-model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: text-only-local",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  text: true",
+                        "  image: false",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            variants = tmp_path / "variants.jsonl"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "text-unit",
+                        "model": "text-only-local",
+                        "config": str(config),
+                        "launcher": "scripts/jetson/run_hf_gguf_llama_docker.sh",
+                        "env": {
+                            "MODEL_REF": "tencent/example-GGUF:Q4_K_M",
+                            "MODEL_FILE": "example.gguf",
+                            "MODEL_ALIAS": "text-only-local",
+                            "EDGE_VLM_CASES": "configs/benchmark/text_prompt_cases.jsonl",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            plan = build_sweep_plan(
+                variants_path=variants,
+                run_prefix="unit",
+                output_root=tmp_path / "outputs",
+                server_log_dir=tmp_path / "logs",
+                port=18080,
+                trial_count=1,
+                max_tokens=16,
+                temperature=0,
+                python_bin="python3",
+                include_fake_stream=True,
+                base_env={
+                    "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                },
+            )
+
+        variant_plan = plan["variants"][0]
+        self.assertIsNone(variant_plan["fake_stream_command"])
+        self.assertEqual(variant_plan["benchmark_env"]["EDGE_VLM_CASES"], "configs/benchmark/text_prompt_cases.jsonl")
+
     def test_jetson_sweep_plan_records_docker_image_metadata(self):
         from edge_vlm.jetson_sweep import build_sweep_plan
 
@@ -1401,7 +1463,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 with patch("edge_vlm.jetson_sweep._wait_for_server", return_value=True):
                     with patch("edge_vlm.jetson_sweep.subprocess.Popen", return_value=FakeProcess()):
                         with patch("edge_vlm.jetson_sweep.subprocess.run", side_effect=fake_run):
-                            with patch("edge_vlm.jetson_sweep.time.monotonic", side_effect=[10.0, 12.5]):
+                            with patch("edge_vlm.jetson_sweep.time.monotonic", side_effect=[10.0, 12.5, 20.0, 20.75]):
                                 result = run_sweep(plan, wait_timeout_s=1.0, report_output=report)
 
             report_text = report.read_text(encoding="utf-8")
@@ -1413,6 +1475,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result["results"][0]["fake_stream_returncode"], 0)
         self.assertEqual(result["results"][0]["server_wait_seconds"], 2.5)
         self.assertEqual(result["results"][0]["server_startup_seconds"], 2.5)
+        self.assertEqual(result["results"][0]["server_shutdown_seconds"], 0.75)
         self.assertIsInstance(result["results"][0]["server_started_at"], str)
         self.assertIsInstance(result["results"][0]["server_ready_at"], str)
         self.assertEqual(result["results"][0]["profile_summary_path"], str(profile_summary_json))
@@ -1424,6 +1487,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["formal_text"]["duration_s"], 1.0)
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["formal_image"]["duration_s"], 2.0)
         self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["fake_stream"]["duration_s"], 1.5)
+        self.assertEqual(result["results"][0]["profile_summary"]["phase_timings"]["shutdown"]["duration_s"], 0.75)
         artifact_phase = result["results"][0]["profile_summary"]["phase_timings"]["artifact_check_or_download"]
         self.assertTrue(artifact_phase["available"])
         self.assertEqual(artifact_phase["duration_s"], 3.25)
@@ -2149,6 +2213,80 @@ class EdgeVlmContractsTest(unittest.TestCase):
                     self.assertIn("third-party", status)
                     self.assertIn("not an official Tencent GGUF artifact", status)
 
+    def test_tencent_text_gguf_configs_and_variants_exist(self):
+        from edge_vlm.config import config_supports_images, load_model_config
+
+        expected = {
+            "tencent-hy-mt2-1p8b-1p25bit": {
+                "config": "configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml",
+                "model_ref": "tencent/Hy-MT2-1.8B-1.25Bit-GGUF:1.25Bit",
+                "model_file": "Hy-MT2-1.8B-1.25Bit.gguf",
+                "quantization": "1.25Bit",
+            },
+            "tencent-hy-mt2-1p8b-2bit": {
+                "config": "configs/models/tencent_hy_mt2_1p8b_2bit.yaml",
+                "model_ref": "tencent/Hy-MT2-1.8B-2Bit-GGUF:2Bit",
+                "model_file": "Hy-MT2-1.8B-2Bit.gguf",
+                "quantization": "2Bit",
+            },
+            "tencent-hy-mt2-1p8b-q4": {
+                "config": "configs/models/tencent_hy_mt2_1p8b_q4.yaml",
+                "model_ref": "tencent/Hy-MT2-1.8B-GGUF:Q4_K_M",
+                "model_file": "Hy-MT2-1.8B-Q4_K_M.gguf",
+                "quantization": "Q4_K_M",
+            },
+            "tencent-hy-mt2-1p8b-q6": {
+                "config": "configs/models/tencent_hy_mt2_1p8b_q6.yaml",
+                "model_ref": "tencent/Hy-MT2-1.8B-GGUF:Q6_K",
+                "model_file": "Hy-MT2-1.8B-Q6_K.gguf",
+                "quantization": "Q6_K",
+            },
+            "tencent-hy-mt2-1p8b-q8": {
+                "config": "configs/models/tencent_hy_mt2_1p8b_q8.yaml",
+                "model_ref": "tencent/Hy-MT2-1.8B-GGUF:Q8_0",
+                "model_file": "Hy-MT2-1.8B-Q8_0.gguf",
+                "quantization": "Q8_0",
+            },
+        }
+        variants = [
+            json.loads(line)
+            for line in Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        by_id = {variant["id"]: variant for variant in variants}
+        text_cases = [
+            json.loads(line)
+            for line in Path("configs/benchmark/text_prompt_cases.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        self.assertGreaterEqual(len(text_cases), 4)
+        self.assertTrue(all(case.get("input_type") == "text" for case in text_cases))
+        self.assertIn("text_translation_zh_to_en_short", {case["id"] for case in text_cases})
+        for model_name, expected_values in expected.items():
+            with self.subTest(model_name=model_name):
+                config = load_model_config(expected_values["config"])
+                self.assertEqual(config["model"]["name"], model_name)
+                self.assertEqual(config["model"]["model_ref"], expected_values["model_ref"])
+                self.assertEqual(config["model"]["quantization"], expected_values["quantization"])
+                self.assertFalse(config_supports_images(config))
+                self.assertEqual(config["runtime"]["model_file"], expected_values["model_file"])
+                self.assertEqual(
+                    config["runtime"]["jetson_script"],
+                    "scripts/jetson/run_hf_gguf_llama_docker.sh",
+                )
+
+                variant = by_id[f"{model_name}-text-smoke"]
+                self.assertEqual(variant["model"], model_name)
+                self.assertEqual(variant["config"], expected_values["config"])
+                self.assertEqual(variant["launcher"], "scripts/jetson/run_hf_gguf_llama_docker.sh")
+                self.assertEqual(variant["env"]["MODEL_REF"], expected_values["model_ref"])
+                self.assertEqual(variant["env"]["MODEL_FILE"], expected_values["model_file"])
+                self.assertEqual(variant["env"]["MODEL_ALIAS"], model_name)
+                self.assertEqual(variant["env"]["EDGE_VLM_CASES"], "configs/benchmark/text_prompt_cases.jsonl")
+                self.assertIn("--parallel", variant["args"])
+                self.assertIn("--no-warmup", variant["args"])
+
     def test_jetson_hf_gguf_vlm_launcher_can_dry_run_model_ref(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = {
@@ -2193,6 +2331,69 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("--n-gpu-layers 99", result.stdout)
         self.assertIn("--batch-size 128", result.stdout)
         self.assertNotIn("-it", result.stdout)
+
+    def test_jetson_hf_gguf_text_launcher_can_dry_run_model_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {
+                **os.environ,
+                "JETSON_DRY_RUN": "1",
+                "DOCKER_TTY": "0",
+                "MODEL_DIR": str(Path(tmp) / "models"),
+                "MODEL_REF": "tencent/Hy-MT2-1.8B-1.25Bit-GGUF:1.25Bit",
+                "MODEL_FILE": "Hy-MT2-1.8B-1.25Bit.gguf",
+                "MODEL_ALIAS": "tencent-hy-mt2-1p8b-1p25bit",
+                "CTX_SIZE": "1024",
+                "N_GPU_LAYERS": "99",
+                "VLM_SERVER_PORT": "19102",
+            }
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_hf_gguf_llama_docker.sh",
+                    "--parallel",
+                    "1",
+                    "--batch-size",
+                    "128",
+                    "--ubatch-size",
+                    "32",
+                    "--no-warmup",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("docker run", result.stdout)
+        self.assertIn("-m /models/tencent/Hy-MT2-1.8B-1.25Bit-GGUF/Hy-MT2-1.8B-1.25Bit.gguf", result.stdout)
+        self.assertNotIn("--mmproj", result.stdout)
+        self.assertNotIn("-hf tencent/Hy-MT2-1.8B-1.25Bit-GGUF:1.25Bit", result.stdout)
+        self.assertIn("--alias tencent-hy-mt2-1p8b-1p25bit", result.stdout)
+        self.assertIn("-p 19102:8080", result.stdout)
+        self.assertIn("-c 1024", result.stdout)
+        self.assertIn("--n-gpu-layers 99", result.stdout)
+        self.assertNotIn("-it", result.stdout)
+
+    def test_jetson_hf_gguf_text_launcher_defaults_to_verified_hy_mt2_q4(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_hf_gguf_llama_docker.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_DRY_RUN": "1",
+                    "DOCKER_TTY": "0",
+                    "MODEL_DIR": str(Path(tmp) / "models"),
+                },
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("tencent/Hy-MT2-1.8B-GGUF", result.stdout)
+        self.assertIn("Hy-MT2-1.8B-Q4_K_M.gguf", result.stdout)
+        self.assertIn("--alias tencent-hy-mt2-1p8b-q4", result.stdout)
 
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
@@ -2363,6 +2564,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
             Path("scripts/jetson/run_minicpmv46_llama_docker.sh"),
             Path("scripts/jetson/run_gemma4_e2b_llama_docker.sh"),
             Path("scripts/jetson/run_hf_gguf_vlm_llama_docker.sh"),
+            Path("scripts/jetson/run_hf_gguf_llama_docker.sh"),
         ]
 
         for launcher_path in launcher_paths:
