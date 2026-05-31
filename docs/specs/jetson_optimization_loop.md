@@ -98,6 +98,19 @@ this includes `/proc/meminfo` and a short `tegrastats` sample with parsed
 `lfb` when available. Use this to distinguish memory-state-sensitive startup
 failures from parameter-incompatible failures.
 
+For promotion or final comparison sweeps, lock Jetson clocks before the run:
+
+```bash
+sudo jetson_clocks
+sudo jetson_clocks --show
+```
+
+The max-clocks repeat in `docs/benchmarks/jetson_isolated_repeats_20260531.md`
+showed this is not just bookkeeping: MiniCPM and especially Gemma improved
+substantially after clocks were locked. Treat runs without confirmed
+`jetson_clocks` state as exploratory unless the comparison is explicitly about
+dynamic-clock behavior.
+
 The sweep manifest also records server startup timing for variants that reach
 Docker startup:
 
@@ -148,6 +161,8 @@ A candidate can become the new baseline only when:
 5. the fake-stream latency is not worse enough to invalidate the use case
 6. the exact server parameters and Jetson memory notes are documented in a
    tracked benchmark result file
+7. promotion comparisons were run under confirmed `sudo jetson_clocks`, unless
+   the candidate is explicitly scoped to dynamic-clock operation
 
 If a faster run fails the sanity guard, keep it as a failed optimization
 candidate. Do not promote it.

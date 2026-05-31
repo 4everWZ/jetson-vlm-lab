@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, and `ddb76ad` for DirectIO variants |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, and `62382e5` for max-clocks repeats |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, and `ddb76ad` for DirectIO variants |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, and `62382e5` for max-clocks repeats |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -26,6 +26,19 @@ The non-interactive `sudo -n` pre-variant command still fails on this Jetson
 because sudo requires a password. For these isolated repeats, cache clearing was
 performed before each one-variant run, then the sweep used the `lfb` gate to
 avoid running under low contiguous-memory conditions.
+
+The max-clocks repeat first ran `sudo jetson_clocks` and confirmed:
+
+```text
+cpu0-5 MinFreq=1728000 MaxFreq=1728000 CurrentFreq=1728000
+GPU MinFreq=1020000000 MaxFreq=1020000000 CurrentFreq=1020000000
+EMC MinFreq=204000000 MaxFreq=3199000000 CurrentFreq=3199000000 FreqOverride=1
+NV Power Mode: MAXN_SUPER
+```
+
+The formal wrapper's non-root `jetson_clocks --show` profile file still records
+a permission error on this Jetson, so the root `jetson_clocks --show` command
+above is the authoritative max-clocks confirmation for the max-clocks rows.
 
 ## MiniCPM-V 4.6 Q4
 
@@ -420,9 +433,44 @@ clearly slower. The full K/V q4 combination improves text latency slightly but
 regresses image and fake-stream latency, which is the wrong tradeoff for the VLM
 use case.
 
+## Max-Clocks Repeat
+
+This pass checked whether the earlier optimization rankings were limited by
+Jetson dynamic clocks rather than llama.cpp flags. It ran after `sudo
+jetson_clocks`, with cache dropped before each one-variant sweep and
+`--min-lfb-blocks 150`.
+
+| Model | Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-baseline-b128-u32-kvq8` | `minicpm-baseline-clocks10-20260531a` | 258x4MB | 10 | yes | 60/60 | 3/3 | 6.023 | 48.878 | 47.742 | 1.310 | 1.349 | 1.651 | 56.906 | 19.381 |
+| MiniCPM-V 4.6 Q4 | `minicpm-q4-b512-u128-kvq8` | `minicpm-b512-clocks10-20260531a` | 246x4MB | 10 | yes | 60/60 | 3/3 | 6.024 | 48.761 | 47.666 | 1.313 | 1.350 | 1.640 | 57.468 | 19.396 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8` | `gemma-baseline-clocks5-20260531a` | 235x4MB | 5 | yes | 30/30 | 3/3 | 6.022 | 12.199 | 12.637 | 5.251 | 5.138 | 6.230 | 55.750 | 16.455 |
+| Gemma 4 E2B-it Q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | `gemma-directio-clocks5-20260531a` | 247x4MB | 5 | yes | 30/30 | 3/3 | 7.025 | 12.149 | 12.721 | 5.273 | 5.102 | 5.771 | 56.125 | 16.444 |
+
+Delta for MiniCPM `b512/u128` versus the max-clocks baseline:
+
+| Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---:|---:|---:|---:|---:|
+| -0.24% | -0.16% | +0.23% | +0.07% | -0.67% |
+
+Delta for Gemma `--direct-io` versus the max-clocks baseline:
+
+| Startup | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---:|---:|---:|---:|---:|---:|
+| +16.65% | -0.41% | +0.66% | +0.42% | -0.70% | -7.37% |
+
+Decision: max clocks are a benchmark prerequisite, not an optional tuning flag.
+They materially improve both models, especially Gemma. Under max clocks, MiniCPM
+still keeps `b128/u32` as the default because `b512/u128` does not improve
+formal text or image throughput. Gemma keeps the baseline as the default for
+cold-start or mixed workloads, while `--direct-io` becomes stronger as an
+optional long-lived streaming flag: it improves three-frame fake-stream latency
+by 7.37% with nearly flat formal throughput, but still adds about one second of
+startup.
+
 ## Current Promotion State
 
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
-| MiniCPM-V 4.6 Q4 | `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial repeat did not show a `b512/u128` throughput win |
-| Gemma 4 E2B-it Q4 | `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `batch=256`, `ubatch=256` for formal throughput; `batch=384`, `ubatch=384` for fake-stream latency; Flash Attention for image-only workloads; DirectIO only as an optional long-lived streaming workload flag | Batch, Flash Attention, DirectIO, and Flash Attention plus lower-precision KV are tradeoffs; `N_GPU_LAYERS=16`, memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |
+| MiniCPM-V 4.6 Q4 | `sudo jetson_clocks` first, then `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache | none ahead of baseline yet | isolated 5-trial and max-clocks 10-trial repeats did not show a `b512/u128` formal throughput win |
+| Gemma 4 E2B-it Q4 | `sudo jetson_clocks` first, then `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache | `--direct-io` only for optional long-lived streaming workloads | Batch, Flash Attention, DirectIO, and Flash Attention plus lower-precision KV are tradeoffs; `N_GPU_LAYERS=16`, memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |

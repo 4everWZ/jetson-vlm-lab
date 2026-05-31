@@ -113,18 +113,28 @@ Attention combined with lower-precision KV cache is also negative: Gemma
 `kq4/vq8 + flash-attn` sharply regresses formal and fake-stream latency, while
 `kvq4 + flash-attn` only improves text latency slightly and regresses image and
 fake-stream latency.
+A max-clocks repeat on commit `62382e5` changed the practical baseline: after
+`sudo jetson_clocks`, MiniCPM baseline reached 48.878 text tok/s and 47.742
+image tok/s, while Gemma baseline reached 12.199 text tok/s and 12.637 image
+tok/s. This makes locked clocks a promotion prerequisite rather than an
+optional environment detail.
 
 ## Next Optimization Work
 
 1. Treat Gemma `--direct-io` as an optional long-lived-server streaming flag
-   only. The three-frame confirmation no longer supports promoting it to the
-   default runtime.
+   only. Under max clocks it improves three-frame fake-stream latency by 7.37%
+   with nearly flat formal throughput, but startup still costs about one extra
+   second, so it is not the cold-start default.
 2. Keep using per-run preflight JSON and `--min-lfb-blocks` so `tegrastats`
    `lfb` is recorded before each variant and failed starts can be labeled as
    memory-state-sensitive or parameter-incompatible.
-3. Keep judging load-path flags with the sweep manifest startup timing fields
+3. Run `sudo jetson_clocks` before promotion or comparison sweeps. Without this,
+   results can understate both MiniCPM and Gemma throughput and are not
+   comparable to the max-clocks rows in
+   `docs/benchmarks/jetson_isolated_repeats_20260531.md`.
+4. Keep judging load-path flags with the sweep manifest startup timing fields
    added in `9a8b4e8`, separately from steady-state formal/fake metrics.
-4. `--mlock`, `--no-mmap`, lower KV cache precision, `--no-cont-batching`,
+5. `--mlock`, `--no-mmap`, lower KV cache precision, `--no-cont-batching`,
    `--cache-ram 0`, `--no-cache-prompt`, `--no-host`, `--no-repack`, and
    MiniCPM DirectIO now have negative or noise-level evidence on the current
    pinned image. For Gemma, higher GPU offload and Flash Attention plus
