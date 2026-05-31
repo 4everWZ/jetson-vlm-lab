@@ -2362,6 +2362,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("ARG=bash\nARG=-lc\n", log_text)
         self.assertIn("mkfifo", log_text)
         self.assertIn("trap '' PIPE", log_text)
+        self.assertIn('> "${pw_fifo}" 2>/dev/null', log_text)
         self.assertIn("--pre-variant-command", log_text)
         self.assertIn("sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'", log_text)
         self.assertIn("ARG=LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87\n", log_text)

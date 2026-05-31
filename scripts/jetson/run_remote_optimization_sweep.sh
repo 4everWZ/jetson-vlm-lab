@@ -82,7 +82,7 @@ trap cleanup EXIT
 (
   trap '\'''\'' PIPE
   while true; do
-    if ! printf "%s\n" "${sudo_password}" > "${pw_fifo}"; then
+    if ! printf "%s\n" "${sudo_password}" > "${pw_fifo}" 2>/dev/null; then
       sleep 0.1
     fi
   done

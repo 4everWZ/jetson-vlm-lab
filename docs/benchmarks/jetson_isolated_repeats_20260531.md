@@ -13,9 +13,9 @@ under ignored `outputs/optimization_sweeps/` paths on the Jetson worktree.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, and `62382e5` for max-clocks repeats |
+| Local branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, `62382e5` for max-clocks repeats, and `e9aa919` for the remote FIFO feeder fix plus Gemma DirectIO 10-trial confirmation |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
-| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, and `62382e5` for max-clocks repeats |
+| Jetson branch / commit | `bench/formal-jetson-infra` / `d01e905`, then `3ea75f5` for `b384/u384`, `c322312` for Flash Attention variants, `135900c` for memory mapping variants, `433c718` for `mlock` plus Docker memlock ulimit variants, `643d63c`/`316f999` for quality canaries, `f1c219e` for cache/continuous-batching variants, `7cee0f2` for prompt-cache variants, `ee8b604` for host/repack variants, `9a8b4e8` for startup timing capture, `ddb76ad` for DirectIO variants, `62382e5` for max-clocks repeats, and `e9aa919` for the remote FIFO feeder fix plus Gemma DirectIO 10-trial confirmation |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
 | Max tokens | 64 |
 | Temperature | 0 |
@@ -468,6 +468,38 @@ optional long-lived streaming flag: it improves three-frame fake-stream latency
 by 7.37% with nearly flat formal throughput, but still adds about one second of
 startup.
 
+## Gemma DirectIO 10-Trial Confirmation
+
+The earlier max-clocks DirectIO result was only a 5-trial sample. Commit
+`e9aa919` fixed the remote drop-caches FIFO feeder so a single remote sweep can
+run multiple variants with `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`
+without hanging after the first sudo invocation. The first attempted
+10-trial confirmation, `gemma-directio-confirm10-clocks-20260531a`, was
+terminated after the stale FIFO feeder blocked before the DirectIO variant, so
+only `gemma-directio-confirm10-clocks-20260531b` is valid evidence.
+
+The valid confirmation used `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`,
+`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--min-lfb-blocks 150`,
+`--fake-stream-max-frames 3`, `--trial-count 10`, `--max-tokens 64`, and
+`--temperature 0`. The comparison table was generated mechanically with
+`python -m edge_vlm.optimization compare`.
+
+| Variant | Run prefix | Preflight `lfb` | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W |
+|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8` | `gemma-directio-confirm10-clocks-20260531b` | 259x4MB | 10 | yes | 60/60 | 3/3 | 6.026 | 11.911 | 12.838 | 5.377 | 5.048 | 5.987 | 55.968 | 16.253 |
+| `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | `gemma-directio-confirm10-clocks-20260531b` | 275x4MB | 10 | yes | 60/60 | 3/3 | 7.023 | 11.457 | 12.339 | 5.602 | 5.236 | 6.435 | 56.312 | 16.021 |
+
+Delta for Gemma `--direct-io` versus the same-run max-clocks baseline:
+
+| Startup | Text tok/s | Image tok/s | Text latency | Image latency | Fake-stream latency |
+|---:|---:|---:|---:|---:|---:|
+| +16.56% | -3.81% | -3.88% | +4.18% | +3.72% | +7.48% |
+
+Decision: demote `--direct-io` from the Gemma candidate list. The longer
+same-sweep confirmation reverses the earlier 5-trial fake-stream signal and
+regresses formal text, formal image, fake-stream latency, and startup time.
+Keep the default Gemma runtime unchanged.
+
 ## Warmup Candidates Under Max Clocks
 
 Commit `d72e253` added warmup-on comparison variants for both default models by
@@ -507,4 +539,4 @@ max clocks, so it is not a promotion candidate.
 | Model | Default after this repeat | Candidate to keep testing | Reason |
 |---|---|---|---|
 | MiniCPM-V 4.6 Q4 | `sudo jetson_clocks` first, then `batch=128`, `ubatch=32`, `N_GPU_LAYERS=32`, q8_0 KV cache, `--no-warmup` | none ahead of baseline yet | isolated 5-trial and max-clocks 10-trial repeats did not show a `b512/u128` formal throughput win; warmup-on is noise-level in the 3-trial max-clocks check |
-| Gemma 4 E2B-it Q4 | `sudo jetson_clocks` first, then `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache, `--no-warmup` | `--direct-io` only for optional long-lived streaming workloads | Batch, Flash Attention, DirectIO, and Flash Attention plus lower-precision KV are tradeoffs; warmup-on regresses; `N_GPU_LAYERS=16`, memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |
+| Gemma 4 E2B-it Q4 | `sudo jetson_clocks` first, then `batch=512`, `ubatch=512`, `N_GPU_LAYERS=12`, q8_0 KV cache, `--no-warmup` | none ahead of baseline yet | The 10-trial max-clocks DirectIO confirmation regressed formal and fake-stream latency; batch, Flash Attention, warmup-on, Flash Attention plus lower-precision KV, `N_GPU_LAYERS=16`, memory mapping, locking, cache precision, no-continuous-batching, prompt-cache, host-buffer, and repack variants are not default-promotion candidates |
