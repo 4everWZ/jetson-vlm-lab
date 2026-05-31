@@ -233,7 +233,7 @@ they split into two lanes:
 | Hy-MT1.5 1.8B 2bit GGUF | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
 | Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
 | Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
-| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; Q4 cached Jetson smoke passed, Q6/Q8 still need real Jetson evidence; not VLM candidates. |
+| Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; Q4/Q6 passed the full text-suite smoke, while the Q8 full-suite row is invalidated by the pre-fix launcher cleanup issue and must be rerun cached before use. Not VLM candidates. |
 | Hy-MT2 1.8B FP8 | `tencent/Hy-MT2-1.8B-FP8` | Deferred; Safetensors/compressed-tensors path, no low-friction GGUF launcher row. |
 | HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Jetson smoke loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs; not an official Tencent-owned GGUF artifact and not ranked. |
 | Penguin-VL-2B | `tencent/Penguin-VL-2B` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
@@ -270,6 +270,28 @@ at 1,133,080,448 bytes; the cached smoke then loaded the local artifact, skipped
 fake-stream because the config is text-only, and produced coherent text outputs
 for the four text prompt cases. Treat this as a text/router smoke only.
 
+Tencent text-suite smoke evidence:
+
+Run prefix:
+`tencent-text-smoke64-20260531T120054Z`. The suite used all seven configured
+Hy-MT1.5/Hy-MT2 text rows, `--trial-count 1`, `--max-tokens 64`,
+`--fake-stream-max-frames 0`, locked clocks, cache drop, and
+`--min-lfb-blocks 150`. Q4 and Q6 include first-run host-side artifact download
+time in startup; do not use those startup values as cached-startup evidence.
+
+| Variant | Preflight `lfb` | Server ready | Guard | Success | Startup s | Text tok/s | Text latency s | Avg power W | Avg GR3D % | Min lfb blocks | Status |
+|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `tencent-hy-mt1p5-1p8b-1p25bit-text-smoke` | 248x4MB | no | n/a | 0/0 | n/a | n/a | n/a | n/a | n/a | n/a | Failed before server ready: `invalid ggml type 42` while loading `blk.0.attn_k.weight`. |
+| `tencent-hy-mt1p5-1p8b-2bit-text-smoke` | 250x4MB | no | n/a | 0/0 | n/a | n/a | n/a | n/a | n/a | n/a | Failed before server ready: tensor `blk.0.attn_k_norm.weight` offset 203248672, expected `203129888`. |
+| `tencent-hy-mt2-1p8b-1p25bit-text-smoke` | 250x4MB | no | n/a | 0/0 | n/a | n/a | n/a | n/a | n/a | n/a | Failed before server ready: `invalid ggml type 42` while loading `blk.0.attn_k.weight`. |
+| `tencent-hy-mt2-1p8b-2bit-text-smoke` | 249x4MB | no | n/a | 0/0 | n/a | n/a | n/a | n/a | n/a | n/a | Failed before server ready: tensor `blk.0.attn_k_norm.weight` offset 203248672, expected `203572256`. |
+| `tencent-hy-mt2-1p8b-q4-text-smoke` | 249x4MB | yes | yes | 4/4 | 529.771 | 33.541 | 1.688 | 21.415 | 95.333 | 188 | Valid text/router smoke. |
+| `tencent-hy-mt2-1p8b-q6-text-smoke` | 247x4MB | yes | yes | 4/4 | 923.418 | 26.287 | 2.145 | 21.613 | 96.875 | 156 | Valid text/router smoke. |
+| `tencent-hy-mt2-1p8b-q8-text-smoke` | 234x4MB | yes | no | 3/4 | 183.282 | 17.119 | 32.806 | 10.089 | 8.885 | 160 | Q8 full-suite row is invalidated: the artifact was still `Hy-MT2-1.8B-Q8_0.gguf.partial` and the launcher download child outlived the parent in the pre-fix harness, so the row may have hit a stale server. Rerun cached after the launcher cleanup and port-guard fix before reporting Q8. |
+
+These rows are runtime and text/router evidence only. The low-bit failures feed
+the runtime/build compatibility backlog, not VLM model ranking.
+
 ## Next Model Checks
 
 1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M, Qwen3-VL 2B,
@@ -277,9 +299,10 @@ for the four text prompt cases. Treat this as a text/router smoke only.
    MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
 2. Run the dedicated Tencent Hy-MT1.5/Hy-MT2 text suite only as a separate
    text/router study if it becomes useful for routing or translation
-   pre/post-processing; Q4 has one cached smoke, Q6/Q8 and repeated text runs
-   are still pending, and low-bit failures should feed the runtime/build lane,
-   not VLM ranking.
+   pre/post-processing; Q4/Q6 now have one valid full-suite smoke, Q8 needs a
+   cached rerun after the harness cleanup fix, repeated text runs are still
+   pending, and low-bit failures should feed the runtime/build lane, not VLM
+   ranking.
 3. Add a separate Youtu Q4 GPU-mmproj/offload canary if memory allows; keep it
    distinct from the CPU-mmproj smoke and the official Tencent Q8 failure.
 4. Revisit HunyuanOCR only through a bounded quality triage of artifact,

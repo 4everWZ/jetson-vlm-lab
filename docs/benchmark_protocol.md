@@ -492,6 +492,17 @@ scoped validation. Those variants use
 `configs/benchmark/text_prompt_cases.jsonl`; fake-stream is also skipped by
 their text-only configs.
 
+Observed one-trial full-suite evidence is recorded in
+`docs/benchmarks/jetson_lightweight_models_20260531.md` from
+`tencent-text-smoke64-20260531T120054Z`: Hy-MT2 Q4 passed at 33.541 tok/s and
+1.688 s average text latency, Hy-MT2 Q6 passed at 26.287 tok/s and 2.145 s
+average text latency, and Q8 full-suite row is invalidated by the pre-fix
+launcher cleanup/stale-port issue. The fixed sweep harness now starts launcher
+processes in their own process group, terminates the group, rejects a variant
+with `server_port_still_open_before_start` when `/v1/models` is already served
+on the target port, and records whether the server port closes after shutdown.
+Rerun Q8 cached before reporting it.
+
 ## llama.cpp Runtime Image Builds
 
 When testing a newer llama.cpp runtime, keep the build path artifact based:

@@ -427,6 +427,28 @@ def _wait_for_server(port: int, process: subprocess.Popen[Any], timeout_s: float
     return False
 
 
+def _server_models_endpoint_open(port: int) -> bool:
+    url = f"http://127.0.0.1:{port}/v1/models"
+    try:
+        with urllib.request.urlopen(url, timeout=1.0):
+            return True
+    except urllib.error.HTTPError:
+        return True
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return False
+
+
+def _wait_for_server_port_closed(port: int, timeout_s: float = 5.0) -> bool:
+    if not _server_models_endpoint_open(port):
+        return True
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        time.sleep(0.5)
+        if not _server_models_endpoint_open(port):
+            return True
+    return False
+
+
 def _terminate_process(process: subprocess.Popen[Any]) -> dict[str, Any]:
     shutdown_started = time.monotonic()
     if process.poll() is not None:
@@ -760,6 +782,25 @@ def run_sweep(
                 }
             )
             continue
+        if not _wait_for_server_port_closed(int(plan["port"]), timeout_s=5.0):
+            results.append(
+                {
+                    "run_id": variant_plan["run_id"],
+                    "variant_id": variant_plan["variant"]["id"],
+                    "server_ready": False,
+                    "server_returncode": None,
+                    "benchmark_returncode": None,
+                    "fake_stream_returncode": None,
+                    "preflight_path": paths["preflight_json"],
+                    "preflight": preflight,
+                    "preflight_passed": True,
+                    "preflight_reason": "server_port_still_open_before_start",
+                    "server_port_available_before_start": False,
+                    **_not_started_server_timing(),
+                    **pre_variant_result,
+                }
+            )
+            continue
         Path(paths["server_log"]).parent.mkdir(parents=True, exist_ok=True)
         server_log = open(paths["server_log"], "w", encoding="utf-8")
         server_started_at = datetime.now(timezone.utc).isoformat()
@@ -837,6 +878,10 @@ def run_sweep(
             results.append(result_entry)
         finally:
             shutdown_timing = _terminate_process(server)
+            shutdown_timing["server_port_closed_after_shutdown"] = _wait_for_server_port_closed(
+                int(plan["port"]),
+                timeout_s=5.0,
+            )
             server_log.close()
             if result_entry is not None:
                 result_entry.update(shutdown_timing)

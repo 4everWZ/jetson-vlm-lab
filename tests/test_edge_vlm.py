@@ -1632,6 +1632,68 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(skipped["server_ready"], False)
         self.assertEqual(skipped["benchmark_returncode"], None)
 
+    def test_jetson_sweep_skips_variant_when_server_port_is_already_open(self):
+        from edge_vlm.jetson_sweep import run_sweep
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            preflight_json = tmp_path / "preflight" / "unit-run.preflight.json"
+            report = tmp_path / "report.md"
+            plan = {
+                "run_prefix": "unit",
+                "port": 18080,
+                "variants": [
+                    {
+                        "variant": {"id": "unit-variant"},
+                        "run_id": "unit-run",
+                        "server_command": ["bash", "server.sh"],
+                        "server_env": {},
+                        "benchmark_command": ["bash", "bench.sh"],
+                        "benchmark_env": {},
+                        "fake_stream_command": None,
+                        "fake_stream_env": {},
+                        "paths": {
+                            "benchmark_jsonl": str(tmp_path / "benchmarks" / "unit-run.jsonl"),
+                            "fake_stream_jsonl": str(tmp_path / "fake_stream" / "unit-run.jsonl"),
+                            "server_log": str(tmp_path / "logs" / "server.log"),
+                            "preflight_json": str(preflight_json),
+                        },
+                    }
+                ],
+            }
+
+            def fake_preflight(path):
+                sample = {
+                    "captured_at": "2026-05-30T00:00:00+00:00",
+                    "tegrastats": {
+                        "available": True,
+                        "raw": "RAM 716/7620MB (lfb 180x4MB)",
+                        "lfb": {"free_blocks": 180, "block_mb": 4},
+                    },
+                }
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                Path(path).write_text(json.dumps(sample), encoding="utf-8")
+                return sample
+
+            with patch("edge_vlm.jetson_sweep.capture_preflight_sample", side_effect=fake_preflight):
+                with patch("edge_vlm.jetson_sweep._wait_for_server_port_closed", return_value=False):
+                    with patch("edge_vlm.jetson_sweep.subprocess.Popen") as popen:
+                        result = run_sweep(
+                            plan,
+                            wait_timeout_s=1.0,
+                            report_output=report,
+                            min_lfb_blocks=150,
+                        )
+
+        self.assertEqual(result["report_output"], None)
+        self.assertFalse(report.exists())
+        self.assertFalse(popen.called)
+        skipped = result["results"][0]
+        self.assertTrue(skipped["preflight_passed"])
+        self.assertEqual(skipped["preflight_reason"], "server_port_still_open_before_start")
+        self.assertEqual(skipped["server_ready"], False)
+        self.assertEqual(skipped["benchmark_returncode"], None)
+
     def test_jetson_sweep_runs_pre_variant_command_before_preflight(self):
         from edge_vlm.jetson_sweep import run_sweep
 
@@ -2508,6 +2570,25 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("text/router", benchmark_doc)
         self.assertIn("not a VLM ranking row", model_doc)
         self.assertIn("guard-passing cached text smoke", matrix)
+
+    def test_tencent_text_suite_full_smoke_evidence_is_documented_with_invalid_q8(self):
+        benchmark_doc = Path("docs/benchmarks/jetson_lightweight_models_20260531.md").read_text(
+            encoding="utf-8"
+        )
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(
+            encoding="utf-8"
+        )
+        model_doc = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+
+        for text in (benchmark_doc, strategy_doc, model_doc, protocol_doc):
+            self.assertIn("tencent-text-smoke64-20260531T120054Z", text)
+            self.assertIn("33.541", text)
+            self.assertIn("26.287", text)
+            self.assertIn("Q8 full-suite row is invalidated", text)
+        self.assertIn("invalid ggml type 42", benchmark_doc)
+        self.assertIn("offset 203248672", benchmark_doc)
+        self.assertIn("server_port_still_open_before_start", protocol_doc)
 
     def test_jetson_hf_gguf_vlm_launcher_can_dry_run_model_ref(self):
         with tempfile.TemporaryDirectory() as tmp:
