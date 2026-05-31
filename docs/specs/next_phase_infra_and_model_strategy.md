@@ -44,13 +44,14 @@ Lightweight model evidence is promising but not promotable yet:
 |---|---|---|
 | SmolVLM2 256M Q8 | Jetson smoke passed and is a latency floor; visible output is weaker and repetitive on simple frames. | 5-trial formal repeat, raw excerpt review, classify as latency-floor or route-only. |
 | Qwen3-VL 2B Thinking Q4 | Jetson cached smoke passed and is much faster than Gemma. | 5-trial formal repeat, raw excerpt review, compare against MiniCPM and Gemma references. |
-| HunyuanOCR 1B Q8 | Added as a Tencent-base VLM/OCR smoke candidate through `ggml-org/HunyuanOCR-GGUF`; this is not an official Tencent-owned GGUF artifact. | Jetson smoke, raw excerpt review, then decide whether it belongs in an OCR/route-only lane or general VLM ranking. |
+| HunyuanOCR 1B Q8 | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded through `ggml-org/HunyuanOCR-GGUF` after the launcher-resume fix and completed formal/fake-stream records, but the guard failed because all output excerpts were repetitive exclamation-mark strings. This is not an official Tencent-owned GGUF artifact. | Do not run formal repeats for the current Q8 artifact/runtime path. Revisit only with bounded quality triage of artifact, prompt/template handling, or runtime lane. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
 | Youtu-VL-4B third-party Q4 | Jetson cached smoke passed with CPU mmproj, but it is slow and not official Tencent support. | Separate CPU-mmproj and GPU-mmproj artifact A/B before any ranking. |
-| Tencent Hy-MT2 1.8B GGUF text variants | Added to the text/router lane only: 1.25Bit, 2Bit, Q4_K_M, Q6_K, and Q8_0 use local GGUF files through `scripts/jetson/run_hf_gguf_llama_docker.sh`. | 5-trial text-only repeat on `configs/benchmark/text_prompt_cases.jsonl`; do not rank against VLM image/fake-stream rows. |
+| Tencent Hy-MT1.5/Hy-MT2 1.8B GGUF text variants | Added to the text/router lane only: Hy-MT1.5 1.25bit/2bit and Hy-MT2 1.25Bit/2Bit/Q4_K_M/Q6_K/Q8_0 use local GGUF files through `scripts/jetson/run_hf_gguf_llama_docker.sh`. | 5-trial text-only repeat through `scripts/jetson/run_remote_tencent_text_suite.sh`; do not rank against VLM image/fake-stream rows. |
 
 Tencent Hub note from the 2026-05-31 refresh: the current official small GGUF
-Tencent rows such as `tencent/Hy-MT2-1.8B-GGUF`,
+Tencent rows such as `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF`,
+`tencent/Hy-MT1.5-1.8B-2bit-GGUF`, `tencent/Hy-MT2-1.8B-GGUF`,
 `tencent/Hy-MT2-1.8B-1.25Bit-GGUF`, and
 `tencent/Hy-MT2-1.8B-2Bit-GGUF` are text/translation models, not VLM
 candidates. They are configured for text/router benchmarks only. Newer Tencent
@@ -350,11 +351,12 @@ estimates:
 ## Execution Order
 
 1. Add the profiling harness and richer structured tegrastats parser.
-2. Run 5-trial formal repeats for SmolVLM2 256M, Qwen3-VL 2B Thinking,
-   HunyuanOCR Q8, and Youtu Q4 third-party CPU-mmproj under the fixed
-   comparison policy.
-3. Run Tencent Hy-MT2 text/router variants separately if a text-only route is
-   useful; keep them out of VLM ranking tables.
+2. Run 5-trial formal repeats for SmolVLM2 256M, Qwen3-VL 2B Thinking, and
+   Youtu Q4 third-party CPU-mmproj under the fixed comparison policy.
+   HunyuanOCR Q8 is excluded from this repeat queue until its current
+   guard-failing repeated punctuation output is explained and fixed.
+3. Run Tencent Hy-MT1.5/Hy-MT2 text/router variants separately if a text-only
+   route is useful; keep them out of VLM ranking tables.
 4. Add artifact A/B rows only for candidates that survive repeat, starting with
    mmproj placement and available quantization differences.
 5. Use profiling evidence to choose exactly one runtime lane for a smoke.
@@ -386,6 +388,8 @@ External references checked:
 - Tencent HY-Embodied-0.5: https://hf.co/tencent/HY-Embodied-0.5
 - Tencent HY-Embodied-0.5-X: https://hf.co/tencent/HY-Embodied-0.5-X
 - Tencent Youtu-Parsing: https://hf.co/tencent/Youtu-Parsing
+- Tencent Hy-MT1.5 1.8B 1.25bit GGUF: https://hf.co/tencent/Hy-MT1.5-1.8B-1.25bit-GGUF
+- Tencent Hy-MT1.5 1.8B 2bit GGUF: https://hf.co/tencent/Hy-MT1.5-1.8B-2bit-GGUF
 - Tencent Hy-MT2 1.8B GGUF: https://hf.co/tencent/Hy-MT2-1.8B-GGUF
 - Tencent Hy-MT2 1.8B 1.25Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF
 - Tencent Hy-MT2 1.8B 2Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-2Bit-GGUF

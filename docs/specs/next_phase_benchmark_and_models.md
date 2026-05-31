@@ -46,7 +46,7 @@ Initial candidate order:
 |---|---|---|---|
 | SmolVLM2 256M | Lowest-resource image baseline and latency floor | `ggml-org/SmolVLM2-256M-Video-Instruct-GGUF:Q8_0` | Jetson 1-trial smoke passed in `smolvlm2-256m-smoke64-20260531c`; latency floor only, not a quality/default replacement |
 | Qwen3-VL-2B Thinking | New small Qwen VLM quality/speed comparison | `Qwen/Qwen3-VL-2B-Thinking-GGUF:Q4_K_M` | Jetson 1-trial cached smoke passed in `qwen3vl-2b-thinking-smoke64-cached-20260531c`; needs repeated formal run before ranking |
-| HunyuanOCR 1B Q8 | Tencent-base OCR/VLM route candidate with low model size | `ggml-org/HunyuanOCR-GGUF:Q8_0` | Added as a smoke candidate from the 2026-05-31 refresh. It is a ggml-org GGUF quantization of Tencent HunyuanOCR, not an official Tencent-owned GGUF artifact; needs Jetson startup, formal benchmark, and fake-stream evidence before ranking. |
+| HunyuanOCR 1B Q8 | Tencent-base OCR/VLM route candidate with low model size | `ggml-org/HunyuanOCR-GGUF:Q8_0` | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs. It is a ggml-org GGUF quantization of Tencent HunyuanOCR, not an official Tencent-owned GGUF artifact; do not rank or repeat until quality triage changes the artifact, prompt/template handling, or runtime path. |
 | Tencent Youtu-VL-4B | Tencent small VLM candidate for Chinese/image reasoning comparison | `tencent/Youtu-VL-4B-Instruct-GGUF:Q8_0` | Downloaded official Q8/BF16-mmproj artifacts, but Jetson smoke `youtu-vl-4b-q8-smoke64-20260531a` failed before server ready with CUDA OOM while allocating the 893MB mmproj buffer; defer unless a lower-bit official artifact or different backend is available |
 | Youtu-VL-4B third-party Q4 | Clearly separated low-bit experiment for Tencent Youtu base-model behavior | `mradermacher/Youtu-VL-4B-Instruct-GGUF:Q4_K_M` | Jetson 1-trial cached smoke passed in `youtu-vl-4b-q4-thirdparty-smoke64-cached-20260531b` with CPU mmproj via `--no-mmproj-offload`; not official Tencent support, not yet ranked |
 | SmolVLM2 500M | Slightly larger latency/quality point if 256M is too weak | `ggml-org/SmolVLM2-500M-Video-Instruct-GGUF` | Watchlist; add after 256M establishes the path |
@@ -69,7 +69,9 @@ First smoke order:
 
 1. `smolvlm2-256m-q8-smoke`
 2. `qwen3-vl-2b-thinking-q4-smoke`
-3. `hunyuanocr-q8-smoke`
+3. `hunyuanocr-q8-smoke` loaded but failed the guard with repetitive output;
+   keep it out of ranking and formal repeat until quality triage fixes the
+   current artifact/runtime path.
 4. `youtu-vl-4b-q8-smoke` did not become a promotable smoke candidate because
    the official Q8 model plus BF16 mmproj failed startup on Jetson with CUDA OOM.
 5. `youtu-vl-4b-q4-thirdparty-smoke` passed as a separate CPU-mmproj smoke path;
@@ -81,12 +83,14 @@ three-frame fake-stream path before any tuning sweep is added.
 
 ### Text/Router Lane
 
-Tencent's newest small official GGUF rows are Hy-MT2 text/translation models,
-not VLMs. They are configured separately so they can be tested as text/router
-candidates without polluting VLM rankings:
+Tencent's newest small official GGUF rows are text/translation models, not
+VLMs. The executable Hy-MT1.5 and Hy-MT2 rows are configured separately so
+they can be tested as text/router candidates without polluting VLM rankings:
 
 | Candidate | Config | Source file |
 |---|---|---|
+| Hy-MT1.5 1.8B 1.25bit | `configs/models/tencent_hy_mt1p5_1p8b_1p25bit.yaml` | `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF` / `Hy-MT1.5-1.8B-1.25bit.gguf` |
+| Hy-MT1.5 1.8B 2bit | `configs/models/tencent_hy_mt1p5_1p8b_2bit.yaml` | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf` |
 | Hy-MT2 1.8B 1.25Bit | `configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml` | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` |
 | Hy-MT2 1.8B 2Bit | `configs/models/tencent_hy_mt2_1p8b_2bit.yaml` | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` |
 | Hy-MT2 1.8B Q4_K_M | `configs/models/tencent_hy_mt2_1p8b_q4.yaml` | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-Q4_K_M.gguf` |
@@ -95,9 +99,11 @@ candidates without polluting VLM rankings:
 
 These variants use `scripts/jetson/run_hf_gguf_llama_docker.sh`,
 `configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
-The sweep planner skips fake-stream for them even when the sweep's global
-fake-stream sidecar is enabled. Treat their results as a separate text/router
-study.
+The dedicated wrapper `scripts/jetson/run_remote_tencent_text_suite.sh` runs
+them under locked clocks, cache drop, `--min-lfb-blocks`, and a mechanical
+comparison report with `--fake-stream-max-frames 0`. The sweep planner also
+skips fake-stream for them because the configs are text-only. Treat their
+results as a separate text/router study.
 
 ## Phase 3: llama.cpp Acceleration Sweep
 
@@ -143,6 +149,8 @@ TensorRT, TensorRT-LLM, NanoLLM, Ollama, vLLM, and custom kernels stay deferred 
 - Tencent HY-Embodied-0.5: https://hf.co/tencent/HY-Embodied-0.5
 - Tencent HY-Embodied-0.5-X: https://hf.co/tencent/HY-Embodied-0.5-X
 - Tencent Youtu-Parsing: https://hf.co/tencent/Youtu-Parsing
+- Tencent Hy-MT1.5 1.8B 1.25bit GGUF: https://hf.co/tencent/Hy-MT1.5-1.8B-1.25bit-GGUF
+- Tencent Hy-MT1.5 1.8B 2bit GGUF: https://hf.co/tencent/Hy-MT1.5-1.8B-2bit-GGUF
 - Tencent Hy-MT2 1.8B GGUF: https://hf.co/tencent/Hy-MT2-1.8B-GGUF
 - Tencent Hy-MT2 1.8B 1.25Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF
 - Tencent Hy-MT2 1.8B 2Bit GGUF: https://hf.co/tencent/Hy-MT2-1.8B-2Bit-GGUF

@@ -9,8 +9,8 @@ Jetson paths.
 
 | Field | Value |
 |---|---|
-| Local branch / commit | `bench/formal-jetson-infra` / through `52b390e` for the Youtu Q4 third-party note |
-| Jetson branch / commit | `bench/formal-jetson-infra` / through `52b390e` for the Youtu Q4 third-party note |
+| Local branch / commit | `bench/formal-jetson-infra` / through `158f0e4` for the HunyuanOCR launcher-resume fix and smoke |
+| Jetson branch / commit | `bench/formal-jetson-infra` / through `158f0e4` for the HunyuanOCR launcher-resume fix and smoke |
 | Jetson worktree | `~/code/jetson-vlm-lab-bench` |
 | Model root | `/home/weizheng/code/jetson-vlm-lab/models` |
 | Docker image | `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` |
@@ -35,6 +35,12 @@ HTTPS is not supported. Please rebuild with one of:
 Commit `94154a4` changed the generic launcher to download the named GGUF and
 mmproj files on the Jetson host with `curl`, then start the container with
 local `-m` and `--mmproj` paths.
+
+Commit `158f0e4` added a recovery path for interrupted host-side downloads: if
+`curl --continue-at -` receives HTTP 416 while a `.partial` file already starts
+with the GGUF magic bytes, the launcher accepts that completed partial and
+renames it to the final artifact path. This unblocked the HunyuanOCR mmproj
+file after the first run timed out during artifact download.
 
 Downloaded SmolVLM2 artifacts:
 
@@ -93,6 +99,57 @@ Decision: Qwen3-VL 2B Thinking Q4 is a valid Jetson smoke candidate. It is much
 slower than SmolVLM2 256M but still substantially faster than the current
 Gemma Q4 baseline, and its sample outputs are more deliberate than SmolVLM2.
 Do not promote it without a repeated formal run and output review.
+
+## HunyuanOCR 1B Q8 Smoke
+
+Variant: `hunyuanocr-q8-smoke`
+
+The first HunyuanOCR attempt (`hunyuanocr-q8-smoke64-20260531a`) did not reach
+server readiness because it spent the wait window downloading artifacts. The
+second attempt (`hunyuanocr-q8-smoke64-20260531b`) immediately failed with
+`curl` HTTP 416 while resuming a completed-looking `mmproj` partial. Commit
+`158f0e4` changed both HF GGUF launchers to accept an existing `.partial` as
+complete only when the server returned HTTP 416 and the local file has GGUF
+magic bytes. The third run pulled that launcher fix on the Jetson and completed
+the smoke.
+
+Downloaded HunyuanOCR artifacts:
+
+| File | Size |
+|---|---:|
+| `models/ggml-org/HunyuanOCR-GGUF/HunyuanOCR-Q8_0.gguf` | 583,134,944 bytes |
+| `models/ggml-org/HunyuanOCR-GGUF/mmproj-HunyuanOCR-Q8_0.gguf` | 732,938,240 bytes |
+
+| Run prefix | Preflight `lfb` | Startup s | Guard | Success | Fake success | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s |
+|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| `hunyuanocr-q8-smoke64-20260531a` | 242x4MB | n/a | n/a | 0/0 | 0/0 | n/a | n/a | n/a | n/a | n/a |
+| `hunyuanocr-q8-smoke64-20260531b` | 242x4MB | n/a | n/a | 0/0 | 0/0 | n/a | n/a | n/a | n/a | n/a |
+| `hunyuanocr-q8-smoke64-20260531c` | 245x4MB | 5.022 | no | 6/6 | 3/3 | 67.745 | 35.006 | 0.945 | 1.830 | 1.738 |
+
+Failed-run causes:
+
+| Run prefix | Server ready | Server return code | Wait s | Failure |
+|---|---|---:|---:|---|
+| `hunyuanocr-q8-smoke64-20260531a` | no | -15 | 600.951 | Timeout while downloading artifacts; `mmproj` remained as `.partial`. |
+| `hunyuanocr-q8-smoke64-20260531b` | no | 22 | 1.000 | `curl --continue-at -` returned HTTP 416 for the completed `.partial`. |
+
+Profile summary for the successful run recorded six `tegrastats` samples,
+minimum profiled `lfb` of 186 blocks, average GR3D utilization of 95.333%,
+average CPU utilization of 3.028%, max temperature 51.437 C, average `VDD_IN`
+power 18.975 W, and bottleneck label `gpu_compute`. The launcher lifecycle
+marked `artifact_check_or_download` as `downloaded_or_checked` with 0.689s
+duration.
+
+The model loaded and returned HTTP responses, but every text, image, and
+fake-stream output excerpt was a repeated exclamation-mark string. The report
+therefore marked the guard as failed for repetitive output and quality-term
+misses across all benchmark and fake-stream records.
+
+Decision: HunyuanOCR Q8 is a valid load-path smoke for the Tencent-base
+ggml-org artifact, but it is not a usable VLM/OCR candidate under the current
+llama.cpp runtime, prompt path, and Q8 artifact. Do not spend 5-trial formal
+repeat budget on it until a bounded quality triage changes the artifact,
+prompt/template handling, or runtime path.
 
 ## Youtu-VL 4B Q8 Smoke
 
@@ -172,27 +229,36 @@ they split into two lanes:
 
 | Model | HF source | Repo status |
 |---|---|---|
+| Hy-MT1.5 1.8B 1.25bit GGUF | `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF` / `Hy-MT1.5-1.8B-1.25bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
+| Hy-MT1.5 1.8B 2bit GGUF | `tencent/Hy-MT1.5-1.8B-2bit-GGUF` / `Hy-MT1.5-1.8B-2bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
 | Hy-MT2 1.8B 1.25Bit GGUF | `tencent/Hy-MT2-1.8B-1.25Bit-GGUF` / `Hy-MT2-1.8B-1.25Bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
 | Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as text/router config and variant; not a VLM candidate. |
 | Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as text/router configs and variants; not VLM candidates. |
-| HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Added as Tencent-base VLM/OCR smoke config and variant; not an official Tencent-owned GGUF artifact. |
+| Hy-MT2 1.8B FP8 | `tencent/Hy-MT2-1.8B-FP8` | Deferred; Safetensors/compressed-tensors path, no low-friction GGUF launcher row. |
+| HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Jetson smoke loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs; not an official Tencent-owned GGUF artifact and not ranked. |
 | Penguin-VL-2B | `tencent/Penguin-VL-2B` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
 | HY-Embodied-0.5 / HY-Embodied-0.5-X | `tencent/HY-Embodied-0.5`, `tencent/HY-Embodied-0.5-X` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
 | Youtu-Parsing | `tencent/Youtu-Parsing` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
 
-The executable Hy-MT2 rows use `scripts/jetson/run_hf_gguf_llama_docker.sh`,
+The executable Hy-MT1.5 and Hy-MT2 rows use
+`scripts/jetson/run_hf_gguf_llama_docker.sh`,
 `configs/benchmark/text_prompt_cases.jsonl`, and `capabilities.image=false`.
-The sweep planner skips fake-stream for these rows. Do not compare them against
-SmolVLM2/Qwen/HunyuanOCR/Youtu image or fake-stream metrics.
+`scripts/jetson/run_remote_tencent_text_suite.sh` runs these rows with the same
+locked-clocks/cache-drop/min-lfb policy and `--fake-stream-max-frames 0`. The
+sweep planner also skips fake-stream for these rows because their configs are
+text-only. Do not compare them against SmolVLM2/Qwen/HunyuanOCR/Youtu image or
+fake-stream metrics.
 
 ## Next Model Checks
 
 1. Run repeated 3- or 5-trial formal checks for SmolVLM2 256M, Qwen3-VL 2B,
-   HunyuanOCR Q8, and the Youtu Q4 third-party CPU-mmproj path before ranking
-   them against MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
-2. Run Hy-MT2 1.8B quantization rows only as a separate text/router study if
-   they become useful for routing or translation pre/post-processing.
+   and the Youtu Q4 third-party CPU-mmproj path before ranking them against
+   MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4.
+2. Run Hy-MT1.5/Hy-MT2 1.8B quantization rows only as a separate text/router
+   study if they become useful for routing or translation pre/post-processing.
 3. Add a separate Youtu Q4 GPU-mmproj/offload canary if memory allows; keep it
    distinct from the CPU-mmproj smoke and the official Tencent Q8 failure.
-4. Promote none of these candidates until a formal repeat passes
+4. Revisit HunyuanOCR only through a bounded quality triage of artifact,
+   prompt/template handling, or runtime path; do not rank the current Q8 smoke.
+5. Promote none of these candidates until a formal repeat passes
    the guard and preserves acceptable output quality.

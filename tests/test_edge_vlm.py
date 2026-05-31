@@ -1959,6 +1959,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
         )
         self.assertIn("tencent/Youtu-VL-4B-Instruct-GGUF", spec)
         self.assertIn("ggml-org/HunyuanOCR-GGUF", spec)
+        self.assertIn("Hy-MT1.5", spec)
         self.assertIn("SmolVLM2", spec)
         self.assertIn("Qwen3-VL-2B", spec)
 
@@ -1971,9 +1972,11 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("scripts/jetson/run_optimization_sweep.sh", matrix)
         self.assertIn("scripts/jetson/run_remote_current_defaults_suite.sh", matrix)
         self.assertIn("run_hf_gguf_vlm_llama_docker.sh", matrix)
+        self.assertIn("run_remote_tencent_text_suite.sh", matrix)
         self.assertIn("SmolVLM2", matrix)
         self.assertIn("Qwen3-VL", matrix)
         self.assertIn("HunyuanOCR", matrix)
+        self.assertIn("Hy-MT1.5", matrix)
         self.assertIn("Youtu-VL", matrix)
 
     def test_jetson_optimization_variants_include_gemma_mid_batch_candidate(self):
@@ -2362,6 +2365,18 @@ class EdgeVlmContractsTest(unittest.TestCase):
         from edge_vlm.config import config_supports_images, load_model_config
 
         expected = {
+            "tencent-hy-mt1p5-1p8b-1p25bit": {
+                "config": "configs/models/tencent_hy_mt1p5_1p8b_1p25bit.yaml",
+                "model_ref": "tencent/Hy-MT1.5-1.8B-1.25bit-GGUF:1.25bit",
+                "model_file": "Hy-MT1.5-1.8B-1.25bit.gguf",
+                "quantization": "1.25bit",
+            },
+            "tencent-hy-mt1p5-1p8b-2bit": {
+                "config": "configs/models/tencent_hy_mt1p5_1p8b_2bit.yaml",
+                "model_ref": "tencent/Hy-MT1.5-1.8B-2bit-GGUF:2bit",
+                "model_file": "Hy-MT1.5-1.8B-2bit.gguf",
+                "quantization": "2bit",
+            },
             "tencent-hy-mt2-1p8b-1p25bit": {
                 "config": "configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml",
                 "model_ref": "tencent/Hy-MT2-1.8B-1.25Bit-GGUF:1.25Bit",
@@ -3398,11 +3413,11 @@ class EdgeVlmContractsTest(unittest.TestCase):
             "gemma-q4-baseline-gpu12-b512-u512-kvq8",
             "smolvlm2-256m-q8-smoke",
             "qwen3-vl-2b-thinking-q4-smoke",
-            "hunyuanocr-q8-smoke",
             "youtu-vl-4b-q8-smoke",
             "youtu-vl-4b-q4-thirdparty-smoke",
         ):
             self.assertIn(f"SWEEP_ARG=--variant\nSWEEP_ARG={variant_id}\n", log_text)
+        self.assertNotIn("SWEEP_ARG=--variant\nSWEEP_ARG=hunyuanocr-q8-smoke\n", log_text)
         self.assertIn("SWEEP_ARG=--trial-count\nSWEEP_ARG=6\n", log_text)
         self.assertIn("SWEEP_ARG=--max-tokens\nSWEEP_ARG=44\n", log_text)
         self.assertIn("SWEEP_ARG=--fake-stream-max-frames\nSWEEP_ARG=4\n", log_text)
@@ -3418,6 +3433,95 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/comparison.md\n",
+            log_text,
+        )
+
+    def test_remote_tencent_text_suite_runs_text_candidates_then_compare(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "suite.log"
+            fake_sweep = tmp_path / "run_remote_optimization_sweep.sh"
+            fake_remote = tmp_path / "remote_exec.sh"
+            fake_sweep.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'SWEEP\\n' >> \"${FAKE_SUITE_LOG:?}\"",
+                        "printf 'ENV_PREPARE=%s\\n' \"${JETSON_REMOTE_PREPARE_MAX_CLOCKS:-}\" >> \"${FAKE_SUITE_LOG}\"",
+                        "printf 'ENV_DROP=%s\\n' \"${JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT:-}\" >> \"${FAKE_SUITE_LOG}\"",
+                        "printf 'ENV_SYNC=%s\\n' \"${JETSON_REMOTE_SYNC:-}\" >> \"${FAKE_SUITE_LOG}\"",
+                        "for arg in \"$@\"; do printf 'SWEEP_ARG=%s\\n' \"$arg\" >> \"${FAKE_SUITE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'REMOTE\\n' >> \"${FAKE_SUITE_LOG:?}\"",
+                        "for arg in \"$@\"; do printf 'REMOTE_ARG=%s\\n' \"$arg\" >> \"${FAKE_SUITE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_sweep, 0o755)
+            os.chmod(fake_remote, 0o755)
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_remote_tencent_text_suite.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_TENCENT_TEXT_RUN_PREFIX": "tencent-text-unit",
+                    "JETSON_TENCENT_TEXT_TRIAL_COUNT": "4",
+                    "JETSON_TENCENT_TEXT_MAX_TOKENS": "55",
+                    "JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS": "188",
+                    "JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S": "222",
+                    "JETSON_REMOTE_SYNC": "0",
+                    "JETSON_REMOTE_SWEEP": str(fake_sweep),
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                    "FAKE_SUITE_LOG": str(log_file),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertIn("SWEEP\n", log_text)
+        self.assertIn("ENV_PREPARE=1\n", log_text)
+        self.assertIn("ENV_DROP=1\n", log_text)
+        self.assertIn("ENV_SYNC=0\n", log_text)
+        self.assertIn("SWEEP_ARG=--run-prefix\nSWEEP_ARG=tencent-text-unit\n", log_text)
+        for variant_id in (
+            "tencent-hy-mt1p5-1p8b-1p25bit-text-smoke",
+            "tencent-hy-mt1p5-1p8b-2bit-text-smoke",
+            "tencent-hy-mt2-1p8b-1p25bit-text-smoke",
+            "tencent-hy-mt2-1p8b-2bit-text-smoke",
+            "tencent-hy-mt2-1p8b-q4-text-smoke",
+            "tencent-hy-mt2-1p8b-q6-text-smoke",
+            "tencent-hy-mt2-1p8b-q8-text-smoke",
+        ):
+            self.assertIn(f"SWEEP_ARG=--variant\nSWEEP_ARG={variant_id}\n", log_text)
+        self.assertIn("SWEEP_ARG=--trial-count\nSWEEP_ARG=4\n", log_text)
+        self.assertIn("SWEEP_ARG=--max-tokens\nSWEEP_ARG=55\n", log_text)
+        self.assertIn("SWEEP_ARG=--fake-stream-max-frames\nSWEEP_ARG=0\n", log_text)
+        self.assertIn("SWEEP_ARG=--min-lfb-blocks\nSWEEP_ARG=188\n", log_text)
+        self.assertIn("SWEEP_ARG=--wait-timeout-s\nSWEEP_ARG=222\n", log_text)
+        self.assertIn("REMOTE\n", log_text)
+        self.assertIn("REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.optimization\nREMOTE_ARG=compare\n", log_text)
+        self.assertIn(
+            "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/tencent-text-unit.manifest.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/comparison.md\n",
             log_text,
         )
 

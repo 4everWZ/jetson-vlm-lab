@@ -19,7 +19,8 @@ Small non-private sample images are included under `data/sample_images/` so dry 
 
 `configs/benchmark/text_prompt_cases.jsonl` is the text/router-only subset. It
 contains no image or fake-stream cases, and is used by text-only model variants
-such as Tencent Hy-MT2. Do not mix text/router rows into VLM rankings.
+such as Tencent Hy-MT1.5 and Hy-MT2. Do not mix text/router rows into VLM
+rankings.
 
 ## Raw Output
 
@@ -440,8 +441,7 @@ scripts/jetson/run_remote_current_defaults_suite.sh
 ```
 
 To run the fixed-policy lightweight model ladder with the current MiniCPM and
-Gemma baselines plus SmolVLM2, Qwen3-VL 2B, HunyuanOCR, and Tencent/Youtu
-candidates, use:
+Gemma baselines plus the guard-passing lightweight candidates, use:
 
 ```bash
 scripts/jetson/run_remote_lightweight_model_suite.sh
@@ -458,27 +458,36 @@ path stable, or override `JETSON_LIGHTWEIGHT_TRIAL_COUNT`,
 `JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S`, `JETSON_LIGHTWEIGHT_BASELINE_VARIANTS`,
 `JETSON_LIGHTWEIGHT_CANDIDATE_VARIANTS`, or
 `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS` for scoped validation runs.
+The default candidate list excludes HunyuanOCR after its launcher-resume smoke
+loaded but failed the guard with repetitive punctuation output; pass
+`JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=hunyuanocr-q8-smoke` only for a scoped
+quality-triage rerun.
+
+If a host-side HF GGUF download is interrupted after the bytes have completed
+but before the launcher renames the `.partial` file, the generic HF GGUF
+launchers recover a subsequent HTTP 416 resume response only when the existing
+partial starts with GGUF magic bytes. This path was added after the first
+HunyuanOCR run timed out during mmproj download; it is an artifact recovery
+mechanism, not a model-quality signal.
 
 For current Tencent text-only GGUF candidates, use the generic text launcher and
-text cases through the normal sweep:
+text cases through the Tencent text suite wrapper:
 
 ```bash
-PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
-  --run-prefix tencent-hy-mt2-text-001 \
-  --variant tencent-hy-mt2-1p8b-1p25bit-text-smoke \
-  --variant tencent-hy-mt2-1p8b-2bit-text-smoke \
-  --variant tencent-hy-mt2-1p8b-q4-text-smoke \
-  --variant tencent-hy-mt2-1p8b-q6-text-smoke \
-  --variant tencent-hy-mt2-1p8b-q8-text-smoke \
-  --trial-count 5 \
-  --max-tokens 64 \
-  --temperature 0 \
-  --min-lfb-blocks 150
+scripts/jetson/run_remote_tencent_text_suite.sh
 ```
 
-Those variants use `scripts/jetson/run_hf_gguf_llama_docker.sh` and
-`configs/benchmark/text_prompt_cases.jsonl`; fake-stream is skipped because the
-configs are text-only.
+The wrapper defaults to Hy-MT1.5 1.25bit/2bit and Hy-MT2
+1.25Bit/2Bit/Q4_K_M/Q6_K/Q8_0 rows, runs with locked clocks, drops caches
+before each variant, sets `--fake-stream-max-frames 0`, and writes a comparison
+report. Override `JETSON_TENCENT_TEXT_RUN_PREFIX`,
+`JETSON_TENCENT_TEXT_TRIAL_COUNT`, `JETSON_TENCENT_TEXT_MAX_TOKENS`,
+`JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS`, `JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S`,
+`JETSON_TENCENT_TEXT_VARIANTS`, or `JETSON_TENCENT_TEXT_EXTRA_VARIANTS` for
+scoped validation. Those variants use
+`scripts/jetson/run_hf_gguf_llama_docker.sh` and
+`configs/benchmark/text_prompt_cases.jsonl`; fake-stream is also skipped by
+their text-only configs.
 
 ## llama.cpp Runtime Image Builds
 
