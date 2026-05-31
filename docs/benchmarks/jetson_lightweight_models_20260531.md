@@ -249,11 +249,11 @@ Repeat conclusions:
 - SmolVLM2 256M Q8 is the latency floor. It is fast enough for cheap routing,
   liveness, and harness stress, but the raw text excerpts still show weak
   semantics such as interpreting WSL as a generic web-services layer.
-- Qwen3-VL 2B Thinking Q4 is the balanced_candidate for the next quality gate:
-  it is slower than MiniCPM-V 4.6 Q4 but far ahead of Gemma and keeps enough
-  `lfb` headroom for continued pipeline/routing experiments.
+- Qwen3-VL 2B Thinking Q4 is the balanced_candidate for image/fake-stream
+  experiments: it is slower than MiniCPM-V 4.6 Q4 but far ahead of Gemma and
+  keeps enough `lfb` headroom for continued pipeline/routing experiments.
 - MiniCPM-V 4.6 Q4 remains the practical default reference row for quality and
-  speed balance until a quality review proves otherwise.
+  speed balance.
 - Gemma 4 E2B-it Q4 is not a 2B-class target in practice. The repeat reinforces
   the decision to stop broad llama.cpp flag tuning for it: throughput is low,
   GR3D is not saturated, and profiled `lfb` falls to one block.
@@ -264,6 +264,28 @@ Repeat conclusions:
   mostly `gpu_compute`; Gemma and Youtu Q4 show `runtime_overhead` with very
   low profiled `lfb`, so deeper infra work should focus on memory/runtime
   characterization rather than more llama.cpp flag sweeps.
+
+Structured quality review:
+
+Policy: `configs/benchmark/quality_review_policy.json`, runner:
+`python -m edge_vlm.quality_review`. The review below applies route-specific
+checks to recorded `output_excerpt` fields from
+`lightweight-repeat5-20260531T134554Z`; it is a mechanical gate before human
+review, not a substitute for full-output inspection.
+
+| Model | Passed records | Policy pass | Failed policy cases | Route implication |
+|---|---:|---|---|---|
+| MiniCPM-V 4.6 Q4 | 30/30 | yes | none | Keep as quality_reference/default row. |
+| Gemma 4 E2B-it Q4 | 20/30 | no | `text_cn_short` 0/5, `text_code_short` 0/5 | Keep only as quality/reference evidence where explicitly useful; not a speed or route candidate. |
+| SmolVLM2 256M Q8 | 20/30 | no | `text_cn_short` 0/5, `text_en_reasoning_short` 0/5 | Keep as latency_floor and harness stress row; do not use for text reasoning routes. |
+| Qwen3-VL 2B Thinking Q4 | 20/30 | no | `text_cn_short` 0/5, `text_code_short` 0/5 | Keep as image/fake-stream balanced_candidate only; do not use for text/code routes until prompt/output evidence changes. |
+| Youtu-VL 4B Q4 third-party | 30/30 | yes | none | Quality policy passes, but it remains a failed_artifact for default ranking because it is slow, nonofficial, and memory-stressed. |
+
+The failures narrow route roles rather than invalidate the raw repeat. SmolVLM2
+still proves the low-latency floor; Qwen still has useful image/fake-stream
+behavior but failed the current text/code excerpt policy; Youtu Q4 still cannot
+be promoted because artifact provenance and runtime cost dominate the simple
+quality pass.
 
 ## Tencent Small-Model Refresh
 
@@ -377,9 +399,9 @@ still needs human output review and route-specific translation/router checks.
 
 ## Next Model Checks
 
-1. Do human output review and route-specific quality checks for
-   `lightweight-repeat5-20260531T134554Z`; treat SmolVLM2 as latency_floor and
-   Qwen3-VL 2B as the balanced_candidate unless that review fails.
+1. Do human full-output review for `lightweight-repeat5-20260531T134554Z`;
+   structured quality review already keeps SmolVLM2 as latency_floor and narrows
+   Qwen3-VL 2B to image/fake-stream balanced_candidate rather than text/code.
 2. Use profiling next: capture memory/`lfb`, CPU/GPU/EMC, phase, and input
    pipeline evidence before selecting any deeper runtime or routing change.
 3. Run the dedicated Tencent Hy-MT1.5/Hy-MT2 text suite only as a separate

@@ -42,12 +42,21 @@ Lightweight model evidence is promising but not promotable yet:
 
 | Candidate | Current status | Next gate |
 |---|---|---|
-| SmolVLM2 256M Q8 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard at 199.847 text tok/s, 164.551 image tok/s, 0.462 s fake-stream latency, and minimum profiled `lfb` 220. Raw excerpts still show weak semantics, including a WSL prompt answered as if WSL meant a generic web-services layer. | Role `latency_floor`; use for cheap routing/harness stress only unless route-specific quality review says otherwise. |
-| Qwen3-VL 2B Thinking Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard at 34.761 text tok/s, 34.290 image tok/s, 1.942 s fake-stream latency, average GR3D 96.457%, and minimum profiled `lfb` 154. It is slower than MiniCPM but far ahead of Gemma. | Role `balanced_candidate`; next gate is human output review and route-specific quality tests against MiniCPM. |
+| SmolVLM2 256M Q8 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard at 199.847 text tok/s, 164.551 image tok/s, 0.462 s fake-stream latency, and minimum profiled `lfb` 220. `edge_vlm.quality_review` with `configs/benchmark/quality_review_policy.json` passed 20/30 excerpt records and failed `text_cn_short` plus `text_en_reasoning_short`; raw excerpts still show weak semantics, including a WSL prompt answered as if WSL meant a generic web-services layer. | Role `latency_floor`; use for cheap routing/harness stress only, not text reasoning routes, unless prompt/runtime changes produce fresh quality evidence. |
+| Qwen3-VL 2B Thinking Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard at 34.761 text tok/s, 34.290 image tok/s, 1.942 s fake-stream latency, average GR3D 96.457%, and minimum profiled `lfb` 154. `edge_vlm.quality_review` passed 20/30 excerpt records and failed `text_cn_short` plus `text_code_short`, so it is slower than MiniCPM but still far ahead of Gemma for the surviving route. | Qwen remains image/fake-stream balanced_candidate; do human full-output review and route-specific tests against MiniCPM before any broader text/code route use. |
 | HunyuanOCR 1B Q8 | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded through `ggml-org/HunyuanOCR-GGUF` after the launcher-resume fix and completed formal/fake-stream records, but the guard failed because all output excerpts were repetitive exclamation-mark strings. This is not an official Tencent-owned GGUF artifact. | Do not run formal repeats for the current Q8 artifact/runtime path. Revisit only with bounded quality triage of artifact, prompt/template handling, or runtime lane. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
-| Youtu-VL-4B third-party Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard but only reached 7.502 text tok/s, 7.249 image tok/s, 9.186 s fake latency, average GR3D 19.546%, and minimum profiled `lfb` 1 with `runtime_overhead`. It is also not official Tencent support. | Role `failed_artifact` for default ranking; revisit only for a scoped artifact/runtime A/B. |
-| Tencent Hy-MT1.5/Hy-MT2 1.8B GGUF text variants | Added to the text/router lane only: Hy-MT1.5 1.25bit/2bit and Hy-MT2 1.25Bit/2Bit/Q4_K_M/Q6_K/Q8_0 are all included in the dedicated Tencent text suite by default. Low-bit rows are runtime-compatibility canaries; the 1.25bit rows fail on pinned llama.cpp with `invalid ggml type 42`, and the 2bit rows fail with tensor offset mismatches. Earlier Hy-MT2 Q4 cached smoke `tencent-hy-mt2-q4-smoke64-cached-20260531b` passed the text guard at 19.759 tok/s and 3.070 s average text latency. Full-suite run `tencent-text-smoke64-20260531T120054Z` produced valid Hy-MT2 Q4/Q6 text rows: Q4 passed at 33.541 tok/s and 1.688 s average text latency, Q6 passed at 26.287 tok/s and 2.145 s average text latency. Cached Q6 run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s and 2.144 s average text latency. Q8 full-suite row is invalidated by the pre-fix launcher cleanup/stale-port issue; fixed-harness cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s and 1.841 s average text latency. Five-trial repeat `tencent-text-repeat5-20260531a` passed Q4/Q6/Q8 at 20/20 records each: Q4 34.528 tok/s and 1.643 s latency, Q6 26.778 tok/s and 2.108 s, Q8 31.395 tok/s and 1.806 s. All valid rows used `terminate_group` shutdown with closed-port evidence. | Do human output review and route-specific translation/router checks before use; keep text rows separate from VLM image/fake-stream rows. Low-bit failures remain runtime-compatibility evidence unless a newer llama.cpp runtime can load them. |
+| Youtu-VL-4B third-party Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard and `edge_vlm.quality_review` passed 30/30 excerpt records, but it only reached 7.502 text tok/s, 7.249 image tok/s, 9.186 s fake latency, average GR3D 19.546%, and minimum profiled `lfb` 1 with `runtime_overhead`. It is also not official Tencent support. | Role `failed_artifact` for default ranking; revisit only for a scoped artifact/runtime A/B. |
+| Tencent Hy-MT1.5/Hy-MT2 1.8B GGUF text variants | Added to the text/router lane only: Hy-MT1.5 1.25bit/2bit and Hy-MT2 1.25Bit/2Bit/Q4_K_M/Q6_K/Q8_0 are all included in the dedicated Tencent text suite by default. Low-bit rows are runtime-compatibility canaries; the 1.25bit rows fail on pinned llama.cpp with `invalid ggml type 42`, and the 2bit rows fail with tensor offset mismatches. Earlier Hy-MT2 Q4 cached smoke `tencent-hy-mt2-q4-smoke64-cached-20260531b` passed the text guard at 19.759 tok/s and 3.070 s average text latency. Full-suite run `tencent-text-smoke64-20260531T120054Z` produced valid Hy-MT2 Q4/Q6 text rows: Q4 passed at 33.541 tok/s and 1.688 s average text latency, Q6 passed at 26.287 tok/s and 2.145 s average text latency. Cached Q6 run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s and 2.144 s average text latency. Q8 full-suite row is invalidated by the pre-fix launcher cleanup/stale-port issue; fixed-harness cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s and 1.841 s average text latency. Five-trial repeat `tencent-text-repeat5-20260531a` passed Q4/Q6/Q8 at 20/20 records each: Q4 34.528 tok/s and 1.643 s latency, Q6 26.778 tok/s and 2.108 s, Q8 31.395 tok/s and 1.806 s. All valid rows used `terminate_group` shutdown with closed-port evidence. | Run `edge_vlm.quality_review` with `configs/benchmark/quality_review_policy.json`, then do human output review and route-specific translation/router checks before use; keep text rows separate from VLM image/fake-stream rows. Low-bit failures remain runtime-compatibility evidence unless a newer llama.cpp runtime can load them. |
+
+Structured quality review on `lightweight-repeat5-20260531T134554Z` produced
+30/30 policy passes for MiniCPM-V 4.6 Q4 and third-party Youtu Q4, and 20/30
+passes for Gemma, SmolVLM2, and Qwen. SmolVLM2 failed text-resource and WSL
+reasoning checks, which reinforces `latency_floor`. Qwen failed the Chinese
+resource-term and code-function checks but kept image and fake-stream cases
+passing. Qwen remains image/fake-stream balanced_candidate, not a general
+text/code route, until a human output review or prompt/policy change proves a
+broader role.
 
 Tencent Hub note from the 2026-05-31 refresh: the current official small GGUF
 Tencent rows such as `tencent/Hy-MT1.5-1.8B-1.25bit-GGUF`,
@@ -276,6 +285,10 @@ Routing policy candidates:
   ranking tables without labeling the cadence difference.
 - Keep text-only small models out of image routes unless a text-only stage is
   explicitly added after image understanding.
+- Run `edge_vlm.quality_review` with
+  `configs/benchmark/quality_review_policy.json` on candidate benchmark JSONL
+  before changing a route role. This policy checks route-specific terms and
+  known bad patterns; it supports human review but does not replace it.
 
 Acceptance:
 
@@ -283,6 +296,9 @@ Acceptance:
   pipeline overhead.
 - A route improves average or p95 fake-stream latency without introducing guard
   failures in the routed cases.
+- Candidate routes pass the structured quality review policy for the benchmark
+  cases they claim to serve, or the failure is explicitly documented as a
+  `route_only`/`failed_artifact` limitation.
 - Routing changes are measured against the current three-frame fake-stream
   fixture before any real-camera work.
 
@@ -369,13 +385,17 @@ estimates:
    cached evidence, use `tencent-text-repeat5-20260531a` as Q4/Q6/Q8 5-trial
    text/router repeat evidence, and treat low-bit failures as
    runtime-compatibility evidence.
-4. Add artifact A/B rows only for candidates that survive repeat. Start with
-   Qwen role-quality checks and memory/runtime characterization; run Youtu Q4
-   GPU-mmproj/offload only if it answers a scoped artifact question.
-5. Use profiling evidence to choose exactly one runtime lane for a smoke. The
+4. Run the route-specific review CLI, `edge_vlm.quality_review`, with
+   `configs/benchmark/quality_review_policy.json` on repeat JSONL before any
+   model is promoted beyond its current role label.
+5. Add artifact A/B rows only for candidates that survive repeat and quality
+   review. Start with Qwen role-quality checks and memory/runtime
+   characterization; run Youtu Q4 GPU-mmproj/offload only if it answers a
+   scoped artifact question.
+6. Use profiling evidence to choose exactly one runtime lane for a smoke. The
    repeat already separates `gpu_compute` rows from Gemma/Youtu
    `runtime_overhead` rows with minimum profiled `lfb` of one block.
-6. Add route-policy experiments after baseline profiling can separate input
+7. Add route-policy experiments after baseline profiling can separate input
    overhead from server latency; real camera/live input remains a later
    validation lane after folder-based fake-stream controls are understood.
 

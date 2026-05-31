@@ -2025,6 +2025,134 @@ class EdgeVlmContractsTest(unittest.TestCase):
         )
         self.assertEqual(summary_record, summary)
 
+    def test_quality_review_applies_route_specific_policy_to_benchmark_jsonl(self):
+        from edge_vlm.quality_review import format_markdown_report, review_benchmark_jsonl
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            benchmark_jsonl = tmp_path / "benchmark.jsonl"
+            benchmark_jsonl.write_text(
+                "\n".join(
+                    json.dumps(record)
+                    for record in (
+                        {
+                            "run_id": "quality-unit",
+                            "model": "candidate",
+                            "trial_index": 1,
+                            "case_index": 1,
+                            "prompt_case_id": "text_code_short",
+                            "input_type": "text",
+                            "success": True,
+                            "output_excerpt": "def tokens_per_second(latency_s, token_count):\n    return token_count / latency_s",
+                        },
+                        {
+                            "run_id": "quality-unit",
+                            "model": "candidate",
+                            "trial_index": 1,
+                            "case_index": 2,
+                            "prompt_case_id": "text_code_short",
+                            "input_type": "text",
+                            "success": True,
+                            "output_excerpt": "return latency * token_count",
+                        },
+                        {
+                            "run_id": "quality-unit",
+                            "model": "candidate",
+                            "trial_index": 1,
+                            "case_index": 3,
+                            "prompt_case_id": "image_safety_scene_single",
+                            "input_type": "image",
+                            "success": True,
+                            "output_excerpt": "No visible hazards are present in the simple square scene.",
+                        },
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            policy = {
+                "default": {"min_output_chars": 12, "max_repeat_ratio": 0.8},
+                "cases": {
+                    "text_code_short": {
+                        "must_include_all": ["def ", "tokens_per_second"],
+                        "must_not_include_any": ["latency * token_count"],
+                    },
+                    "image_safety_scene_single": {
+                        "must_include_any": ["no visible", "none"],
+                        "must_not_include_any": ["fire", "knife"],
+                    },
+                },
+            }
+
+            report = review_benchmark_jsonl(benchmark_jsonl, policy)
+            markdown = format_markdown_report(report)
+
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["records"], 3)
+        self.assertEqual(report["failed_records"], 1)
+        self.assertEqual(report["case_summaries"]["text_code_short"]["failed"], 1)
+        self.assertIn("text_code_short", markdown)
+        self.assertIn("missing_all:def ", json.dumps(report, ensure_ascii=False))
+        self.assertIn("forbidden:latency * token_count", json.dumps(report, ensure_ascii=False))
+
+    def test_quality_review_cli_and_docs_are_wired(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            benchmark_jsonl = tmp_path / "benchmark.jsonl"
+            report_json = tmp_path / "quality.json"
+            report_md = tmp_path / "quality.md"
+            benchmark_jsonl.write_text(
+                json.dumps(
+                    {
+                        "run_id": "quality-cli-unit",
+                        "model": "candidate",
+                        "trial_index": 1,
+                        "case_index": 1,
+                        "prompt_case_id": "text_translation_zh_to_en_short",
+                        "input_type": "text",
+                        "success": True,
+                        "output_excerpt": "Jetson Orin runs a vision language model on the edge with memory bandwidth, power, and latency constraints.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    "-m",
+                    "edge_vlm.quality_review",
+                    "--input",
+                    str(benchmark_jsonl),
+                    "--policy",
+                    "configs/benchmark/quality_review_policy.json",
+                    "--output",
+                    str(report_json),
+                    "--markdown-output",
+                    str(report_md),
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={**os.environ, "PYTHONPATH": "src", "PYTHONPYCACHEPREFIX": "/tmp/edge-vlm-pycache"},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(report_json.read_text(encoding="utf-8"))
+            markdown = report_md.read_text(encoding="utf-8")
+
+        self.assertTrue(report["passed"])
+        self.assertIn("quality-cli-unit", report["run_ids"])
+        self.assertIn("text_translation_zh_to_en_short", markdown)
+
+        protocol = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        strategy = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(encoding="utf-8")
+        matrix = Path("docs/matrix_edge_vlm_workflow.md").read_text(encoding="utf-8")
+        for text in (protocol, strategy, matrix):
+            self.assertIn("edge_vlm.quality_review", text)
+            self.assertIn("configs/benchmark/quality_review_policy.json", text)
+
     def test_next_phase_spec_orders_infra_before_model_expansion_and_lists_tencent_youtu_vl(self):
         spec = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(encoding="utf-8")
 
@@ -2621,6 +2749,12 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("balanced_candidate", strategy_doc)
         self.assertIn("runtime_overhead", strategy_doc)
         self.assertIn("official Youtu-VL Q8", model_doc)
+        self.assertIn("Structured quality review", benchmark_doc)
+        self.assertIn("MiniCPM-V 4.6 Q4 | 30/30", benchmark_doc)
+        self.assertIn("SmolVLM2 256M Q8 | 20/30", benchmark_doc)
+        self.assertIn("Qwen3-VL 2B Thinking Q4 | 20/30", benchmark_doc)
+        self.assertIn("Youtu-VL 4B Q4 third-party | 30/30", benchmark_doc)
+        self.assertIn("Qwen remains image/fake-stream balanced_candidate", strategy_doc)
 
     def test_jetson_hf_gguf_vlm_launcher_can_dry_run_model_ref(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -354,6 +354,22 @@ against the selected baseline variant. Copy only the defensible summary rows
 into tracked benchmark docs; keep raw generated reports under ignored
 `outputs/`.
 
+For route-specific output review, run the benchmark JSONL through the quality
+review policy before promoting a candidate beyond smoke/repeat evidence:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.quality_review \
+  --input outputs/optimization_sweeps/<run-prefix>/benchmarks/<run-id>.jsonl \
+  --policy configs/benchmark/quality_review_policy.json \
+  --output outputs/optimization_sweeps/<run-prefix>/<run-id>.quality.json \
+  --markdown-output outputs/optimization_sweeps/<run-prefix>/<run-id>.quality.md
+```
+
+This check is deliberately stricter than the optimization sanity guard for
+route-sensitive prompts such as WSL reasoning, code, safety, and translation.
+It is a structured review aid, not a replacement for human review of raw
+excerpts.
+
 Successful sweep variants also write derived profile artifacts under
 `outputs/optimization_sweeps/<run-prefix>/profiles/` and launcher lifecycle
 events under `outputs/optimization_sweeps/<run-prefix>/lifecycle/`:

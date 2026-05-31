@@ -15,6 +15,9 @@ Not implemented in the current version.
 - `edge_vlm.image_payload`: Converts local images into data URLs, builds content parts, and reports MIME/read/base64/data-URL timing.
 - `edge_vlm.benchmark.run_benchmark`: Reads JSONL cases, writes JSONL results with `input_timing`, can repeat full-case trials, and can write Markdown summary plus JSON manifest sidecars for the current run.
 - `edge_vlm.fake_stream.run_fake_stream`: Iterates a sorted image folder on a fixed-cadence schedule and writes one response record per processed frame, including per-frame `input_timing` and `stream_timing` when available. It can optionally skip late non-final source frames or adapt the next interval from the previous processed frame's elapsed time for stream-control experiments, and it reports skipped-frame and effective-interval metadata on processed records.
+- `edge_vlm.quality_review`: Reads benchmark JSONL outputs and applies
+  `configs/benchmark/quality_review_policy.json` so route-specific quality
+  checks are explicit before a model role changes.
 - `edge_vlm.config.load_model_config`: Loads YAML/JSON model configs with environment overrides for host and port.
 
 The benchmark treats `input_type=fake_stream` as a marker case and records an instruction to run `edge_vlm.fake_stream`. It does not expand a folder inside the normal benchmark loop.
@@ -25,6 +28,7 @@ The benchmark treats `input_type=fake_stream` as a marker case and records an in
 - Tests: `tests/test_edge_vlm.py`
 - Configs: `configs/models/*.yaml`
 - Cases: `configs/benchmark/prompt_cases.jsonl`
+- Quality review policy: `configs/benchmark/quality_review_policy.json`
 - Sample assets: `data/sample_images/`, `data/sample_stream/`
 
 ## Tradeoffs

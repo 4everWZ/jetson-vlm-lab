@@ -1,0 +1,92 @@
+{
+  "default": {
+    "min_output_chars": 32,
+    "max_repeat_ratio": 0.65
+  },
+  "cases": {
+    "text_cn_short": {
+      "must_include_any": [
+        "内存",
+        "显存",
+        "带宽",
+        "功耗",
+        "散热",
+        "计算",
+        "memory",
+        "bandwidth",
+        "power",
+        "thermal",
+        "compute"
+      ]
+    },
+    "text_en_reasoning_short": {
+      "must_include_all": [
+        "WSL",
+        "Jetson"
+      ],
+      "must_include_any": [
+        "Linux",
+        "dependency",
+        "container",
+        "development"
+      ],
+      "must_not_include_any": [
+        "web service layer",
+        "web-services layer"
+      ]
+    },
+    "text_code_short": {
+      "must_include_all": [
+        "def ",
+        "tokens_per_second"
+      ],
+      "must_include_any": [
+        "return",
+        "/"
+      ],
+      "must_not_include_any": [
+        "latency * token_count",
+        "latency*token_count"
+      ]
+    },
+    "image_caption_single": {
+      "must_include_any": [
+        "square",
+        "squares",
+        "background",
+        "black",
+        "white"
+      ]
+    },
+    "image_safety_scene_single": {
+      "must_include_any": [
+        "no visible",
+        "none",
+        "hazard",
+        "hazards",
+        "safety"
+      ],
+      "must_not_include_any": [
+        "fire",
+        "knife",
+        "weapon",
+        "smoke"
+      ]
+    },
+    "text_translation_zh_to_en_short": {
+      "must_include_all": [
+        "Jetson",
+        "Orin",
+        "memory",
+        "bandwidth",
+        "power",
+        "latency"
+      ],
+      "must_include_any": [
+        "edge",
+        "edge side",
+        "edge-side"
+      ]
+    }
+  }
+}
