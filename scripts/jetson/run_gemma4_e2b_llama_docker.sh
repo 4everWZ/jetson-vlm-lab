@@ -23,7 +23,6 @@ docker_tty="${DOCKER_TTY:-1}"
 dry_run="${JETSON_DRY_RUN:-0}"
 llama_server_cmd="${LLAMA_SERVER_CMD:-}"
 
-mkdir -p "${model_dir}" "${hf_home_on_host}"
 read -r -a gpu_args <<< "${docker_gpu_args}"
 tty_args=()
 if [[ "${docker_tty}" == "1" ]]; then
@@ -78,6 +77,8 @@ if [[ "${dry_run}" == "1" ]]; then
   printf '\n'
   exit 0
 fi
+
+mkdir -p "${model_dir}" "${hf_home_on_host}"
 
 artifact_phase_start_ns="$(phase_now_ns)"
 if [[ -n "${model_path}" || -n "${mmproj_path}" ]]; then

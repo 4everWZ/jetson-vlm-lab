@@ -3092,6 +3092,31 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertIn("ggml-org/gemma-4-E2B-it-GGUF:Q8_0", result.stdout)
         self.assertIn("-p 19090:8080", result.stdout)
 
+    def test_jetson_gemma_launcher_dry_run_does_not_create_model_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            blocked_parent = Path(tmp) / "blocked"
+            blocked_parent.mkdir()
+            blocked_parent.chmod(0o500)
+            try:
+                env = {
+                    **os.environ,
+                    "JETSON_DRY_RUN": "1",
+                    "MODEL_DIR": str(blocked_parent / "models"),
+                }
+                result = subprocess.run(
+                    ["bash", "scripts/jetson/run_gemma4_e2b_llama_docker.sh"],
+                    check=False,
+                    capture_output=True,
+                    encoding="utf-8",
+                    env=env,
+                )
+            finally:
+                blocked_parent.chmod(0o700)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("docker run", result.stdout)
+        self.assertFalse((blocked_parent / "models").exists())
+
     def test_jetson_launcher_allows_explicit_llama_cpp_image_override(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = {
