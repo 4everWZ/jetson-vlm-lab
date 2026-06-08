@@ -41,7 +41,18 @@ Before moving to the device, you can validate Docker command construction from a
 JETSON_DRY_RUN=1 scripts/jetson/run_gemma4_e2b_llama_docker.sh
 ```
 
-The Jetson launchers use dusty-nv `llama_cpp` containers by default. On Jetson, install jetson-containers or otherwise provide `autotag`; the scripts use `autotag llama_cpp` to select a JetPack/L4T-compatible image. If `autotag` is unavailable, the fallback image is `dustynv/llama_cpp:r36.4.0`. Override the image with `LLAMA_CPP_DOCKER_IMAGE=...`, and override the server binary path inside the container with `LLAMA_SERVER_CMD=...` if a particular image places `llama-server` somewhere unusual.
+The Jetson launchers default to the self-built official llama.cpp image used by
+the observed multimodal smoke runs. The dusty-nv `llama_cpp` image is not the
+default because it has not provided the multimodal `llama-server` path this repo
+needs. Override the image with `LLAMA_CPP_DOCKER_IMAGE=...`, set
+`LLAMA_CPP_USE_AUTOTAG=1` only when you intentionally want `autotag llama_cpp`
+selection, and override the server binary path inside the container with
+`LLAMA_SERVER_CMD=...` if a particular image places `llama-server` somewhere
+unusual.
+
+Remote Jetson connection settings belong in the ignored `.env.jetson` file.
+`scripts/jetson/remote_exec.sh` sources it automatically. Do not put SSH hosts,
+passwords, tokens, or private paths into tracked documentation.
 
 The observed Jetson smoke runs used:
 
@@ -84,7 +95,7 @@ Do not use Jetson as the primary conversion or quantization machine. The current
 ## First-Run Checklist
 
 1. Confirm Jetson has Docker and NVIDIA container runtime configured.
-2. Confirm `autotag llama_cpp` resolves a dusty-nv `llama_cpp` image, or set `LLAMA_CPP_DOCKER_IMAGE` explicitly.
+2. Confirm the default self-built official llama.cpp image is present, or set `LLAMA_CPP_DOCKER_IMAGE` explicitly.
 3. Confirm available storage under `/mnt/nvme/models` or set `MODEL_DIR`.
 4. Confirm model files or HF cache are present.
 5. Start the observed Q4 smoke paths first: MiniCPM-V 4.6 Q4 with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, batch 128, ubatch 32; or Gemma Q4 with `CTX_SIZE=512`, `N_GPU_LAYERS=12`, batch 512, ubatch 512.
@@ -158,8 +169,11 @@ EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
 ## Common Failure Modes
 
 - `docker: unknown runtime nvidia`: NVIDIA container runtime is not configured. Fix Jetson Docker runtime before benchmarking.
-- `autotag: command not found`: install jetson-containers on Jetson or set `LLAMA_CPP_DOCKER_IMAGE` to a compatible `dustynv/llama_cpp` tag.
-- `llama-server not found in container`: set `LLAMA_SERVER_CMD` to the server binary path inside that dusty-nv image, or switch to a tag that includes the installed llama.cpp server binary.
+- `dustynv/llama_cpp` was selected unexpectedly: unset `LLAMA_CPP_USE_AUTOTAG`,
+  or set `LLAMA_CPP_DOCKER_IMAGE` to the self-built official llama.cpp image.
+- `llama-server not found in container`: set `LLAMA_SERVER_CMD` to the server
+  binary path inside that image, or switch to a tag that includes the installed
+  llama.cpp server binary.
 - `Model GGUF not found`: model files are missing or paths do not match `MODEL_DIR`.
 - Server starts but image cases fail: mmproj may be missing, incompatible, or not loaded. Check `/v1/models` capabilities and server logs.
 - Out-of-memory or process killed: lower `CTX_SIZE`, reduce parallelism, close other processes, or use externally prepared lower-bit quantization. Do not run BF16-to-Q4 conversion on a memory-constrained Jetson.

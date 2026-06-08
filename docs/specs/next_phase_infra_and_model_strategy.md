@@ -174,6 +174,10 @@ Candidate policy:
 
 - Primary lane: VLMs at or below the 2B class with GGUF plus mmproj or an
   equivalent confirmed llama.cpp multimodal load path.
+- Quantization policy: prefer pre-built Q4 GGUF artifacts for <=2B LLM/VLM
+  candidates; fall back to Q8 when Q4 is unavailable or unusable. Do not use
+  local conversion or quantization on the memory-constrained host as a default
+  path.
 - Secondary lane: slightly larger models only when they fill a specific
   comparison role, such as official Tencent/Youtu evidence or quality anchor.
 - Text-only small models are allowed only for a separate text/router study; they
@@ -346,6 +350,9 @@ Build rules:
   copy only the install tree into the runtime image, and avoid unrelated
   packages, caches, model weights, `.env` files, SSH files, outputs, or local
   benchmark artifacts.
+- Use the self-built official llama.cpp image as the default multimodal Jetson
+  runtime. dusty-nv `llama_cpp` image selection is opt-in and needs separate
+  multimodal evidence before it can support VLM claims.
 - Record OCI labels for source revision, llama.cpp ref, build date, and base
   image.
 - Record the copied file list and `llama-server --version` or help excerpt in

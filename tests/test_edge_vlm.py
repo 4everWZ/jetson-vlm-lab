@@ -3087,7 +3087,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("docker run", result.stdout)
-        self.assertIn("dustynv/llama_cpp", result.stdout)
+        self.assertIn("ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87", result.stdout)
         self.assertIn("/bin/bash -lc", result.stdout)
         self.assertIn("ggml-org/gemma-4-E2B-it-GGUF:Q8_0", result.stdout)
         self.assertIn("-p 19090:8080", result.stdout)
@@ -3112,6 +3112,43 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("dustynv/llama_cpp:b5283-r36.4-cu128-24.04", result.stdout)
         self.assertIn("/usr/local/bin/llama-server", result.stdout)
+
+    def test_jetson_image_resolver_defaults_to_verified_multimodal_image_even_with_autotag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_bin = Path(tmp) / "bin"
+            fake_bin.mkdir()
+            autotag = fake_bin / "autotag"
+            autotag.write_text(
+                "#!/usr/bin/env bash\n"
+                "if [[ \"$1\" == \"llama_cpp\" ]]; then\n"
+                "  printf '%s\\n' 'dustynv/llama_cpp:r36.4.0'\n"
+                "fi\n",
+                encoding="utf-8",
+            )
+            autotag.chmod(0o755)
+            env = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            }
+            env.pop("LLAMA_CPP_DOCKER_IMAGE", None)
+            env.pop("LLAMA_CPP_DOCKER_IMAGE_FALLBACK", None)
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-lc",
+                    "source scripts/jetson/resolve_llama_cpp_image.sh; resolve_llama_cpp_image",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.strip(),
+            "ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87",
+        )
 
     def test_jetson_gemma_launcher_dry_run_allows_explicit_missing_model_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3176,7 +3213,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("docker run", result.stdout)
-        self.assertIn("dustynv/llama_cpp", result.stdout)
+        self.assertIn("ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87", result.stdout)
         self.assertIn("/bin/bash -lc", result.stdout)
         self.assertIn("-m /models/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf", result.stdout)
         self.assertIn("--mmproj /models/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf", result.stdout)

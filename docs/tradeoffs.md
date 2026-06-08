@@ -18,11 +18,22 @@ Consequence: `scripts/wsl/prepare_minicpmv46_q4.sh` downloads `MiniCPM-V-4_6-Q4_
 
 ## TRD-003: Docker-First Jetson Scripts
 
-Decision: Jetson scripts use Docker/NVIDIA runtime with dusty-nv `llama_cpp` containers by default.
+Decision: Jetson scripts use Docker/NVIDIA runtime by default, with the
+self-built official llama.cpp image
+`ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87` as the default
+multimodal image.
 
-Reason: the Jetson should not be the primary development machine, Docker keeps runtime setup more reproducible than Conda-heavy local installs, and dusty-nv/jetson-containers publishes Jetson/L4T-oriented llama.cpp images.
+Reason: the Jetson should not be the primary development machine, Docker keeps
+runtime setup more reproducible than Conda-heavy local installs, and the
+dusty-nv `llama_cpp` image has not provided the multimodal `llama-server` path
+this repo needs. The self-built image is built from official llama.cpp and is
+the image used for the observed multimodal smoke paths.
 
-Consequence: users without Docker/NVIDIA runtime configured must either fix that first or adapt scripts to a native llama.cpp build. On Jetson, `autotag llama_cpp` should pick a compatible dusty-nv image; otherwise set `LLAMA_CPP_DOCKER_IMAGE` explicitly.
+Consequence: users without Docker/NVIDIA runtime configured must either fix
+that first or adapt scripts to a native llama.cpp build. Set
+`LLAMA_CPP_DOCKER_IMAGE` to override the image explicitly. `autotag llama_cpp`
+is opt-in through `LLAMA_CPP_USE_AUTOTAG=1` and should not be used for VLM
+claims unless that selected image has its own multimodal evidence.
 
 ## TRD-004: Gemma Uses Pre-Quantized GGUF Artifacts
 

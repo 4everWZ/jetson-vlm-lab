@@ -14,7 +14,7 @@ Implemented in this iteration:
 - A small Python package for OpenAI-compatible chat requests, image payload construction, benchmark runs, and fake image stream runs.
 - Benchmark prompt cases, JSONL logging, Markdown summaries, repeated-trial fields, and JSON manifest sidecars.
 - A Jetson formal benchmark wrapper that can capture device profile files and `tegrastats` when available.
-- Observed Jetson Q4 smoke paths for MiniCPM-V 4.6 and Gemma 4 E2B-it through dusty-nv-style llama.cpp Docker launchers.
+- Observed Jetson Q4 smoke paths for MiniCPM-V 4.6 and Gemma 4 E2B-it through the self-built official llama.cpp Docker image.
 - Migration, benchmark, runtime, reference, design, and matrix documentation.
 
 Not implemented in the current version:
@@ -35,7 +35,7 @@ Not implemented in the current version:
 - `scripts/wsl/prepare_minicpmv46_q4.sh`: Downloads official MiniCPM-V 4.6 Q4_K_M model and F16 mmproj GGUF files without local conversion or quantization.
 - `scripts/wsl/run_gemma4_e2b_llama.sh`: Launches Gemma 4 E2B-it through local GGUF plus `mmproj`, or through `llama-server -hf`.
 - `scripts/wsl/run_minicpmv46_llama.sh`: Launches MiniCPM-V 4.6 through local GGUF plus `mmproj`, or through an explicitly supplied `MODEL_REF`.
-- `scripts/jetson/resolve_llama_cpp_image.sh`: Resolves the Jetson llama.cpp container image from `LLAMA_CPP_DOCKER_IMAGE`, `autotag llama_cpp`, or the dusty-nv fallback image.
+- `scripts/jetson/resolve_llama_cpp_image.sh`: Resolves the Jetson llama.cpp container image from `LLAMA_CPP_DOCKER_IMAGE`, the default self-built official llama.cpp image, or opt-in `autotag llama_cpp` selection through `LLAMA_CPP_USE_AUTOTAG=1`.
 - `scripts/jetson/*.sh`: Docker-oriented Jetson launchers, `tegrastats` monitor, and formal benchmark wrapper.
 - `configs/models/*.yaml`: Editable runtime model facts and capabilities.
 - `configs/benchmark/prompt_cases.jsonl`: Shared WSL/Jetson benchmark cases.
@@ -54,7 +54,7 @@ Not implemented in the current version:
 6. Run `scripts/common/check_server.sh`.
 7. Run a dry-run benchmark first, then a real benchmark once server health is confirmed.
 8. Copy only source/config/script/docs files to Jetson, not reference repos or WSL build output.
-9. Start the observed Jetson Q4 Docker runtime with a dusty-nv-style `llama_cpp` image and run `scripts/jetson/run_formal_benchmark.sh` to collect JSONL, Markdown, manifest, profile files, and `tegrastats` when available.
+9. Start the observed Jetson Q4 Docker runtime with the self-built official llama.cpp image and run `scripts/jetson/run_formal_benchmark.sh` to collect JSONL, Markdown, manifest, profile files, and `tegrastats` when available.
 
 ## Verification Strategy
 

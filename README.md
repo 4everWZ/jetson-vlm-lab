@@ -4,6 +4,11 @@ WSL-first edge VLM workflow for validating GGUF vision-language models before mo
 
 The default path is deliberately practical: download pre-built GGUF artifacts, start `llama-server`, run the shared benchmark, then copy only source/configs/scripts/docs and model files to Jetson storage. Local model quantization is not part of the normal WSL flow for this machine.
 
+Current goal: iterate on LLM/VLM candidates at or below the 2B class, prefer
+pre-built Q4 GGUF artifacts, fall back to Q8 when Q4 is unavailable, and move
+lower-level infrastructure only from profile evidence rather than broad
+parameter sweeps.
+
 ## What This Repo Provides
 
 - llama.cpp `llama-server` as the first supported backend for GGUF models.
@@ -25,7 +30,7 @@ The default path is deliberately practical: download pre-built GGUF artifacts, s
 | Gemma 4 E2B-it Q4 | Uses pre-built `Q4_K_M` GGUF from `mradermacher/gemma-4-E2B-it-GGUF`. WSL CUDA and Jetson text, sample-image benchmark, and one-frame fake-stream checks passed. |
 | Gemma Q8 WSL CUDA smoke | Text and sample-image benchmark passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, one server slot, and `VLM_SERVER_PORT=18081`. The wrapper-default real run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` and `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`. |
 | MiniCPM-V 4.6 | Official pre-built `Q4_K_M` model and F16 mmproj files from `openbmb/MiniCPM-V-4.6-gguf` are downloaded under ignored `models/` storage. WSL CUDA and Jetson text, sample-image benchmark, and one-frame fake-stream checks passed. |
-| Jetson runtime | MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4 have observed Jetson smoke outputs through the Docker launchers with the pinned Jetson llama.cpp image `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`. |
+| Jetson runtime | MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4 have observed Jetson smoke outputs through the Docker launchers with the self-built official llama.cpp image `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`. The dusty-nv `llama_cpp` image is not the default because it has not provided the multimodal server path this repo needs. |
 
 Do not treat dry runs or server startup as performance results. Performance claims need real benchmark JSONL from a running model/server. The current observed runtime support covers Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 on WSL CUDA, plus Jetson smoke coverage for MiniCPM-V 4.6 Q4 and Gemma Q4. It does not validate Jetson Q8, camera input, long-run behavior, power/thermal behavior, or broad performance.
 
@@ -323,7 +328,18 @@ scripts/jetson/run_gemma4_e2b_llama_docker.sh \
   --no-warmup
 ```
 
-The Jetson scripts default to a dusty-nv `llama_cpp` image. On a Jetson with `autotag` from jetson-containers installed, they use `autotag llama_cpp` to select a JetPack/L4T-compatible image. Without `autotag`, dry-run and fallback commands use `dustynv/llama_cpp:r36.4.0`. Override with `LLAMA_CPP_DOCKER_IMAGE=...` if your JetPack requires a different tag.
+The Jetson scripts default to the self-built official llama.cpp image used by
+the observed multimodal smoke runs:
+`ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`. The dusty-nv
+`llama_cpp` image is not used by default because it has not provided the
+multimodal `llama-server` path this repo needs. Override with
+`LLAMA_CPP_DOCKER_IMAGE=...` for a specific image, or set
+`LLAMA_CPP_USE_AUTOTAG=1` only when you intentionally want `autotag llama_cpp`
+selection.
+
+Remote Jetson connection settings live in the ignored `.env.jetson` file. The
+remote helpers source it automatically; do not copy SSH hosts, passwords,
+tokens, or private paths into tracked docs.
 
 Use `JETSON_DRY_RUN=1` to print the Docker command without requiring Docker or Jetson hardware:
 

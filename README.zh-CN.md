@@ -4,6 +4,10 @@
 
 默认路径是务实的：下载现成 GGUF、启动 `llama-server`、跑共享 benchmark，然后只把源码、配置、脚本、文档和模型文件放到 Jetson 存储上。本机模型量化不是这台 WSL 的常规流程。
 
+当前目标：持续迭代 2B 以内的 LLM/VLM 候选，优先使用现成 Q4 GGUF；
+没有 Q4 时退到 Q8；底层 infra 工作必须来自 profiling 证据，而不是继续
+无边界调参。
+
 ## 项目内容
 
 - 第一条支持路线是 llama.cpp `llama-server` + GGUF。
@@ -25,7 +29,7 @@
 | Gemma 4 E2B-it Q4 | 使用 `mradermacher/gemma-4-E2B-it-GGUF` 的现成 `Q4_K_M` GGUF。WSL CUDA 和 Jetson 文本、样例图 benchmark、一帧 fake-stream 已通过。 |
 | Gemma Q8 WSL CUDA smoke | 文本和样例图 benchmark 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、`LLAMA_BATCH_SIZE=512`、`LLAMA_UBATCH_SIZE=512`、单 server slot、`VLM_SERVER_PORT=18081`。wrapper 默认参数真实运行写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` 和 `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`。 |
 | MiniCPM-V 4.6 | 已下载 `openbmb/MiniCPM-V-4.6-gguf` 的官方现成 `Q4_K_M` model 和 F16 mmproj 文件，存放在被 Git 忽略的 `models/` 目录。WSL CUDA 和 Jetson 文本、样例图 benchmark、一帧 fake-stream 已通过。 |
-| Jetson runtime | MiniCPM-V 4.6 Q4 和 Gemma 4 E2B-it Q4 已通过 Jetson Docker launcher 产出 smoke 日志，镜像固定为 `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`。 |
+| Jetson runtime | MiniCPM-V 4.6 Q4 和 Gemma 4 E2B-it Q4 已通过 Jetson Docker launcher 产出 smoke 日志，使用自编译的官方 llama.cpp 镜像 `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`。dusty-nv `llama_cpp` 不是默认路径，因为它没有提供本仓库需要的多模态 server 路线。 |
 
 dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前已观察到的 runtime 支持覆盖 WSL CUDA 上的 Gemma Q8、Gemma Q4、MiniCPM-V 4.6 Q4，以及 Jetson 上的 MiniCPM-V 4.6 Q4 和 Gemma Q4 smoke；不验证 Jetson Q8、camera input、长时间运行、电源/温度行为或泛化性能。
 
@@ -323,7 +327,15 @@ scripts/jetson/run_gemma4_e2b_llama_docker.sh \
   --no-warmup
 ```
 
-Jetson 脚本默认使用 dusty-nv `llama_cpp` 镜像。Jetson 上如果装了 jetson-containers 的 `autotag`，脚本会用 `autotag llama_cpp` 选择匹配当前 JetPack/L4T 的镜像；没有 `autotag` 时，dry-run 和 fallback 命令使用 `dustynv/llama_cpp:r36.4.0`。如果你的 JetPack 需要别的 tag，用 `LLAMA_CPP_DOCKER_IMAGE=...` 覆盖。
+Jetson 脚本默认使用已验证多模态 smoke 的自编译官方 llama.cpp 镜像：
+`ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`。dusty-nv
+`llama_cpp` 不是默认路径，因为它没有提供本仓库需要的多模态
+`llama-server` 路线。如果需要指定镜像，用 `LLAMA_CPP_DOCKER_IMAGE=...`
+覆盖；只有明确想用 `autotag llama_cpp` 选择镜像时，才设置
+`LLAMA_CPP_USE_AUTOTAG=1`。
+
+Jetson 远端连接参数在被 Git 忽略的 `.env.jetson` 中。远端 helper 会自动
+读取它；不要把 SSH host、密码、token 或私有路径写进 tracked 文档。
 
 用 `JETSON_DRY_RUN=1` 可以只打印 Docker 命令，不要求当前机器有 Docker 或 Jetson 硬件：
 
