@@ -3280,6 +3280,54 @@ class EdgeVlmContractsTest(unittest.TestCase):
             self.assertIn("artifact_check_or_download", launcher, str(launcher_path))
             self.assertIn("write_launch_phase", launcher, str(launcher_path))
 
+    def test_hf_gguf_launchers_share_artifact_download_helper(self):
+        helper_path = Path("scripts/jetson/hf_artifacts.sh")
+        self.assertTrue(helper_path.is_file())
+        helper = helper_path.read_text(encoding="utf-8")
+        self.assertIn("download_hf_file", helper)
+        self.assertIn("accepting existing GGUF partial as complete", helper)
+
+        launcher_paths = [
+            Path("scripts/jetson/run_hf_gguf_vlm_llama_docker.sh"),
+            Path("scripts/jetson/run_hf_gguf_llama_docker.sh"),
+        ]
+        for launcher_path in launcher_paths:
+            launcher = launcher_path.read_text(encoding="utf-8")
+            self.assertIn("hf_artifacts.sh", launcher, str(launcher_path))
+            self.assertNotIn("download_hf_file() {", launcher, str(launcher_path))
+
+    def test_hf_gguf_launcher_dry_runs_do_not_create_model_directories(self):
+        launcher_paths = [
+            "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
+            "scripts/jetson/run_hf_gguf_llama_docker.sh",
+        ]
+        for launcher_path in launcher_paths:
+            with self.subTest(launcher_path=launcher_path):
+                with tempfile.TemporaryDirectory() as tmp:
+                    blocked_parent = Path(tmp) / "blocked"
+                    blocked_parent.mkdir()
+                    blocked_parent.chmod(0o500)
+                    try:
+                        env = {
+                            **os.environ,
+                            "JETSON_DRY_RUN": "1",
+                            "MODEL_DIR": str(blocked_parent / "models"),
+                            "DOCKER_TTY": "0",
+                        }
+                        result = subprocess.run(
+                            ["bash", launcher_path],
+                            check=False,
+                            capture_output=True,
+                            encoding="utf-8",
+                            env=env,
+                        )
+                    finally:
+                        blocked_parent.chmod(0o700)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("docker run", result.stdout)
+                self.assertFalse((blocked_parent / "models").exists())
+
     def test_jetson_remote_exec_dry_run_sources_ignored_env_without_exposing_password(self):
         with tempfile.TemporaryDirectory() as tmp:
             env_file = Path(tmp) / ".env.jetson"

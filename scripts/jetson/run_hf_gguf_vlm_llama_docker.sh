@@ -6,6 +6,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/resolve_llama_cpp_image.sh"
 # shellcheck source=phase_logging.sh
 source "${script_dir}/phase_logging.sh"
+# shellcheck source=hf_artifacts.sh
+source "${script_dir}/hf_artifacts.sh"
 
 image="$(resolve_llama_cpp_image)"
 model_dir="${MODEL_DIR:-/mnt/nvme/models}"
@@ -30,7 +32,6 @@ host_mmproj_path="${MMPROJ_PATH_ON_HOST:-${model_dir}/${model_subdir}/${mmproj_f
 container_model_path="${MODEL_PATH:-/models/${model_subdir}/${model_file}}"
 container_mmproj_path="${MMPROJ_PATH:-/models/${model_subdir}/${mmproj_file}}"
 
-mkdir -p "${model_dir}" "${hf_home_on_host}" "$(dirname "${host_model_path}")" "$(dirname "${host_mmproj_path}")"
 read -r -a gpu_args <<< "${docker_gpu_args}"
 tty_args=()
 if [[ "${docker_tty}" == "1" ]]; then
@@ -71,43 +72,15 @@ if [[ "${dry_run}" == "1" ]]; then
   exit 0
 fi
 
-download_hf_file() {
-  local filename="$1"
-  local destination="$2"
-  if [[ -f "${destination}" ]]; then
-    return 0
-  fi
-  if ! command -v curl >/dev/null 2>&1; then
-    echo "curl is required to download ${repo_id}/${filename}; pre-place the file or install curl." >&2
-    exit 2
-  fi
-  local url="https://huggingface.co/${repo_id}/resolve/main/${filename}"
-  local partial="${destination}.partial"
-  local curl_log="${partial}.curl.log"
-  echo "Downloading ${url} -> ${destination}" >&2
-  local curl_status=0
-  curl --fail --location --retry 3 --continue-at - --output "${partial}" "${url}" 2> >(tee "${curl_log}" >&2) || curl_status=$?
-  if [[ "${curl_status}" -ne 0 ]]; then
-    if [[ "${curl_status}" -eq 22 && -f "${partial}" ]] \
-      && grep -q "416" "${curl_log}" \
-      && [[ "$(head -c 4 "${partial}" 2>/dev/null || true)" == "GGUF" ]]; then
-      echo "HTTP 416 while resuming ${destination}; accepting existing GGUF partial as complete." >&2
-    else
-      rm -f "${curl_log}"
-      return "${curl_status}"
-    fi
-  fi
-  rm -f "${curl_log}"
-  mv "${partial}" "${destination}"
-}
+mkdir -p "${model_dir}" "${hf_home_on_host}" "$(dirname "${host_model_path}")" "$(dirname "${host_mmproj_path}")"
 
 artifact_phase_start_ns="$(phase_now_ns)"
 artifact_status="cached"
 if [[ ! -f "${host_model_path}" || ! -f "${host_mmproj_path}" ]]; then
   artifact_status="downloaded_or_checked"
 fi
-download_hf_file "${model_file}" "${host_model_path}"
-download_hf_file "${mmproj_file}" "${host_mmproj_path}"
+download_hf_file "${repo_id}" "${model_file}" "${host_model_path}"
+download_hf_file "${repo_id}" "${mmproj_file}" "${host_mmproj_path}"
 write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "${artifact_status}"
 
 if ! command -v docker >/dev/null 2>&1; then
