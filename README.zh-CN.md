@@ -4,9 +4,12 @@
 
 默认路径是务实的：下载现成 GGUF、启动 `llama-server`、跑共享 benchmark，然后只把源码、配置、脚本、文档和模型文件放到 Jetson 存储上。本机模型量化不是这台 WSL 的常规流程。
 
-当前目标：持续迭代 2B 以内的 LLM/VLM 候选，优先使用现成 Q4 GGUF；
-没有 Q4 时退到 Q8；底层 infra 工作必须来自 profiling 证据，而不是继续
-无边界调参。
+## Goal
+
+- 持续迭代 2B 以内的 LLM/VLM 候选，优先使用现成 Q4 GGUF；没有可用 Q4 时退到 Q8。
+- Jetson 多模态默认 runtime 是自编译的官方 llama.cpp 镜像；dusty-nv `llama_cpp` 不是默认 VLM 路线，因为它没有提供本仓库已验证需要的多模态 `llama-server` 路径。
+- 下一步优先做更底层的 infra：launcher、artifact 下载/恢复、profile capture、runtime image 复现和 multimodal load path；参数调整只能针对 profiling 指出的瓶颈做小范围验证。
+- 不同任务使用独立 branch 或 worktree，验证成功后再合入 `main`。
 
 ## 项目内容
 

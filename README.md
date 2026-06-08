@@ -4,10 +4,12 @@ WSL-first edge VLM workflow for validating GGUF vision-language models before mo
 
 The default path is deliberately practical: download pre-built GGUF artifacts, start `llama-server`, run the shared benchmark, then copy only source/configs/scripts/docs and model files to Jetson storage. Local model quantization is not part of the normal WSL flow for this machine.
 
-Current goal: iterate on LLM/VLM candidates at or below the 2B class, prefer
-pre-built Q4 GGUF artifacts, fall back to Q8 when Q4 is unavailable, and move
-lower-level infrastructure only from profile evidence rather than broad
-parameter sweeps.
+## Goal
+
+- Iterate on LLM/VLM candidates at or below the 2B class. Prefer pre-built Q4 GGUF artifacts; fall back to Q8 when no usable Q4 artifact exists.
+- Use the self-built official llama.cpp image as the default Jetson multimodal runtime. The dusty-nv `llama_cpp` image is not the default VLM path because it has not provided the validated multimodal `llama-server` route this repo needs.
+- Prioritize lower-level infrastructure work: launchers, artifact download/resume, profile capture, runtime image reproducibility, and multimodal load paths. Parameter changes should be scoped to a profile-backed bottleneck.
+- Keep separate tasks on separate branches or worktrees, then merge successful verified work into `main`.
 
 ## What This Repo Provides
 
