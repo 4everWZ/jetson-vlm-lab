@@ -2560,6 +2560,15 @@ class EdgeVlmContractsTest(unittest.TestCase):
                 "mmproj_file": "mmproj-Qwen3VL-2B-Thinking-Q8_0.gguf",
                 "ctx_size": 1024,
             },
+            "qwen3-vl-2b-instruct-q4": {
+                "config": "configs/models/qwen3_vl_2b_instruct_q4.yaml",
+                "model_ref": "Qwen/Qwen3-VL-2B-Instruct-GGUF:Q4_K_M",
+                "model_file": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+                "mmproj_file": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+                "ctx_size": 1024,
+                "batch_size": 256,
+                "ubatch_size": 64,
+            },
             "hunyuanocr-q8": {
                 "config": "configs/models/hunyuanocr_q8.yaml",
                 "model_ref": "ggml-org/HunyuanOCR-GGUF:Q8_0",
@@ -3934,6 +3943,7 @@ class EdgeVlmContractsTest(unittest.TestCase):
             "gemma-q4-baseline-gpu12-b512-u512-kvq8",
             "smolvlm2-256m-q8-smoke",
             "qwen3-vl-2b-thinking-q4-smoke",
+            "qwen3-vl-2b-instruct-q4-smoke",
             "youtu-vl-4b-q4-thirdparty-smoke",
         ):
             self.assertIn(f"SWEEP_ARG=--variant\nSWEEP_ARG={variant_id}\n", log_text)

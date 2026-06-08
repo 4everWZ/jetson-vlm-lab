@@ -487,6 +487,10 @@ ready with CUDA OOM on the BF16 mmproj buffer. Pass
 `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=hunyuanocr-q8-smoke` or
 `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=youtu-vl-4b-q8-smoke` only for scoped
 quality/runtime triage reruns.
+The default Qwen candidates include both Qwen3-VL 2B Thinking Q4 and
+Qwen3-VL 2B Instruct Q4. The Instruct row is a newly configured Q4-first
+candidate with no Jetson evidence yet; keep its first run at smoke scope until
+it has guard, fake-stream, and quality-review evidence.
 
 If a host-side HF GGUF download is interrupted after the bytes have completed
 but before the launcher renames the `.partial` file, the generic HF GGUF

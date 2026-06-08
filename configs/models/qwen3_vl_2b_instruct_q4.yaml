@@ -1,0 +1,29 @@
+model:
+  name: qwen3-vl-2b-instruct-q4
+  family: Qwen3-VL
+  backend: llama.cpp
+  model_ref: Qwen/Qwen3-VL-2B-Instruct-GGUF:Q4_K_M
+  quantization: Q4_K_M
+
+server:
+  base_url: http://127.0.0.1:8080/v1
+  host: 127.0.0.1
+  port: 8080
+
+runtime:
+  launch_mode: hf_gguf_with_mmproj
+  ctx_size: 1024
+  n_gpu_layers: 99
+  model_ref_env: MODEL_REF
+  model_file: Qwen3VL-2B-Instruct-Q4_K_M.gguf
+  mmproj_file: mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf
+  wsl_script: null
+  jetson_script: scripts/jetson/run_hf_gguf_vlm_llama_docker.sh
+
+capabilities:
+  text: true
+  image: true
+  audio: false
+
+notes:
+  status: Candidate only. Uses Qwen/Qwen3-VL-2B-Instruct-GGUF Q4_K_M with the Q8_0 mmproj downloaded to MODEL_DIR, then loaded as local -m/--mmproj files because the pinned Jetson llama.cpp container lacks HTTPS support for direct -hf downloads. Added as a Q4-first <=2B VLM comparison against Qwen3-VL 2B Thinking; no Jetson evidence exists yet in this repo.

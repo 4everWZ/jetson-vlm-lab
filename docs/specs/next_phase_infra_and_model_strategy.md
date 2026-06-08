@@ -44,6 +44,7 @@ Lightweight model evidence is promising but not promotable yet:
 |---|---|---|
 | SmolVLM2 256M Q8 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard at 199.847 text tok/s, 164.551 image tok/s, 0.462 s fake-stream latency, and minimum profiled `lfb` 220. `edge_vlm.quality_review` with `configs/benchmark/quality_review_policy.json` passed 20/30 excerpt records and failed `text_cn_short` plus `text_en_reasoning_short`; raw excerpts still show weak semantics, including a WSL prompt answered as if WSL meant a generic web-services layer. | Role `latency_floor`; use for cheap routing/harness stress only, not text reasoning routes, unless prompt/runtime changes produce fresh quality evidence. |
 | Qwen3-VL 2B Thinking Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard at 34.761 text tok/s, 34.290 image tok/s, 1.942 s fake-stream latency, average GR3D 96.457%, and minimum profiled `lfb` 154. `edge_vlm.quality_review` passed 20/30 excerpt records and failed `text_cn_short` plus `text_code_short`, so it is slower than MiniCPM but still far ahead of Gemma for the surviving route. | Qwen remains image/fake-stream balanced_candidate; do human full-output review and route-specific tests against MiniCPM before any broader text/code route use. |
+| Qwen3-VL 2B Instruct Q4 | Added as a Q4-first official Qwen GGUF candidate from `Qwen/Qwen3-VL-2B-Instruct-GGUF`, using `Qwen3VL-2B-Instruct-Q4_K_M.gguf` and Q8_0 mmproj. It has no Jetson evidence yet in this repo. | Run one locked-clocks smoke with three fake-stream frames, then quality review, before comparing it to the Thinking row. |
 | HunyuanOCR 1B Q8 | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded through `ggml-org/HunyuanOCR-GGUF` after the launcher-resume fix and completed formal/fake-stream records, but the guard failed because all output excerpts were repetitive exclamation-mark strings. This is not an official Tencent-owned GGUF artifact. | Do not run formal repeats for the current Q8 artifact/runtime path. Revisit only with bounded quality triage of artifact, prompt/template handling, or runtime lane. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
 | Youtu-VL-4B third-party Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard and `edge_vlm.quality_review` passed 30/30 excerpt records, but it only reached 7.502 text tok/s, 7.249 image tok/s, 9.186 s fake latency, average GR3D 19.546%, and minimum profiled `lfb` 1 with `runtime_overhead`. It is also not official Tencent support. | Role `failed_artifact` for default ranking; revisit only for a scoped artifact/runtime A/B. |
@@ -394,8 +395,10 @@ estimates:
    when collected through the formal wrapper.
 2. Treat `lightweight-repeat5-20260531T134554Z` as the completed fixed-policy
    5-trial repeat for SmolVLM2 256M, Qwen3-VL 2B Thinking, and Youtu Q4
-   third-party CPU-mmproj. HunyuanOCR Q8 and official Youtu-VL Q8 stay excluded
-   from the default repeat queue until their current guard/OOM causes change.
+   third-party CPU-mmproj. Qwen3-VL 2B Instruct Q4 is a newly configured
+   smoke candidate, not part of that historical repeat. HunyuanOCR Q8 and
+   official Youtu-VL Q8 stay excluded from the default repeat queue until their
+   current guard/OOM causes change.
 3. Run the dedicated Tencent Hy-MT1.5/Hy-MT2/Youtu-LLM text/router suite
    separately if a text-only route is useful; keep all eleven default rows out
    of VLM ranking tables,
@@ -438,6 +441,7 @@ External references checked:
 - llama.cpp multimodal docs: https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md
 - Tencent Youtu-VL-4B GGUF: https://hf.co/tencent/Youtu-VL-4B-Instruct-GGUF
 - HunyuanOCR GGUF: https://hf.co/ggml-org/HunyuanOCR-GGUF
+- Qwen3-VL 2B Instruct GGUF: https://hf.co/Qwen/Qwen3-VL-2B-Instruct-GGUF
 - Tencent HunyuanOCR base: https://hf.co/tencent/HunyuanOCR
 - Tencent Penguin-VL-2B: https://hf.co/tencent/Penguin-VL-2B
 - Tencent HY-Embodied-0.5: https://hf.co/tencent/HY-Embodied-0.5
