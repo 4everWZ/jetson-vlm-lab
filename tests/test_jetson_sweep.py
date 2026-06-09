@@ -855,6 +855,61 @@ class JetsonSweepContractsTest(unittest.TestCase):
 
         self.assertEqual(parsed, {"free_blocks": 150, "block_mb": 4})
 
+    def test_jetson_sweep_parses_buddyinfo_line(self):
+        from edge_vlm.jetson_sweep import parse_buddyinfo_line
+
+        parsed = parse_buddyinfo_line(
+            "Node 0, zone   Normal    752   1866   1691   1106    785    539    399    262    151     92     50     15    227"
+        )
+
+        self.assertEqual(parsed["node"], 0)
+        self.assertEqual(parsed["zone"], "Normal")
+        self.assertEqual(parsed["free_blocks_by_order"][:4], [752, 1866, 1691, 1106])
+        self.assertEqual(parsed["free_blocks_by_order"][-2:], [15, 227])
+        self.assertEqual(parsed["max_order_with_free_block"], 12)
+
+    def test_jetson_sweep_capture_preflight_sample_records_buddyinfo(self):
+        from edge_vlm.jetson_sweep import capture_preflight_sample
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "preflight.json"
+            with patch(
+                "edge_vlm.jetson_sweep._read_meminfo",
+                return_value={"MemTotal": 7802716, "MemAvailable": 6911728},
+            ):
+                with patch(
+                    "edge_vlm.jetson_sweep._read_buddyinfo",
+                    return_value={
+                        "available": True,
+                        "zones": [
+                            {
+                                "node": 0,
+                                "zone": "Normal",
+                                "free_blocks_by_order": [752, 1866, 1691],
+                                "max_order_with_free_block": 2,
+                            }
+                        ],
+                        "max_order_with_free_block": 2,
+                    },
+                ):
+                    with patch(
+                        "edge_vlm.jetson_sweep._sample_tegrastats",
+                        return_value={
+                            "available": True,
+                            "raw": "RAM 683/7620MB (lfb 23x4MB)",
+                            "lfb": {"free_blocks": 23, "block_mb": 4},
+                        },
+                    ):
+                        sample = capture_preflight_sample(output)
+
+            written = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(sample["buddyinfo"]["max_order_with_free_block"], 2)
+        self.assertTrue(sample["buddyinfo"]["available"])
+        self.assertEqual(sample["buddyinfo"]["zones"][0]["zone"], "Normal")
+        self.assertEqual(written["buddyinfo"], sample["buddyinfo"])
+        self.assertEqual(written["tegrastats"]["lfb"]["free_blocks"], 23)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -498,6 +498,39 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         self.assertIn("Youtu-VL 4B Q4 third-party | 30/30", benchmark_doc)
         self.assertIn("Qwen remains image/fake-stream balanced_candidate", strategy_doc)
 
+    def test_qwen3_instruct_diagnostic_smoke_status_is_documented(self):
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(
+            encoding="utf-8"
+        )
+        config_doc = Path("configs/models/qwen3_vl_2b_instruct_q4.yaml").read_text(encoding="utf-8")
+        variant_catalog = Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(
+            encoding="utf-8"
+        )
+
+        for text in (protocol_doc, strategy_doc):
+            self.assertIn("qwen3-instruct-q4-smoke-lfb32-20260609T075208Z", text)
+            self.assertIn("34.349", text)
+            self.assertIn("26.957", text)
+            self.assertIn("1.827", text)
+            self.assertIn("qwen3-instruct-q4-smoke-compact-20260609T074600Z", text)
+            self.assertIn("46x4MB", text)
+            self.assertIn("quality review", text)
+        for text in (config_doc, variant_catalog):
+            self.assertIn("Jetson smoke", text)
+            self.assertIn("min-lfb-blocks 32", text)
+            self.assertIn("quality review", text)
+
+    def test_preflight_docs_include_buddyinfo_fragmentation_context(self):
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("`meminfo_kb`, `/proc/buddyinfo`, and structured `tegrastats` `lfb`", protocol_doc)
+        self.assertIn("/proc/buddyinfo", strategy_doc)
+        self.assertIn("fragmentation", strategy_doc)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [

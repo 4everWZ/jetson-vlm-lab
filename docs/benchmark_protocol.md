@@ -242,7 +242,8 @@ PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
 Variants are defined in `configs/benchmark/jetson_optimization_variants.jsonl`;
 the promotion rules are documented in `docs/specs/jetson_optimization_loop.md`.
 Each variant also writes `preflight/*.preflight.json` under the sweep output
-root so Jetson `lfb` and memory state are visible before server startup.
+root so `meminfo_kb`, `/proc/buddyinfo`, and structured `tegrastats` `lfb`
+state are visible before server startup.
 For promotion sweeps, add `--min-lfb-blocks 150` or a stricter threshold learned
 from prior runs so memory-fragmented starts are skipped and labeled before
 Docker launches.
@@ -509,8 +510,14 @@ ready with CUDA OOM on the BF16 mmproj buffer. Pass
 quality/runtime triage reruns.
 The default Qwen candidates include both Qwen3-VL 2B Thinking Q4 and
 Qwen3-VL 2B Instruct Q4. The Instruct row is a newly configured Q4-first
-candidate with no Jetson evidence yet; keep its first run at smoke scope until
-it has guard, fake-stream, and quality-review evidence.
+candidate with one diagnostic locked-clocks smoke on June 9, 2026:
+`qwen3-instruct-q4-smoke-lfb32-20260609T075208Z` passed 6/6 formal records and
+1/1 fake-stream record at relaxed `--min-lfb-blocks 32`, reaching 34.349 text
+tok/s, 26.957 image tok/s, and 1.827 s fake-stream latency. The strict
+`--min-lfb-blocks 150` rerun `qwen3-instruct-q4-smoke-compact-20260609T074600Z`
+still skipped in preflight at `lfb 46x4MB` even after cache-drop plus
+`compact_memory`, so keep this row at smoke/triage scope until it can satisfy
+the conservative gate and pass quality review.
 
 If a host-side HF GGUF download is interrupted after the bytes have completed
 but before the launcher renames the `.partial` file, the generic HF GGUF
