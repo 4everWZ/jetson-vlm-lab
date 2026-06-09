@@ -17,8 +17,7 @@ fi
 
 if [[ "${remote_sync}" == "1" ]]; then
   "${remote_exec}" git fetch origin "${remote_branch}"
-  "${remote_exec}" git checkout "${remote_branch}"
-  "${remote_exec}" git pull --ff-only origin "${remote_branch}"
+  "${remote_exec}" git checkout --detach FETCH_HEAD
 elif [[ "${remote_sync}" != "0" ]]; then
   echo "JETSON_REMOTE_SYNC must be 0 or 1." >&2
   exit 2

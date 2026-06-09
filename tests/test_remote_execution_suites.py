@@ -277,10 +277,10 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
 
-        self.assertEqual(log_text.count("CALL\n"), 4)
+        self.assertEqual(log_text.count("CALL\n"), 3)
         self.assertIn("ARG=git\nARG=fetch\nARG=origin\nARG=main\n", log_text)
-        self.assertIn("ARG=git\nARG=checkout\nARG=main\n", log_text)
-        self.assertIn("ARG=git\nARG=pull\nARG=--ff-only\nARG=origin\nARG=main\n", log_text)
+        self.assertIn("ARG=git\nARG=checkout\nARG=--detach\nARG=FETCH_HEAD\n", log_text)
+        self.assertNotIn("ARG=pull\n", log_text)
         self.assertIn("ARG=env\n", log_text)
         self.assertIn("ARG=LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87\n", log_text)
         self.assertIn("ARG=PYTHONPATH=src\n", log_text)
@@ -330,13 +330,10 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
 
-        self.assertEqual(log_text.count("CALL\n"), 4)
+        self.assertEqual(log_text.count("CALL\n"), 3)
         self.assertIn("ARG=git\nARG=fetch\nARG=origin\nARG=bench/qwen3-vl-instruct-q4\n", log_text)
-        self.assertIn("ARG=git\nARG=checkout\nARG=bench/qwen3-vl-instruct-q4\n", log_text)
-        self.assertIn(
-            "ARG=git\nARG=pull\nARG=--ff-only\nARG=origin\nARG=bench/qwen3-vl-instruct-q4\n",
-            log_text,
-        )
+        self.assertIn("ARG=git\nARG=checkout\nARG=--detach\nARG=FETCH_HEAD\n", log_text)
+        self.assertNotIn("ARG=pull\n", log_text)
         self.assertIn("ARG=--variant\nARG=qwen3-vl-2b-instruct-q4-smoke\n", log_text)
 
     def test_remote_optimization_sweep_can_skip_git_sync(self):
