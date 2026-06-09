@@ -1,0 +1,327 @@
+"""Jetson sweep plan and dry-run contract tests."""
+
+import json
+import os
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+
+class JetsonSweepPlanContractsTest(unittest.TestCase):
+    def test_jetson_sweep_dry_run_writes_reproducible_variant_plan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            plan = tmp_path / "plan.json"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "minicpm-unit",
+                        "model": "minicpmv46-q4",
+                        "config": "configs/models/minicpmv46_q4.yaml",
+                        "launcher": "scripts/jetson/run_minicpmv46_llama_docker.sh",
+                        "env": {
+                            "MODEL_DIR": str(tmp_path / "models"),
+                            "MODEL_PATH": "${MODEL_DIR}/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf",
+                            "MODEL_ALIAS": "minicpmv46-q4",
+                            "CTX_SIZE": 512,
+                            "N_GPU_LAYERS": 32,
+                            "LLAMA_BATCH_SIZE": 128,
+                            "LLAMA_UBATCH_SIZE": 32,
+                        },
+                        "args": [
+                            "--parallel",
+                            "1",
+                            "--batch-size",
+                            "128",
+                            "--ubatch-size",
+                            "32",
+                            "--cache-type-k",
+                            "q8_0",
+                            "--cache-type-v",
+                            "q8_0",
+                            "--no-warmup",
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    "-m",
+                    "edge_vlm.jetson_sweep",
+                    "--variants",
+                    str(variants),
+                    "--model",
+                    "minicpmv46-q4",
+                    "--run-prefix",
+                    "unit-sweep",
+                    "--output-root",
+                    str(tmp_path / "outputs"),
+                    "--server-log-dir",
+                    str(tmp_path / "logs"),
+                    "--trial-count",
+                    "1",
+                    "--max-tokens",
+                    "16",
+                    "--temperature",
+                    "0",
+                    "--fake-stream-interval-s",
+                    "1.0",
+                    "--fake-stream-skip-late-frames",
+                    "--fake-stream-skip-threshold-s",
+                    "0.5",
+                    "--fake-stream-adaptive-interval",
+                    "--fake-stream-adaptive-interval-scale",
+                    "1.25",
+                    "--fake-stream-adaptive-interval-max-s",
+                    "3.0",
+                    "--min-lfb-blocks",
+                    "150",
+                    "--pre-variant-command",
+                    "sync; echo 3 > /proc/sys/vm/drop_caches",
+                    "--dry-run",
+                    "--plan-output",
+                    str(plan),
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={**os.environ, "PYTHONPATH": "src"},
+            )
+            plan_data = json.loads(plan.read_text(encoding="utf-8"))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(plan_data["variants"]), 1)
+        self.assertEqual(plan_data["pre_variant_command"], "sync; echo 3 > /proc/sys/vm/drop_caches")
+        variant_plan = plan_data["variants"][0]
+        self.assertEqual(variant_plan["run_id"], "unit-sweep-minicpm-unit")
+        self.assertEqual(variant_plan["server_env"]["DOCKER_TTY"], "0")
+        self.assertEqual(
+            variant_plan["server_env"]["MODEL_PATH"],
+            str(tmp_path / "models" / "MiniCPM-V-4.6-gguf" / "MiniCPM-V-4_6-Q4_K_M.gguf"),
+        )
+        self.assertEqual(variant_plan["benchmark_env"]["EDGE_VLM_TRIAL_COUNT"], "1")
+        self.assertEqual(variant_plan["benchmark_env"]["EDGE_VLM_MAX_TOKENS"], "16")
+        self.assertIn("scripts/jetson/run_minicpmv46_llama_docker.sh", variant_plan["server_command"])
+        self.assertIn("--cache-type-k", variant_plan["server_command"])
+        self.assertTrue(variant_plan["paths"]["benchmark_jsonl"].endswith("unit-sweep-minicpm-unit.jsonl"))
+        self.assertTrue(variant_plan["paths"]["preflight_json"].endswith("unit-sweep-minicpm-unit.preflight.json"))
+        self.assertTrue(variant_plan["paths"]["lifecycle_jsonl"].endswith("unit-sweep-minicpm-unit.lifecycle.jsonl"))
+        self.assertEqual(
+            variant_plan["server_env"]["EDGE_VLM_LAUNCH_PHASE_LOG"],
+            variant_plan["paths"]["lifecycle_jsonl"],
+        )
+        warmup_phase = variant_plan["phase_defaults"]["warmup"]
+        self.assertFalse(warmup_phase["available"])
+        self.assertEqual(warmup_phase["reason"], "disabled_by_variant")
+        self.assertEqual(warmup_phase["source"], "sweep")
+        self.assertEqual(warmup_phase["details"]["flag"], "--no-warmup")
+        fake_command = variant_plan["fake_stream_command"]
+        self.assertEqual(fake_command[fake_command.index("--max-frames") + 1], "3")
+        self.assertEqual(fake_command[fake_command.index("--interval-s") + 1], "1.0")
+        self.assertIn("--skip-late-frames", fake_command)
+        self.assertEqual(fake_command[fake_command.index("--skip-threshold-s") + 1], "0.5")
+        self.assertIn("--adaptive-interval", fake_command)
+        self.assertEqual(fake_command[fake_command.index("--adaptive-interval-scale") + 1], "1.25")
+        self.assertEqual(fake_command[fake_command.index("--adaptive-interval-max-s") + 1], "3.0")
+
+    def test_jetson_sweep_plan_records_inherited_launcher_environment(self):
+        from edge_vlm.jetson_sweep import build_sweep_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "minicpm-unit",
+                        "model": "minicpmv46-q4",
+                        "config": "configs/models/minicpmv46_q4.yaml",
+                        "launcher": "scripts/jetson/run_minicpmv46_llama_docker.sh",
+                        "env": {
+                            "MODEL_DIR": str(tmp_path / "models"),
+                            "MODEL_ALIAS": "minicpmv46-q4",
+                            "CTX_SIZE": 512,
+                            "N_GPU_LAYERS": 32,
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            plan = build_sweep_plan(
+                variants_path=variants,
+                run_prefix="unit",
+                output_root=tmp_path / "outputs",
+                server_log_dir=tmp_path / "logs",
+                port=18080,
+                trial_count=1,
+                max_tokens=16,
+                temperature=0,
+                python_bin="python3",
+                base_env={
+                    "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                    "LLAMA_SERVER_CMD": "/usr/local/bin/llama-server",
+                    "DOCKER_GPU_ARGS": "--runtime nvidia",
+                },
+            )
+
+        server_env = plan["variants"][0]["server_env"]
+        self.assertEqual(server_env["LLAMA_CPP_DOCKER_IMAGE"], "ghcr.io/4everwz/jetson-llama-cpp:test")
+        self.assertEqual(server_env["LLAMA_SERVER_CMD"], "/usr/local/bin/llama-server")
+        self.assertEqual(server_env["DOCKER_GPU_ARGS"], "--runtime nvidia")
+
+    def test_jetson_sweep_plan_skips_fake_stream_for_text_only_configs(self):
+        from edge_vlm.jetson_sweep import build_sweep_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            config = tmp_path / "text-model.yaml"
+            config.write_text(
+                "\n".join(
+                    [
+                        "model:",
+                        "  name: text-only-local",
+                        "  backend: llama.cpp",
+                        "server:",
+                        "  base_url: http://127.0.0.1:8080/v1",
+                        "capabilities:",
+                        "  text: true",
+                        "  image: false",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            variants = tmp_path / "variants.jsonl"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "text-unit",
+                        "model": "text-only-local",
+                        "config": str(config),
+                        "launcher": "scripts/jetson/run_hf_gguf_llama_docker.sh",
+                        "env": {
+                            "MODEL_REF": "tencent/example-GGUF:Q4_K_M",
+                            "MODEL_FILE": "example.gguf",
+                            "MODEL_ALIAS": "text-only-local",
+                            "EDGE_VLM_CASES": "configs/benchmark/text_prompt_cases.jsonl",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            plan = build_sweep_plan(
+                variants_path=variants,
+                run_prefix="unit",
+                output_root=tmp_path / "outputs",
+                server_log_dir=tmp_path / "logs",
+                port=18080,
+                trial_count=1,
+                max_tokens=16,
+                temperature=0,
+                python_bin="python3",
+                include_fake_stream=True,
+                base_env={
+                    "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                },
+            )
+
+        variant_plan = plan["variants"][0]
+        self.assertIsNone(variant_plan["fake_stream_command"])
+        self.assertEqual(variant_plan["benchmark_env"]["EDGE_VLM_CASES"], "configs/benchmark/text_prompt_cases.jsonl")
+
+    def test_jetson_sweep_plan_records_docker_image_metadata(self):
+        from edge_vlm.jetson_sweep import build_sweep_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "minicpm-unit",
+                        "model": "minicpmv46-q4",
+                        "config": "configs/models/minicpmv46_q4.yaml",
+                        "launcher": "scripts/jetson/run_minicpmv46_llama_docker.sh",
+                        "env": {
+                            "MODEL_DIR": str(tmp_path / "models"),
+                            "MODEL_ALIAS": "minicpmv46-q4",
+                            "CTX_SIZE": 512,
+                            "N_GPU_LAYERS": 32,
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            inspect_payload = [
+                {
+                    "Id": "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844",
+                    "Created": "2026-05-27T13:47:04.31937282+09:30",
+                    "RepoDigests": [
+                        "ghcr.io/4everwz/jetson-llama-cpp@sha256:c39cdc50c4564f29490c69b30f601da23f4d086f99d5c4b562426dbf65fec263"
+                    ],
+                    "Config": {
+                        "Labels": {
+                            "org.opencontainers.image.version": "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774",
+                            "org.opencontainers.image.revision": "735d6e569bf8",
+                            "org.opencontainers.image.base.name": "dustynv/cuda-python:r36.4.0-cu128-24.04",
+                        }
+                    },
+                }
+            ]
+
+            with patch(
+                "edge_vlm.jetson_sweep.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    ["docker", "image", "inspect", "ghcr.io/4everwz/jetson-llama-cpp:test"],
+                    0,
+                    stdout=json.dumps(inspect_payload),
+                    stderr="",
+                ),
+            ) as docker_inspect:
+                plan = build_sweep_plan(
+                    variants_path=variants,
+                    run_prefix="unit",
+                    output_root=tmp_path / "outputs",
+                    server_log_dir=tmp_path / "logs",
+                    port=18080,
+                    trial_count=1,
+                    max_tokens=16,
+                    temperature=0,
+                    python_bin="python3",
+                    base_env={
+                        "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                    },
+                )
+
+        docker_inspect.assert_called_once_with(
+            ["docker", "image", "inspect", "ghcr.io/4everwz/jetson-llama-cpp:test"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        runtime = plan["variants"][0]["server_runtime"]
+        self.assertEqual(runtime["image"], "ghcr.io/4everwz/jetson-llama-cpp:test")
+        self.assertTrue(runtime["inspect_ok"])
+        self.assertEqual(
+            runtime["image_id"],
+            "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844",
+        )
+        self.assertEqual(runtime["repo_digests"], inspect_payload[0]["RepoDigests"])
+        self.assertEqual(runtime["llama_cpp_ref"], "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774")
+        self.assertEqual(runtime["source_revision"], "735d6e569bf8")
+        self.assertEqual(runtime["base_image"], "dustynv/cuda-python:r36.4.0-cu128-24.04")
+
+
+if __name__ == "__main__":
+    unittest.main()
