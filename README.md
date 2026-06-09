@@ -381,6 +381,10 @@ The remote suite wrappers now also run `edge_vlm.sweep_quality_review` with
 writes per-run `quality_review_json` and `quality_review_markdown` sidecars
 back into the manifest paths, so `edge_vlm.optimization compare` can add a
 `Quality review` column without rerunning the policy review by hand.
+When compare is used for promotion-oriented review, add
+`--promotion-require-quality-review` so `Promotion precheck` also requires the
+structured `Quality review` sidecar to pass instead of only checking the
+mechanical run conditions.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

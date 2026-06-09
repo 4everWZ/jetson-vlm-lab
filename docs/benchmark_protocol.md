@@ -446,7 +446,10 @@ For promotion-oriented review, compare also accepts
 `Promotion precheck` column that checks the mechanical gate only: locked clocks,
 cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`,
 full benchmark success, fake-stream success, and the stage-specific trial
-floor. Use `formal-repeat` for the 5-trial lightweight ladder and `promotion-reference` for 10-trial baseline/reference refreshes. The raw excerpt review remains manual and is not replaced by this column.
+floor. Add `--promotion-require-quality-review` when the promotion gate should
+also require a passing structured `Quality review` sidecar. Use
+`formal-repeat` for the 5-trial lightweight ladder and
+`promotion-reference` for 10-trial baseline/reference refreshes. The raw excerpt review remains manual and is not replaced by this column.
 
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:
@@ -481,7 +484,9 @@ the manifest, records those paths under each variant's
 sidecars are present. The remote current-defaults, lightweight, and Tencent
 text suite wrappers now run `edge_vlm.sweep_quality_review` automatically
 before compare so the structured review state stays attached to the same sweep
-artifact set.
+artifact set. The current-defaults and lightweight wrappers also pass
+`--promotion-require-quality-review` into compare, so their
+`Promotion precheck` rows only pass when the structured sidecar passes as well.
 
 Successful sweep variants also write derived profile artifacts under
 `outputs/optimization_sweeps/<run-prefix>/profiles/` and launcher lifecycle
@@ -575,6 +580,10 @@ To refresh the current MiniCPM/Gemma default reference in one step, use:
 scripts/jetson/run_remote_current_defaults_suite.sh
 ```
 
+That wrapper now also runs `edge_vlm.sweep_quality_review` on the finished
+manifest and calls compare with `--promotion-require-quality-review`, so the
+reference `Promotion precheck` includes the structured `Quality review` gate.
+
 To run the fixed-policy lightweight model ladder with the current MiniCPM and
 Gemma baselines plus the guard-passing lightweight candidates, use:
 
@@ -590,7 +599,9 @@ The wrapper runs the selected defaults for both target models with
 baseline variants. It also runs `edge_vlm.sweep_quality_review` with
 `configs/benchmark/quality_review_policy.json` against the sweep manifest so
 the recorded `quality_review_json` sidecars can feed the compare report's
-`Quality review` column. Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
+`Quality review` column. The wrapper also passes
+`--promotion-require-quality-review`, so the reported `Promotion precheck`
+requires that structured sidecar to pass. Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
 path stable, or override `JETSON_LIGHTWEIGHT_TRIAL_COUNT`,
 `JETSON_LIGHTWEIGHT_MAX_TOKENS`, `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS`,
 `JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S`, `JETSON_LIGHTWEIGHT_BASELINE_VARIANTS`,

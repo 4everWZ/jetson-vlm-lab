@@ -221,14 +221,19 @@ When compare also receives `--promotion-precheck-stage formal-repeat` or
 precheck` column for the mechanical gate only: locked clocks, cache drop,
 strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full
 benchmark success, fake-stream success, and the stage-specific trial floor.
-Use `formal-repeat` for 5-trial lightweight ranking passes and `promotion-reference` for 10-trial baseline/reference refreshes. The raw excerpt review remains manual.
+Add `--promotion-require-quality-review` when the gate should also require a
+passing structured `Quality review` sidecar. Use `formal-repeat` for 5-trial
+lightweight ranking passes and `promotion-reference` for 10-trial
+baseline/reference refreshes. The raw excerpt review remains manual.
 
 When a sweep has route-sensitive outputs, run `edge_vlm.sweep_quality_review`
 with `configs/benchmark/quality_review_policy.json` against the manifest before
 or as part of compare. That helper writes per-run `quality_review_json` and
 `quality_review_markdown` sidecars, updates the sweep manifest paths, and lets
 the comparison table add a `Quality review` column without reopening each
-benchmark JSONL separately.
+benchmark JSONL separately. When compare also receives
+`--promotion-require-quality-review`, that same sidecar becomes part of the
+`Promotion precheck` gate instead of remaining report-only evidence.
 
 For the recurring current-defaults baseline refresh, prefer the wrapper:
 

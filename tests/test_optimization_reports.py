@@ -1525,6 +1525,200 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` |  | qwen-q4 |  | max_clocks, drop_caches | 151x4MB | 150 | yes | yes |", report_text)
         self.assertIn("no (trial_count 4 < required 5; max_tokens 32 < required 64; temperature 0.2 != required 0; guard_failed; fake_stream_success 0/1 < 1/1)", report_text)
 
+    def test_optimization_comparison_report_can_require_quality_review_for_promotion(self):
+        from edge_vlm.optimization import build_sweep_comparison_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "qwen-promotion-quality"
+            benchmark_dir = output_root / "benchmarks"
+            fake_dir = output_root / "fake_stream"
+            benchmark_dir.mkdir(parents=True)
+            fake_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+
+            def write_run(
+                run_prefix,
+                variant_id,
+                *,
+                model,
+                quality_review_passed,
+                quality_review_passed_records,
+                quality_review_records,
+                quality_review_failed_case_ids,
+            ):
+                run_id = f"{run_prefix}-{variant_id}"
+                benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+                fake_jsonl = fake_dir / f"{run_id}.jsonl"
+                benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+                quality_review_json = output_root / f"{run_id}.quality.json"
+                tegrastats_log = tmp_path / "outputs" / "tegrastats" / f"{run_id}.log"
+                tegrastats_log.parent.mkdir(parents=True, exist_ok=True)
+                benchmark_jsonl.write_text(
+                    "\n".join(
+                        [
+                            json.dumps(
+                                {
+                                    "model": model,
+                                    "run_id": run_id,
+                                    "prompt_case_id": "text_case",
+                                    "input_type": "text",
+                                    "success": True,
+                                    "latency_s": 64.0 / 34.0,
+                                    "tokens": 64,
+                                    "tokens_per_sec": 34.0,
+                                    "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                                    "quality_terms_any": ["memory", "bandwidth"],
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "model": model,
+                                    "run_id": run_id,
+                                    "prompt_case_id": "image_case",
+                                    "input_type": "image",
+                                    "success": True,
+                                    "latency_s": 64.0 / 30.0,
+                                    "tokens": 64,
+                                    "tokens_per_sec": 30.0,
+                                    "output_excerpt": "The image shows two contrasting square shapes on a background.",
+                                    "quality_terms_any": ["square", "background"],
+                                }
+                            ),
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                fake_jsonl.write_text(
+                    json.dumps(
+                        {
+                            "frame_id": "frame_001.png",
+                            "success": True,
+                            "latency_s": 2.0,
+                            "output_excerpt": "The frame shows a simple scene with contrasting square shapes.",
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                tegrastats_log.write_text(
+                    "05-31-2026 RAM 2000/7620MB (lfb 151x4MB) GR3D_FREQ 95%@[1020] cpu@50.0C gpu@51.0C tj@51.0C VDD_IN 21000mW/21000mW\n",
+                    encoding="utf-8",
+                )
+                benchmark_manifest.write_text(
+                    json.dumps(
+                        {
+                            "run_id": run_id,
+                            "benchmark": {"trial_count": 5, "max_tokens": 64, "temperature": 0.0},
+                            "cases_written": 2,
+                            "successful": 2,
+                            "failed": 0,
+                            "jetson": {"tegrastats_log": str(tegrastats_log)},
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                quality_review_json.write_text(
+                    json.dumps(
+                        {
+                            "run_ids": [run_id],
+                            "models": [model],
+                            "records": quality_review_records,
+                            "passed_records": quality_review_passed_records,
+                            "failed_records": quality_review_records - quality_review_passed_records,
+                            "passed": quality_review_passed,
+                            "failures": [
+                                {
+                                    "run_id": run_id,
+                                    "case_id": case_id,
+                                    "failures": ["missing_all:placeholder"],
+                                }
+                                for case_id in quality_review_failed_case_ids
+                            ],
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return {
+                    "plan": {
+                        "variant": {"id": variant_id, "comparison_group": "qwen3-vl-2b-instruct"},
+                        "paths": {
+                            "benchmark_jsonl": str(benchmark_jsonl),
+                            "manifest_json": str(benchmark_manifest),
+                            "fake_stream_jsonl": str(fake_jsonl),
+                            "quality_review_json": str(quality_review_json),
+                        },
+                    },
+                    "result": {
+                        "run_id": run_id,
+                        "variant_id": variant_id,
+                        "preflight_required_lfb_blocks": 150,
+                        "preflight": {"tegrastats": {"lfb": {"free_blocks": 151, "block_mb": 4}}},
+                        "preflight_passed": True,
+                        "server_startup_seconds": 5.0,
+                        "benchmark_returncode": 0,
+                        "fake_stream_returncode": 0,
+                    },
+                }
+
+            baseline = write_run(
+                "qwen-q4",
+                "qwen3-vl-2b-instruct-q4-smoke",
+                model="qwen3-vl-2b-instruct-q4",
+                quality_review_passed=True,
+                quality_review_passed_records=30,
+                quality_review_records=30,
+                quality_review_failed_case_ids=(),
+            )
+            fallback = write_run(
+                "qwen-q8",
+                "qwen3-vl-2b-instruct-q8-smoke",
+                model="qwen3-vl-2b-instruct-q8",
+                quality_review_passed=False,
+                quality_review_passed_records=20,
+                quality_review_records=30,
+                quality_review_failed_case_ids=("text_cn_short", "text_code_short"),
+            )
+            manifest = output_root / "qwen-promotion-quality.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {
+                            "run_prefix": "qwen-promotion-quality",
+                            "prepare_context": {
+                                "max_clocks_enabled": True,
+                                "drop_caches_before_variant": True,
+                            },
+                            "variants": [baseline["plan"], fallback["plan"]],
+                        },
+                        "result": {"results": [baseline["result"], fallback["result"]]},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = build_sweep_comparison_report(
+                manifest_paths=[manifest],
+                output_path=report,
+                baseline_variant_ids=["qwen3-vl-2b-instruct-q4-smoke"],
+                ranking_min_lfb_blocks=150,
+                promotion_precheck_stage="formal-repeat",
+                promotion_require_quality_review=True,
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertTrue(rows[0].promotion_precheck_passed)
+        self.assertFalse(rows[1].promotion_precheck_passed)
+        self.assertIn("quality_review_failed 20/30", rows[1].promotion_precheck_reason)
+        self.assertIn("text_cn_short,text_code_short", rows[1].promotion_precheck_reason)
+        self.assertIn("Promotion precheck", report_text)
+        self.assertIn("Quality review", report_text)
+        self.assertIn("quality_review_failed 20/30", report_text)
+
     def test_compare_cli_can_fail_on_promotion_precheck(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -1659,6 +1853,155 @@ class OptimizationReportContractsTest(unittest.TestCase):
                     str(report),
                     "--promotion-precheck-stage",
                     "formal-repeat",
+                    "--fail-on-promotion-precheck",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={**os.environ, "PYTHONPATH": "src"},
+            )
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+
+    def test_compare_cli_can_fail_on_promotion_precheck_when_quality_review_is_required(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "promotion-quality-cli"
+            benchmark_dir = output_root / "benchmarks"
+            fake_dir = output_root / "fake_stream"
+            benchmark_dir.mkdir(parents=True)
+            fake_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+            run_id = "promotion-quality-cli-qwen3-vl-2b-instruct-q4-smoke"
+            benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+            fake_jsonl = fake_dir / f"{run_id}.jsonl"
+            benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+            tegrastats_log = tmp_path / "outputs" / "tegrastats" / f"{run_id}.log"
+            tegrastats_log.parent.mkdir(parents=True, exist_ok=True)
+            benchmark_jsonl.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "model": "qwen3-vl-2b-instruct-q4",
+                                "run_id": run_id,
+                                "prompt_case_id": "text_case",
+                                "input_type": "text",
+                                "success": True,
+                                "latency_s": 2.0,
+                                "tokens": 64,
+                                "tokens_per_sec": 32.0,
+                                "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                                "quality_terms_any": ["memory", "bandwidth"],
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "model": "qwen3-vl-2b-instruct-q4",
+                                "run_id": run_id,
+                                "prompt_case_id": "image_case",
+                                "input_type": "image",
+                                "success": True,
+                                "latency_s": 2.5,
+                                "tokens": 64,
+                                "tokens_per_sec": 25.6,
+                                "output_excerpt": "The image shows two contrasting square shapes on a background.",
+                                "quality_terms_any": ["square", "background"],
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_jsonl.write_text(
+                json.dumps(
+                    {
+                        "frame_id": "frame_001.png",
+                        "success": True,
+                        "latency_s": 2.1,
+                        "output_excerpt": "The frame shows a simple scene with contrasting square shapes.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            tegrastats_log.write_text(
+                "05-31-2026 RAM 2000/7620MB (lfb 151x4MB) GR3D_FREQ 95%@[1020] cpu@50.0C gpu@51.0C tj@51.0C VDD_IN 21000mW/21000mW\n",
+                encoding="utf-8",
+            )
+            benchmark_manifest.write_text(
+                json.dumps(
+                    {
+                        "run_id": run_id,
+                        "benchmark": {"trial_count": 5, "max_tokens": 64, "temperature": 0.0},
+                        "cases_written": 2,
+                        "successful": 2,
+                        "failed": 0,
+                        "jetson": {"tegrastats_log": str(tegrastats_log)},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            manifest = output_root / "promotion-quality-cli.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {
+                            "run_prefix": "promotion-quality-cli",
+                            "prepare_context": {
+                                "max_clocks_enabled": True,
+                                "drop_caches_before_variant": True,
+                            },
+                            "variants": [
+                                {
+                                    "variant": {"id": "qwen3-vl-2b-instruct-q4-smoke"},
+                                    "paths": {
+                                        "benchmark_jsonl": str(benchmark_jsonl),
+                                        "manifest_json": str(benchmark_manifest),
+                                        "fake_stream_jsonl": str(fake_jsonl),
+                                    },
+                                }
+                            ],
+                        },
+                        "result": {
+                            "results": [
+                                {
+                                    "run_id": run_id,
+                                    "variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                                    "preflight_required_lfb_blocks": 150,
+                                    "preflight": {
+                                        "tegrastats": {
+                                            "lfb": {"free_blocks": 151, "block_mb": 4},
+                                        }
+                                    },
+                                    "preflight_passed": True,
+                                    "server_startup_seconds": 5.0,
+                                    "benchmark_returncode": 0,
+                                    "fake_stream_returncode": 0,
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    "-m",
+                    "edge_vlm.optimization",
+                    "compare",
+                    "--manifest",
+                    str(manifest),
+                    "--output",
+                    str(report),
+                    "--promotion-precheck-stage",
+                    "formal-repeat",
+                    "--promotion-require-quality-review",
                     "--fail-on-promotion-precheck",
                 ],
                 check=False,

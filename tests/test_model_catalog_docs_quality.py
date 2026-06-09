@@ -645,6 +645,8 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
         loop_doc = Path("docs/specs/jetson_optimization_loop.md").read_text(encoding="utf-8")
         strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(encoding="utf-8")
+        readme = Path("README.md").read_text(encoding="utf-8")
+        readme_zh = Path("README.zh-CN.md").read_text(encoding="utf-8")
 
         for text in (protocol_doc, loop_doc, strategy_doc):
             self.assertIn("promotion-precheck-stage", text)
@@ -652,6 +654,9 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("formal-repeat", text)
             self.assertIn("promotion-reference", text)
             self.assertIn("raw excerpt review", text)
+        for text in (protocol_doc, loop_doc, strategy_doc, readme, readme_zh):
+            self.assertIn("promotion-require-quality-review", text)
+            self.assertIn("Quality review", text)
 
     def test_sweep_quality_review_sidecars_and_compare_docs_are_wired(self):
         readme = Path("README.md").read_text(encoding="utf-8")
