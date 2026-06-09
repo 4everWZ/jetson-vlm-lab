@@ -1,8 +1,6 @@
-"""Benchmark, client payload, image payload, and formal wrapper contract tests."""
+"""Benchmark runner JSONL, timing, summary, and metadata tests."""
 
 import json
-import os
-import subprocess
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -10,70 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-
-class BenchmarkPayloadContractsTest(unittest.TestCase):
-
-    def test_image_payload_uses_data_url_content_part(self):
-        from edge_vlm.image_payload import build_user_content
-
-        with tempfile.TemporaryDirectory() as tmp:
-            image = Path(tmp) / "frame.png"
-            image.write_bytes(b"\x89PNG\r\n\x1a\n")
-
-            content = build_user_content("Describe the image.", image)
-
-        self.assertEqual(content[0], {"type": "text", "text": "Describe the image."})
-        self.assertEqual(content[1]["type"], "image_url")
-        self.assertTrue(content[1]["image_url"]["url"].startswith("data:image/png;base64,"))
-
-    def test_image_payload_reports_input_timing_breakdown(self):
-        from edge_vlm.image_payload import build_user_content_with_timing
-
-        with tempfile.TemporaryDirectory() as tmp:
-            image = Path(tmp) / "frame.png"
-            image.write_bytes(b"\x89PNG\r\n\x1a\n")
-
-            content, timing = build_user_content_with_timing("Describe the image.", image)
-
-        self.assertEqual(content[0], {"type": "text", "text": "Describe the image."})
-        self.assertEqual(content[1]["type"], "image_url")
-        self.assertEqual(timing["image_bytes"], 8)
-        self.assertGreaterEqual(timing["mime_detect_s"], 0.0)
-        self.assertGreaterEqual(timing["image_read_s"], 0.0)
-        self.assertGreaterEqual(timing["base64_encode_s"], 0.0)
-        self.assertGreaterEqual(timing["data_url_build_s"], 0.0)
-
-    def test_client_dry_run_builds_openai_chat_payload(self):
-        from edge_vlm.client import OpenAICompatClient
-
-        client = OpenAICompatClient(base_url="http://127.0.0.1:8080/v1", model="local-model")
-        result = client.complete(prompt="Say hi.", dry_run=True, max_tokens=16, temperature=0.0)
-
-        self.assertTrue(result.ok)
-        self.assertEqual(result.request["model"], "local-model")
-        self.assertEqual(result.request["max_tokens"], 16)
-        self.assertEqual(result.request["messages"][0]["content"], "Say hi.")
-        self.assertIn("dry run", result.text)
-        self.assertIn("payload_build_s", result.timings)
-        self.assertIn("json_serialize_s", result.timings)
-
-    def test_client_extracts_reasoning_content_when_final_content_is_empty(self):
-        from edge_vlm.client import _extract_text
-
-        response = {
-            "choices": [
-                {
-                    "message": {
-                        "role": "assistant",
-                        "content": "",
-                        "reasoning_content": "thinking text from llama-server",
-                    }
-                }
-            ]
-        }
-
-        self.assertEqual(_extract_text(response), "thinking text from llama-server")
-
+class BenchmarkRunnerOutputsTest(unittest.TestCase):
     def test_benchmark_dry_run_writes_jsonl_records(self):
         from edge_vlm.benchmark import run_benchmark
 
@@ -414,105 +349,6 @@ class BenchmarkPayloadContractsTest(unittest.TestCase):
         self.assertIn("started_at", manifest)
         self.assertIn("ended_at", manifest)
         self.assertIn("runtime_env", manifest)
-
-    def test_formal_jetson_benchmark_wrapper_dry_run_writes_manifest(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            cases = tmp_path / "cases.jsonl"
-            output = tmp_path / "bench.jsonl"
-            summary = tmp_path / "bench.md"
-            metadata = tmp_path / "bench.manifest.json"
-            cases.write_text(
-                json.dumps({"id": "text_case", "input_type": "text", "prompt": "Say hi."}) + "\n",
-                encoding="utf-8",
-            )
-            env = {
-                **os.environ,
-                "PYTHONPATH": "src",
-                "EDGE_VLM_FORMAL_RUN_ID": "formal-wrapper-unit",
-                "EDGE_VLM_CONFIG": "configs/models/minicpmv46_q4.yaml",
-                "EDGE_VLM_CASES": str(cases),
-                "EDGE_VLM_OUTPUT": str(output),
-                "EDGE_VLM_SUMMARY_OUTPUT": str(summary),
-                "EDGE_VLM_METADATA_OUTPUT": str(metadata),
-                "EDGE_VLM_TRIAL_COUNT": "2",
-                "EDGE_VLM_MAX_TOKENS": "8",
-                "EDGE_VLM_TEMPERATURE": "0",
-                "EDGE_VLM_FORMAL_DRY_RUN": "1",
-                "EDGE_VLM_SKIP_TEGRASTATS": "1",
-            }
-            result = subprocess.run(
-                ["bash", "scripts/jetson/run_formal_benchmark.sh"],
-                check=False,
-                capture_output=True,
-                encoding="utf-8",
-                env=env,
-            )
-
-            self.assertEqual(result.returncode, 0, result.stderr)
-            records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
-            manifest = json.loads(metadata.read_text(encoding="utf-8"))
-
-        self.assertEqual(len(records), 2)
-        self.assertEqual(manifest["run_id"], "formal-wrapper-unit")
-        self.assertEqual(manifest["cases_written"], 2)
-        self.assertEqual(manifest["jetson"]["tegrastats_log"], None)
-        self.assertEqual(manifest["jetson"]["tegrastats_status"], "skipped")
-
-    def test_formal_jetson_benchmark_wrapper_prefixes_tegrastats_with_utc_timestamp(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            bin_dir = tmp_path / "bin"
-            bin_dir.mkdir()
-            fake_tegrastats = bin_dir / "tegrastats"
-            fake_tegrastats.write_text(
-                "\n".join(
-                    [
-                        "#!/usr/bin/env bash",
-                        "printf '%s\\n' 'RAM 1000/7620MB (lfb 200x4MB) CPU [10%@1000] GR3D_FREQ 20%@[1020] EMC_FREQ 30%@3199 gpu@40.0C VDD_IN 8000mW/7000mW'",
-                        "sleep 5",
-                    ]
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            os.chmod(fake_tegrastats, 0o755)
-            cases = tmp_path / "cases.jsonl"
-            output = tmp_path / "bench.jsonl"
-            summary = tmp_path / "bench.md"
-            metadata = tmp_path / "bench.manifest.json"
-            tegrastats_log = tmp_path / "tegrastats.log"
-            cases.write_text(
-                json.dumps({"id": "text_case", "input_type": "text", "prompt": "Say hi."}) + "\n",
-                encoding="utf-8",
-            )
-            env = {
-                **os.environ,
-                "PATH": f"{bin_dir}:{os.environ['PATH']}",
-                "PYTHONPATH": "src",
-                "EDGE_VLM_FORMAL_RUN_ID": "formal-wrapper-timestamp-unit",
-                "EDGE_VLM_CONFIG": "configs/models/minicpmv46_q4.yaml",
-                "EDGE_VLM_CASES": str(cases),
-                "EDGE_VLM_OUTPUT": str(output),
-                "EDGE_VLM_SUMMARY_OUTPUT": str(summary),
-                "EDGE_VLM_METADATA_OUTPUT": str(metadata),
-                "EDGE_VLM_TEGRASTATS_LOG": str(tegrastats_log),
-                "EDGE_VLM_TRIAL_COUNT": "1",
-                "EDGE_VLM_MAX_TOKENS": "8",
-                "EDGE_VLM_TEMPERATURE": "0",
-                "EDGE_VLM_FORMAL_DRY_RUN": "1",
-            }
-            result = subprocess.run(
-                ["bash", "scripts/jetson/run_formal_benchmark.sh"],
-                check=False,
-                capture_output=True,
-                encoding="utf-8",
-                env=env,
-            )
-            log_text = tegrastats_log.read_text(encoding="utf-8")
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertRegex(log_text, r"^\d{4}-\d{2}-\d{2}T.*Z RAM 1000/7620MB")
 
 
 if __name__ == "__main__":
