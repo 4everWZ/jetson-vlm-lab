@@ -3396,6 +3396,87 @@ class EdgeVlmContractsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("JETSON_SSH_HOST and JETSON_SSH_USER are required", result.stderr)
 
+    def test_jetson_remote_probe_dry_run_sources_ignored_env_without_exposing_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / ".env.jetson"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=192.168.1.12",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_REPO_DIR=~/code/jetson-vlm-lab",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                ["bash", "scripts/jetson/remote_probe.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "JETSON_REMOTE_PROBE_DRY_RUN": "1",
+                },
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("weizheng@192.168.1.12", result.stdout)
+        self.assertIn("cd ~/code/jetson-vlm-lab", result.stdout)
+        self.assertIn("edge-vlm-remote-probe", result.stdout)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+
+    def test_jetson_remote_probe_classifies_connect_timeout_without_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            env_file = tmp_path / ".env.jetson"
+            fake_remote = tmp_path / "remote_exec.sh"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=192.168.1.12",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'ssh: connect to host 192.168.1.12 port 22: Connection timed out\\n' >&2",
+                        "exit 255",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_remote, 0o755)
+            result = subprocess.run(
+                ["bash", "scripts/jetson/remote_probe.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                },
+            )
+
+        self.assertEqual(result.returncode, 255)
+        self.assertIn("ssh_connect_timeout", result.stderr)
+        self.assertIn("Connection timed out", result.stderr)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+
     def test_jetson_remote_exec_can_use_askpass_without_sshpass(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

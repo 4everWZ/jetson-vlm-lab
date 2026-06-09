@@ -278,6 +278,21 @@ JETSON_REMOTE_DRY_RUN=1 scripts/jetson/remote_exec.sh \
   git status --short --branch
 ```
 
+Before starting a remote sweep, run the sanitized connectivity probe:
+
+```bash
+JETSON_REMOTE_PROBE_DRY_RUN=1 scripts/jetson/remote_probe.sh
+scripts/jetson/remote_probe.sh
+```
+
+The probe prints `remote_probe=ok` only when SSH reaches the configured Jetson
+worktree and the remote command returns the expected marker. On failure, it
+classifies the first SSH boundary as `ssh_connect_timeout`,
+`ssh_network_unreachable`, `ssh_auth_failed`, `ssh_failed`, or
+`remote_command_failed` without printing `.env.jetson` secrets. A successful
+probe is a connectivity preflight, not benchmark evidence and not a model
+runtime success.
+
 Run a command on the Jetson worktree:
 
 ```bash
