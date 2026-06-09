@@ -23,6 +23,7 @@ from .optimization import build_optimization_report
 
 
 LFB_RE = re.compile(r"\blfb\s+(?P<free_blocks>\d+)x(?P<block_mb>\d+)MB\b")
+BUDDYINFO_RE = re.compile(r"^Node\s+(?P<node>\d+),\s+zone\s+(?P<zone>\S+)\s+(?P<counts>.+)$")
 SERVER_ENV_PASSTHROUGH_KEYS = (
     "LLAMA_CPP_DOCKER_IMAGE",
     "LLAMA_CPP_DOCKER_IMAGE_FALLBACK",
@@ -79,6 +80,47 @@ def _read_meminfo() -> dict[str, int]:
     return meminfo
 
 
+def parse_buddyinfo_line(line: str) -> dict[str, Any] | None:
+    match = BUDDYINFO_RE.match(line.strip())
+    if match is None:
+        return None
+    try:
+        counts = [int(part) for part in match.group("counts").split()]
+    except ValueError:
+        return None
+    max_order = None
+    for order, count in enumerate(counts):
+        if count > 0:
+            max_order = order
+    return {
+        "node": int(match.group("node")),
+        "zone": match.group("zone"),
+        "free_blocks_by_order": counts,
+        "max_order_with_free_block": max_order,
+    }
+
+
+def _read_buddyinfo() -> dict[str, Any]:
+    path = Path("/proc/buddyinfo")
+    if not path.is_file():
+        return {"available": False, "zones": [], "max_order_with_free_block": None}
+    zones = []
+    max_order = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        parsed = parse_buddyinfo_line(line)
+        if parsed is None:
+            continue
+        zones.append(parsed)
+        zone_max_order = parsed.get("max_order_with_free_block")
+        if isinstance(zone_max_order, int) and (max_order is None or zone_max_order > max_order):
+            max_order = zone_max_order
+    return {
+        "available": bool(zones),
+        "zones": zones,
+        "max_order_with_free_block": max_order,
+    }
+
+
 def _sample_tegrastats(interval_ms: int = 1000, timeout_s: float = 2.5) -> dict[str, Any]:
     if shutil.which("tegrastats") is None:
         return {"available": False, "raw": None, "lfb": None}
@@ -111,6 +153,7 @@ def capture_preflight_sample(path: str | Path) -> dict[str, Any]:
     sample = {
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "meminfo_kb": _read_meminfo(),
+        "buddyinfo": _read_buddyinfo(),
         "tegrastats": _sample_tegrastats(),
     }
     output.parent.mkdir(parents=True, exist_ok=True)

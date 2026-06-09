@@ -26,4 +26,14 @@ capabilities:
   audio: false
 
 notes:
-  status: Candidate only. Uses Qwen/Qwen3-VL-2B-Instruct-GGUF Q4_K_M with the Q8_0 mmproj downloaded to MODEL_DIR, then loaded as local -m/--mmproj files because the pinned Jetson llama.cpp container lacks HTTPS support for direct -hf downloads. Added as a Q4-first <=2B VLM comparison against Qwen3-VL 2B Thinking; no Jetson evidence exists yet in this repo.
+  status: >
+    Candidate only. Uses Qwen/Qwen3-VL-2B-Instruct-GGUF Q4_K_M with the Q8_0
+    mmproj downloaded to MODEL_DIR, then loaded as local -m/--mmproj files
+    because the pinned Jetson llama.cpp container lacks HTTPS support for
+    direct -hf downloads. Added as a Q4-first <=2B VLM comparison against
+    Qwen3-VL 2B Thinking. Diagnostic Jetson smoke
+    qwen3-instruct-q4-smoke-lfb32-20260609T075208Z passed guard plus
+    fake-stream at relaxed min-lfb-blocks 32, but strict min-lfb-blocks 150
+    reruns still skip at preflight after cache-drop plus compact-memory prep,
+    so keep it at smoke/triage scope until memory gating and quality review are
+    resolved.

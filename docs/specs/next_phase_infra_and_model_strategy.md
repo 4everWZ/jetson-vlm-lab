@@ -44,7 +44,7 @@ Lightweight model evidence is promising but not promotable yet:
 |---|---|---|
 | SmolVLM2 256M Q8 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard at 199.847 text tok/s, 164.551 image tok/s, 0.462 s fake-stream latency, and minimum profiled `lfb` 220. `edge_vlm.quality_review` with `configs/benchmark/quality_review_policy.json` passed 20/30 excerpt records and failed `text_cn_short` plus `text_en_reasoning_short`; raw excerpts still show weak semantics, including a WSL prompt answered as if WSL meant a generic web-services layer. | Role `latency_floor`; use for cheap routing/harness stress only, not text reasoning routes, unless prompt/runtime changes produce fresh quality evidence. |
 | Qwen3-VL 2B Thinking Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard at 34.761 text tok/s, 34.290 image tok/s, 1.942 s fake-stream latency, average GR3D 96.457%, and minimum profiled `lfb` 154. `edge_vlm.quality_review` passed 20/30 excerpt records and failed `text_cn_short` plus `text_code_short`, so it is slower than MiniCPM but still far ahead of Gemma for the surviving route. | Qwen remains image/fake-stream balanced_candidate; do human full-output review and route-specific tests against MiniCPM before any broader text/code route use. |
-| Qwen3-VL 2B Instruct Q4 | Added as a Q4-first official Qwen GGUF candidate from `Qwen/Qwen3-VL-2B-Instruct-GGUF`, using `Qwen3VL-2B-Instruct-Q4_K_M.gguf` and Q8_0 mmproj. It has no Jetson evidence yet in this repo. | Run one locked-clocks smoke with three fake-stream frames, then quality review, before comparing it to the Thinking row. |
+| Qwen3-VL 2B Instruct Q4 | One locked-clocks diagnostic smoke on June 9, 2026, `qwen3-instruct-q4-smoke-lfb32-20260609T075208Z`, passed guard with 6/6 formal and 1/1 fake-stream records at relaxed `--min-lfb-blocks 32`, reaching 34.349 text tok/s, 26.957 image tok/s, and 1.827 s fake-stream latency. The strict-gate rerun `qwen3-instruct-q4-smoke-compact-20260609T074600Z` still skipped at preflight with `lfb 46x4MB` after cache-drop plus `compact_memory`, so this is diagnostic startup evidence rather than ranking evidence. | Keep it out of ranking tables until a locked-clocks smoke passes guard at `--min-lfb-blocks 150`, then run quality review and compare it against the Thinking row. |
 | HunyuanOCR 1B Q8 | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded through `ggml-org/HunyuanOCR-GGUF` after the launcher-resume fix and completed formal/fake-stream records, but the guard failed because all output excerpts were repetitive exclamation-mark strings. This is not an official Tencent-owned GGUF artifact. | Do not run formal repeats for the current Q8 artifact/runtime path. Revisit only with bounded quality triage of artifact, prompt/template handling, or runtime lane. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
 | Youtu-VL-4B third-party Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard and `edge_vlm.quality_review` passed 30/30 excerpt records, but it only reached 7.502 text tok/s, 7.249 image tok/s, 9.186 s fake latency, average GR3D 19.546%, and minimum profiled `lfb` 1 with `runtime_overhead`. It is also not official Tencent support. | Role `failed_artifact` for default ranking; revisit only for a scoped artifact/runtime A/B. |
@@ -126,7 +126,9 @@ Required per-run profile data:
   benchmark, and fake-stream windows.
 - `jetson_clocks --show`, `nvpmodel -q`, `uname -a`, Docker version, runtime
   image tag/id/digest, and llama.cpp ref.
-- Host memory snapshot before startup and before each variant.
+- Host memory snapshot before startup and before each variant, including
+  `/proc/meminfo`, `/proc/buddyinfo`, and `tegrastats` `lfb` so fragmentation
+  can be separated from simple free-memory pressure.
 - Startup timing separated from benchmark request timing.
 - First-run download time separated from cached startup time for host-side Hub
   GGUF launchers through `EDGE_VLM_LAUNCH_PHASE_LOG`. Runtime-internal `-hf`
@@ -326,8 +328,9 @@ Formal comparison runs must:
 - Confirm max clocks through the remote wrapper's root `jetson_clocks --show`
   capture when available.
 - Drop page cache before each comparison variant.
-- Record preflight `lfb`; skip and label variants below threshold instead of
-  mixing fragmented-memory failures into parameter rankings.
+- Record preflight `lfb` plus `/proc/buddyinfo` fragmentation state; skip and
+  label variants below threshold instead of mixing fragmented-memory failures
+  into parameter rankings.
 - Capture `EMC_FREQ`, `GR3D_FREQ`, CPU frequencies, RAM/SWAP, power, and
   temperatures across the request window.
 - Record whether a failure happened before server ready, during first image
@@ -335,7 +338,8 @@ Formal comparison runs must:
 
 Acceptance:
 
-- A startup OOM row states whether `lfb` was below threshold, whether the mmproj
+- A startup OOM row states whether `lfb` was below threshold, whether
+  `/proc/buddyinfo` still had higher-order free blocks, whether the mmproj
   allocation was on GPU, and whether the row is memory-state-sensitive or
   parameter/artifact-incompatible.
 - A comparison doc cannot rank rows that were run under different clock policy
