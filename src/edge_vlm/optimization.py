@@ -45,7 +45,11 @@ class SweepComparisonRow:
     server_image: str | None
     server_image_id: str | None
     llama_cpp_ref: str | None
+    preflight_before_prepare_lfb: str
     preflight_lfb: str
+    preflight_prepare_lfb_delta: int | None
+    preflight_prepare_mem_available_mb_delta: float | None
+    preflight_prepare_buddyinfo_max_order_delta: int | None
     trials: int | None
     guard_passed: bool
     successful: int
@@ -267,6 +271,14 @@ def _fmt_pct(value: float | None) -> str:
     return "" if value is None else f"{value:+.2f}%"
 
 
+def _fmt_signed_int(value: int | None) -> str:
+    return "" if value is None else f"{value:+d}"
+
+
+def _fmt_signed_float(value: float | None) -> str:
+    return "" if value is None else f"{value:+.3f}"
+
+
 def _percent_delta(value: float | None, baseline: float | None) -> float | None:
     if value is None or baseline in (None, 0):
         return None
@@ -340,6 +352,30 @@ def _format_lfb(preflight: Any) -> str:
     if not isinstance(free_blocks, int) or not isinstance(block_mb, int):
         return ""
     return f"{free_blocks}x{block_mb}MB"
+
+
+def _preflight_delta_value(entry: dict[str, Any], key: str) -> Any:
+    delta = entry.get("preflight_delta")
+    if isinstance(delta, dict) and key in delta:
+        return delta.get(key)
+    return None
+
+
+def _preflight_prepare_lfb_delta(entry: dict[str, Any]) -> int | None:
+    value = _preflight_delta_value(entry, "lfb_free_blocks_delta")
+    return int(value) if isinstance(value, int) else None
+
+
+def _preflight_prepare_mem_available_mb_delta(entry: dict[str, Any]) -> float | None:
+    value = _preflight_delta_value(entry, "mem_available_kb_delta")
+    if not isinstance(value, int):
+        return None
+    return float(value) / 1024.0
+
+
+def _preflight_prepare_buddyinfo_max_order_delta(entry: dict[str, Any]) -> int | None:
+    value = _preflight_delta_value(entry, "buddyinfo_max_order_delta")
+    return int(value) if isinstance(value, int) else None
 
 
 def _runtime_metadata(variant_plan: dict[str, Any]) -> dict[str, Any]:
@@ -473,7 +509,11 @@ def summarize_sweep_manifest(
                 server_image=str(runtime["image"]) if runtime.get("image") else None,
                 server_image_id=str(runtime["image_id"]) if runtime.get("image_id") else None,
                 llama_cpp_ref=str(runtime["llama_cpp_ref"]) if runtime.get("llama_cpp_ref") else None,
+                preflight_before_prepare_lfb=_format_lfb(entry.get("preflight_before_prepare")),
                 preflight_lfb=_format_lfb(entry.get("preflight")),
+                preflight_prepare_lfb_delta=_preflight_prepare_lfb_delta(entry),
+                preflight_prepare_mem_available_mb_delta=_preflight_prepare_mem_available_mb_delta(entry),
+                preflight_prepare_buddyinfo_max_order_delta=_preflight_prepare_buddyinfo_max_order_delta(entry),
                 trials=_trial_count_from_manifest(benchmark_manifest_path),
                 guard_passed=summary.guard_passed if summary is not None else False,
                 successful=summary.successful if summary is not None else 0,
@@ -551,18 +591,20 @@ def _format_sweep_comparison_report(rows: list[SweepComparisonRow]) -> str:
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower.",
         "",
-        "| Model | Variant | Run prefix | Runtime | Preflight lfb | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
-        "|---|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
+        "| Model | Variant | Run prefix | Runtime | Preflight lfb | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
+        "|---|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
     ]
     for row in rows:
         failures = ", ".join(row.guard_failures)
         lines.append(
-            "| {model} | `{variant}` | {run_prefix} | {runtime} | {lfb} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {run_prefix} | {runtime} | {lfb} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 run_prefix=row.run_prefix,
                 runtime=_format_runtime(row),
                 lfb=row.preflight_lfb,
+                prepare_lfb_delta=_fmt_signed_int(row.preflight_prepare_lfb_delta),
+                prepare_avail_delta=_fmt_signed_float(row.preflight_prepare_mem_available_mb_delta),
                 trials="" if row.trials is None else row.trials,
                 guard="yes" if row.guard_passed else f"no ({failures})",
                 success=f"{row.successful}/{row.records}",

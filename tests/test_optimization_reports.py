@@ -348,6 +348,18 @@ class OptimizationReportContractsTest(unittest.TestCase):
                     "result": {
                         "run_id": run_id,
                         "variant_id": variant_id,
+                        "preflight_before_prepare": {
+                            "meminfo_kb": {"MemAvailable": 5900000},
+                            "buddyinfo": {"max_order_with_free_block": 10},
+                            "tegrastats": {
+                                "lfb": {"free_blocks": lfb_blocks - 40, "block_mb": 4},
+                            },
+                        },
+                        "preflight_delta": {
+                            "lfb_free_blocks_delta": 40,
+                            "mem_available_kb_delta": 500000,
+                            "buddyinfo_max_order_delta": 2,
+                        },
                         "preflight": {
                             "tegrastats": {
                                 "lfb": {"free_blocks": lfb_blocks, "block_mb": 4},
@@ -406,10 +418,14 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(rows[0].server_image, "ghcr.io/4everwz/jetson-llama-cpp:test")
         self.assertEqual(rows[0].server_image_id, "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844")
         self.assertEqual(rows[0].llama_cpp_ref, "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774")
+        self.assertEqual(rows[0].preflight_before_prepare_lfb, "140x4MB")
+        self.assertEqual(rows[0].preflight_prepare_lfb_delta, 40)
+        self.assertEqual(rows[0].preflight_prepare_mem_available_mb_delta, 500000 / 1024.0)
+        self.assertEqual(rows[0].preflight_prepare_buddyinfo_max_order_delta, 2)
         self.assertEqual(rows[1].delta_text_tokens_per_s_pct, 20.0)
         self.assertEqual(rows[1].delta_image_tokens_per_s_pct, -12.5)
         self.assertAlmostEqual(rows[1].delta_fake_stream_latency_pct, -11.111111, places=5)
-        self.assertIn("| Model | Variant | Run prefix | Runtime | Preflight lfb |", report_text)
+        self.assertIn("| Model | Variant | Run prefix | Runtime | Preflight lfb | Prepare lfb delta | Prepare avail MB delta |", report_text)
         self.assertIn("Avg GR3D %", report_text)
         self.assertIn("Avg EMC %", report_text)
         self.assertIn("Bottlenecks", report_text)
@@ -418,7 +434,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(rows[0].avg_emc_util_pct, 83.0)
         self.assertEqual(rows[0].min_lfb_free_blocks, 180)
         self.assertIn("ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be", report_text)
-        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
+        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | +40 | +488.281 | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
         self.assertIn("Baseline rows use `0.00%` deltas", report_text)
 
 
