@@ -657,6 +657,7 @@ def build_sweep_plan(
     fake_stream_adaptive_interval: bool = False,
     fake_stream_adaptive_interval_scale: float = 1.0,
     fake_stream_adaptive_interval_max_s: float | None = None,
+    min_lfb_blocks: int | None = None,
     pre_variant_command: str | None = None,
     selection_contexts: Iterable[dict[str, Any]] = (),
     variant_min_lfb_blocks: dict[str, int] | None = None,
@@ -793,6 +794,7 @@ def build_sweep_plan(
         "variants_path": str(variants_path),
         "run_prefix": run_prefix,
         "port": port,
+        "min_lfb_blocks": min_lfb_blocks,
         "pre_variant_command": pre_variant_command,
         "selection_contexts": [dict(context) for context in selection_contexts],
         "variant_min_lfb_blocks": dict(variant_min_lfb_blocks or {}),
@@ -1134,6 +1136,8 @@ def run_sweep(
     benchmark_paths: list[str] = []
     fake_stream_paths: list[str] = []
     command = pre_variant_command if pre_variant_command is not None else plan.get("pre_variant_command")
+    if min_lfb_blocks is None and isinstance(plan.get("min_lfb_blocks"), int):
+        min_lfb_blocks = int(plan["min_lfb_blocks"])
     variant_min_lfb_blocks = plan.get("variant_min_lfb_blocks")
     if not isinstance(variant_min_lfb_blocks, dict):
         variant_min_lfb_blocks = {}
@@ -1459,6 +1463,7 @@ def main(argv: list[str] | None = None) -> int:
         fake_stream_adaptive_interval=args.fake_stream_adaptive_interval,
         fake_stream_adaptive_interval_scale=args.fake_stream_adaptive_interval_scale,
         fake_stream_adaptive_interval_max_s=args.fake_stream_adaptive_interval_max_s,
+        min_lfb_blocks=args.min_lfb_blocks,
         pre_variant_command=args.pre_variant_command,
         selection_contexts=selection_contexts,
         variant_min_lfb_blocks=variant_min_lfb_blocks,

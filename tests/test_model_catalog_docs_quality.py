@@ -622,6 +622,15 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         for text in (readme, readme_zh, protocol_doc, strategy_doc):
             self.assertIn("--variant-min-lfb-blocks", text)
 
+    def test_compare_docs_explain_required_lfb_backfill_from_plan(self):
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(encoding="utf-8")
+
+        for text in (protocol_doc, strategy_doc):
+            self.assertIn("plan.min_lfb_blocks", text)
+            self.assertIn("variant_min_lfb_blocks", text)
+            self.assertIn("preflight_required_lfb_blocks", text)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [

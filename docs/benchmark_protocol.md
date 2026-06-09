@@ -253,6 +253,10 @@ single snapshot.
 For promotion sweeps, add `--min-lfb-blocks 150` or a stricter threshold learned
 from prior runs so memory-fragmented starts are skipped and labeled before
 Docker launches.
+The sweep plan now persists that global threshold under `plan.min_lfb_blocks`,
+so later comparison/report passes can still recover the intended strict gate
+even when an older result row does not yet carry
+`preflight_required_lfb_blocks`.
 When comparing variants back-to-back, add `--pre-variant-command` to run the
 same cleanup before each preflight, for example:
 
@@ -415,7 +419,10 @@ auto-selected lanes remain visible in promotion evidence instead of reading like
 anonymous static variant ids. The sweep manifest also carries any
 `variant_min_lfb_blocks` overrides used to keep a selected fallback lane
 aligned with its selector gate, and the comparison table surfaces that gate in
-its `Required lfb` column next to the observed `Preflight lfb`.
+its `Required lfb` column next to the observed `Preflight lfb`. Compare first
+uses a row's explicit `preflight_required_lfb_blocks`; if that is missing, it
+backs off to `variant_min_lfb_blocks` and then `plan.min_lfb_blocks` from the
+sweep manifest before labeling the row as missing required-LFB evidence.
 For ranking decisions, keep only the defensible strict rows: when compare also receives
 `--ranking-min-lfb-blocks`, it adds a `Ranking precheck` column so rows that
 ran under a more relaxed gate stay in the report but are mechanically marked as

@@ -460,6 +460,34 @@ def _preflight_required_lfb_blocks(entry: dict[str, Any]) -> int | None:
     return int(value) if isinstance(value, int) else None
 
 
+def _plan_min_lfb_blocks(plan: dict[str, Any]) -> int | None:
+    value = plan.get("min_lfb_blocks")
+    return int(value) if isinstance(value, int) else None
+
+
+def _plan_variant_min_lfb_blocks(plan: dict[str, Any], variant_id: str) -> int | None:
+    overrides = plan.get("variant_min_lfb_blocks")
+    if not isinstance(overrides, dict):
+        return None
+    value = overrides.get(variant_id)
+    return int(value) if isinstance(value, int) else None
+
+
+def _effective_required_lfb_blocks(
+    entry: dict[str, Any],
+    *,
+    plan: dict[str, Any],
+    variant_id: str,
+) -> int | None:
+    explicit_required_lfb_blocks = _preflight_required_lfb_blocks(entry)
+    if explicit_required_lfb_blocks is not None:
+        return explicit_required_lfb_blocks
+    override_required_lfb_blocks = _plan_variant_min_lfb_blocks(plan, variant_id)
+    if override_required_lfb_blocks is not None:
+        return override_required_lfb_blocks
+    return _plan_min_lfb_blocks(plan)
+
+
 def _ranking_precheck(
     row: SweepComparisonRow,
     *,
@@ -612,7 +640,11 @@ def summarize_sweep_manifest(
                 llama_cpp_ref=str(runtime["llama_cpp_ref"]) if runtime.get("llama_cpp_ref") else None,
                 preflight_before_prepare_lfb=_format_lfb(entry.get("preflight_before_prepare")),
                 preflight_lfb=_format_lfb(entry.get("preflight")),
-                preflight_required_lfb_blocks=_preflight_required_lfb_blocks(entry),
+                preflight_required_lfb_blocks=_effective_required_lfb_blocks(
+                    entry,
+                    plan=plan,
+                    variant_id=variant_id,
+                ),
                 preflight_prepare_lfb_delta=_preflight_prepare_lfb_delta(entry),
                 preflight_prepare_mem_available_mb_delta=_preflight_prepare_mem_available_mb_delta(entry),
                 preflight_prepare_buddyinfo_max_order_delta=_preflight_prepare_buddyinfo_max_order_delta(entry),
