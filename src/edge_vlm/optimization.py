@@ -42,6 +42,7 @@ class SweepComparisonRow:
     run_id: str
     variant_id: str
     model: str
+    comparison_group: str
     server_image: str | None
     server_image_id: str | None
     llama_cpp_ref: str | None
@@ -383,6 +384,18 @@ def _runtime_metadata(variant_plan: dict[str, Any]) -> dict[str, Any]:
     return runtime if isinstance(runtime, dict) else {}
 
 
+def _comparison_group(variant_plan: dict[str, Any], model: str) -> str:
+    variant = variant_plan.get("variant")
+    if isinstance(variant, dict):
+        group = variant.get("comparison_group")
+        if isinstance(group, str) and group.strip():
+            return group.strip()
+    group = variant_plan.get("comparison_group")
+    if isinstance(group, str) and group.strip():
+        return group.strip()
+    return model
+
+
 def _short_ref(value: str | None, length: int = 12) -> str | None:
     if not value:
         return None
@@ -506,6 +519,10 @@ def summarize_sweep_manifest(
                 run_id=run_id,
                 variant_id=variant_id,
                 model=summary.model if summary is not None else str(entry.get("model") or "unknown"),
+                comparison_group=_comparison_group(
+                    variant_plan,
+                    summary.model if summary is not None else str(entry.get("model") or "unknown"),
+                ),
                 server_image=str(runtime["image"]) if runtime.get("image") else None,
                 server_image_id=str(runtime["image_id"]) if runtime.get("image_id") else None,
                 llama_cpp_ref=str(runtime["llama_cpp_ref"]) if runtime.get("llama_cpp_ref") else None,
@@ -566,17 +583,17 @@ def _add_comparison_deltas(rows: list[SweepComparisonRow], baseline_variant_ids:
     requested_baselines = set(baseline_variant_ids)
     baselines: dict[str, SweepComparisonRow] = {}
     for row in rows:
-        if row.model in baselines:
+        if row.comparison_group in baselines:
             continue
         if requested_baselines and row.variant_id not in requested_baselines:
             continue
-        baselines[row.model] = row
+        baselines[row.comparison_group] = row
     if not requested_baselines:
         for row in rows:
-            if row.model not in baselines and row.guard_passed:
-                baselines[row.model] = row
+            if row.comparison_group not in baselines and row.guard_passed:
+                baselines[row.comparison_group] = row
     for row in rows:
-        baseline = baselines.get(row.model)
+        baseline = baselines.get(row.comparison_group)
         if baseline is None:
             continue
         row.delta_text_tokens_per_s_pct = _percent_delta(row.text_avg_tokens_per_s, baseline.text_avg_tokens_per_s)

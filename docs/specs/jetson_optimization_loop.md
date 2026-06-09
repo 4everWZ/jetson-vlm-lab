@@ -197,10 +197,12 @@ runtime image/id/ref, preflight `lfb`, trial count, startup seconds, sanity
 guard, success counts, formal throughput/latency, fake-stream latency, max
 temperature, average `VDD_IN` power, average GR3D utilization, average EMC
 utilization, minimum profiled `lfb`, conservative bottleneck labels, any
-recorded prepare-phase preflight deltas, and deltas versus the per-model
-baseline variant. Treat this as the source table for tracked benchmark docs; do
-not hand-copy raw metrics from multiple JSON files when the comparison command
-can derive them.
+recorded prepare-phase preflight deltas, and deltas versus the selected
+baseline variant. When variant metadata provides a shared `comparison_group`,
+the delta columns use that group instead of raw model id so Q4/Q8 fallback
+lanes can share one baseline. Treat this as the source table for tracked
+benchmark docs; do not hand-copy raw metrics from multiple JSON files when the
+comparison command can derive them.
 
 For the recurring current-defaults baseline refresh, prefer the wrapper:
 

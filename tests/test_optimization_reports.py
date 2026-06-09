@@ -437,6 +437,199 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | +40 | +488.281 | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
         self.assertIn("Baseline rows use `0.00%` deltas", report_text)
 
+    def test_optimization_comparison_report_can_use_shared_comparison_group(self):
+        from edge_vlm.optimization import build_sweep_comparison_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "qwen-compare"
+            benchmark_dir = output_root / "benchmarks"
+            fake_dir = output_root / "fake_stream"
+            benchmark_dir.mkdir(parents=True)
+            fake_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+
+            def write_run(
+                run_prefix,
+                variant_id,
+                *,
+                model,
+                comparison_group,
+                text_tps,
+                image_tps,
+                fake_latency,
+                startup_s,
+            ):
+                run_id = f"{run_prefix}-{variant_id}"
+                benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+                fake_jsonl = fake_dir / f"{run_id}.jsonl"
+                benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+                tegrastats_log = tmp_path / "outputs" / "tegrastats" / f"{run_id}.log"
+                tegrastats_log.parent.mkdir(parents=True, exist_ok=True)
+                benchmark_jsonl.write_text(
+                    "\n".join(
+                        [
+                            json.dumps(
+                                {
+                                    "model": model,
+                                    "run_id": run_id,
+                                    "prompt_case_id": "text_case",
+                                    "input_type": "text",
+                                    "success": True,
+                                    "latency_s": 64.0 / text_tps,
+                                    "tokens": 64,
+                                    "tokens_per_sec": text_tps,
+                                    "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                                    "quality_terms_any": ["memory", "bandwidth"],
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "model": model,
+                                    "run_id": run_id,
+                                    "prompt_case_id": "image_case",
+                                    "input_type": "image",
+                                    "success": True,
+                                    "latency_s": 64.0 / image_tps,
+                                    "tokens": 64,
+                                    "tokens_per_sec": image_tps,
+                                    "output_excerpt": "The image shows two contrasting square shapes on a background.",
+                                    "quality_terms_any": ["square", "background"],
+                                }
+                            ),
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                fake_jsonl.write_text(
+                    json.dumps(
+                        {
+                            "frame_id": "frame_001.png",
+                            "success": True,
+                            "latency_s": fake_latency,
+                            "output_excerpt": "The frame shows a simple scene with contrasting square shapes.",
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                tegrastats_log.write_text(
+                    "\n".join(
+                        [
+                            "05-31-2026 RAM 2000/7620MB (lfb 121x4MB) GR3D_FREQ 95%@[1020] cpu@50.0C gpu@51.0C tj@51.0C VDD_IN 21000mW/21000mW",
+                            "05-31-2026 RAM 2100/7620MB (lfb 118x4MB) GR3D_FREQ 96%@[1020] cpu@52.0C gpu@54.5C tj@54.5C VDD_IN 22000mW/22000mW",
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                benchmark_manifest.write_text(
+                    json.dumps(
+                        {
+                            "run_id": run_id,
+                            "benchmark": {"trial_count": 3},
+                            "cases_written": 2,
+                            "successful": 2,
+                            "failed": 0,
+                            "jetson": {"tegrastats_log": str(tegrastats_log)},
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return {
+                    "plan": {
+                        "variant": {
+                            "id": variant_id,
+                            "comparison_group": comparison_group,
+                        },
+                        "server_runtime": {
+                            "image": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                        },
+                        "paths": {
+                            "benchmark_jsonl": str(benchmark_jsonl),
+                            "manifest_json": str(benchmark_manifest),
+                            "fake_stream_jsonl": str(fake_jsonl),
+                        },
+                    },
+                    "result": {
+                        "run_id": run_id,
+                        "variant_id": variant_id,
+                        "preflight": {
+                            "tegrastats": {
+                                "lfb": {"free_blocks": 121, "block_mb": 4},
+                            }
+                        },
+                        "preflight_passed": True,
+                        "server_startup_seconds": startup_s,
+                        "benchmark_returncode": 0,
+                        "fake_stream_returncode": 0,
+                    },
+                }
+
+            baseline = write_run(
+                "qwen-q4",
+                "qwen3-vl-2b-instruct-q4-smoke",
+                model="qwen3-vl-2b-instruct-q4",
+                comparison_group="qwen3-vl-2b-instruct",
+                text_tps=34.865,
+                image_tps=31.958,
+                fake_latency=1.827,
+                startup_s=8.023,
+            )
+            candidate = write_run(
+                "qwen-q8",
+                "qwen3-vl-2b-instruct-q8-smoke",
+                model="qwen3-vl-2b-instruct-q8",
+                comparison_group="qwen3-vl-2b-instruct",
+                text_tps=31.346,
+                image_tps=29.393,
+                fake_latency=2.144,
+                startup_s=5.017,
+            )
+            manifest = output_root / "qwen-compare.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {"run_prefix": "qwen-compare", "variants": [baseline["plan"], candidate["plan"]]},
+                        "result": {"results": [baseline["result"], candidate["result"]]},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = build_sweep_comparison_report(
+                manifest_paths=[manifest],
+                output_path=report,
+                baseline_variant_ids=["qwen3-vl-2b-instruct-q4-smoke"],
+            )
+
+        baseline_row, candidate_row = rows
+        self.assertEqual(baseline_row.variant_id, "qwen3-vl-2b-instruct-q4-smoke")
+        self.assertEqual(candidate_row.variant_id, "qwen3-vl-2b-instruct-q8-smoke")
+        self.assertAlmostEqual(
+            candidate_row.delta_text_tokens_per_s_pct,
+            ((31.346 - 34.865) / 34.865) * 100.0,
+            places=5,
+        )
+        self.assertAlmostEqual(
+            candidate_row.delta_image_tokens_per_s_pct,
+            ((29.393 - 31.958) / 31.958) * 100.0,
+            places=5,
+        )
+        self.assertAlmostEqual(
+            candidate_row.delta_startup_pct,
+            ((5.017 - 8.023) / 8.023) * 100.0,
+            places=5,
+        )
+        self.assertAlmostEqual(
+            candidate_row.delta_fake_stream_latency_pct,
+            ((2.144 - 1.827) / 1.827) * 100.0,
+            places=5,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

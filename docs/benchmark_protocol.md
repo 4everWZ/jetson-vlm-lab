@@ -376,11 +376,14 @@ fake-stream sidecar, benchmark metadata, and `tegrastats` log. It adds
 runtime image/id/llama.cpp ref, preflight `lfb`, trial count, startup time,
 guard status, success counts, throughput, latency, max temperature, average
 `VDD_IN` power, average GR3D utilization, average EMC utilization, minimum
-profiled `lfb`, conservative bottleneck labels, per-model delta columns
-against the selected baseline variant, and any recorded prepare-phase
+profiled `lfb`, conservative bottleneck labels, delta columns against the
+selected baseline variant, and any recorded prepare-phase
 preflight deltas such as `lfb` or `MemAvailable` changes after cache-drop plus
-`compact_memory`. Copy only the defensible summary rows into tracked benchmark
-docs; keep raw generated reports under ignored `outputs/`.
+`compact_memory`. When variant metadata defines a shared
+`comparison_group`, the delta columns use that group instead of raw model id,
+so Q4/Q8 fallback lanes can be compared directly. Copy only the defensible
+summary rows into tracked benchmark docs; keep raw generated reports under
+ignored `outputs/`.
 
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:

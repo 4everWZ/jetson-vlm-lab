@@ -196,6 +196,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "model_ref": "Qwen/Qwen3-VL-2B-Instruct-GGUF:Q4_K_M",
                 "model_file": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
                 "mmproj_file": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+                "comparison_group": "qwen3-vl-2b-instruct",
                 "ctx_size": 1024,
                 "batch_size": 256,
                 "ubatch_size": 64,
@@ -205,6 +206,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "model_ref": "Qwen/Qwen3-VL-2B-Instruct-GGUF:Q8_0",
                 "model_file": "Qwen3VL-2B-Instruct-Q8_0.gguf",
                 "mmproj_file": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+                "comparison_group": "qwen3-vl-2b-instruct",
                 "ctx_size": 1024,
                 "batch_size": 128,
                 "ubatch_size": 32,
@@ -273,6 +275,8 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 self.assertEqual(variant["env"]["MMPROJ_FILE"], expected_values["mmproj_file"])
                 self.assertEqual(variant["env"]["CTX_SIZE"], expected_values["ctx_size"])
                 self.assertEqual(variant["env"]["MODEL_ALIAS"], model_name)
+                if "comparison_group" in expected_values:
+                    self.assertEqual(variant["comparison_group"], expected_values["comparison_group"])
                 if "n_gpu_layers" in expected_values:
                     self.assertEqual(variant["env"]["N_GPU_LAYERS"], expected_values["n_gpu_layers"])
                 if "batch_size" in expected_values:
