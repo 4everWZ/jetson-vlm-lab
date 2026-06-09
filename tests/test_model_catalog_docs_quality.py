@@ -200,6 +200,15 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "batch_size": 256,
                 "ubatch_size": 64,
             },
+            "qwen3-vl-2b-instruct-q8": {
+                "config": "configs/models/qwen3_vl_2b_instruct_q8.yaml",
+                "model_ref": "Qwen/Qwen3-VL-2B-Instruct-GGUF:Q8_0",
+                "model_file": "Qwen3VL-2B-Instruct-Q8_0.gguf",
+                "mmproj_file": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+                "ctx_size": 1024,
+                "batch_size": 128,
+                "ubatch_size": 32,
+            },
             "hunyuanocr-q8": {
                 "config": "configs/models/hunyuanocr_q8.yaml",
                 "model_ref": "ggml-org/HunyuanOCR-GGUF:Q8_0",
