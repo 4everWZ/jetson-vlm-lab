@@ -9,6 +9,12 @@ from pathlib import Path
 
 
 class RemoteExecutionSuiteContractsTest(unittest.TestCase):
+    def isolated_remote_env(self, **overrides):
+        env = {**os.environ, "JETSON_ENV_FILE": os.devnull}
+        env.pop("JETSON_SSH_PASSWORD", None)
+        env.pop("JETSON_REMOTE_SUDO_PASSWORD", None)
+        env.update(overrides)
+        return env
 
     def test_jetson_remote_exec_dry_run_sources_ignored_env_without_exposing_password(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -268,11 +274,10 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 encoding="utf-8",
-                env={
-                    **os.environ,
-                    "JETSON_REMOTE_EXEC": str(fake_remote),
-                    "FAKE_REMOTE_LOG": str(log_file),
-                },
+                env=self.isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
@@ -320,12 +325,11 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 encoding="utf-8",
-                env={
-                    **os.environ,
-                    "JETSON_REMOTE_EXEC": str(fake_remote),
-                    "JETSON_REMOTE_BRANCH": "bench/qwen3-vl-instruct-q4",
-                    "FAKE_REMOTE_LOG": str(log_file),
-                },
+                env=self.isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_BRANCH="bench/qwen3-vl-instruct-q4",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
@@ -366,12 +370,11 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 encoding="utf-8",
-                env={
-                    **os.environ,
-                    "JETSON_REMOTE_EXEC": str(fake_remote),
-                    "JETSON_REMOTE_SYNC": "0",
-                    "FAKE_REMOTE_LOG": str(log_file),
-                },
+                env=self.isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
@@ -415,14 +418,13 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 encoding="utf-8",
-                env={
-                    **os.environ,
-                    "JETSON_REMOTE_EXEC": str(fake_remote),
-                    "JETSON_REMOTE_SYNC": "0",
-                    "JETSON_REMOTE_PREPARE_MAX_CLOCKS": "1",
-                    "JETSON_SSH_PASSWORD": "secret-password",
-                    "FAKE_REMOTE_LOG": str(log_file),
-                },
+                env=self.isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_PREPARE_MAX_CLOCKS="1",
+                    JETSON_SSH_PASSWORD="secret-password",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
@@ -470,16 +472,13 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 encoding="utf-8",
             )
             os.chmod(fake_remote, 0o755)
-            env = {
-                **os.environ,
-                "JETSON_ENV_FILE": str(env_file),
-                "JETSON_REMOTE_EXEC": str(fake_remote),
-                "JETSON_REMOTE_SYNC": "0",
-                "JETSON_REMOTE_PREPARE_MAX_CLOCKS": "1",
-                "FAKE_REMOTE_LOG": str(log_file),
-            }
-            env.pop("JETSON_SSH_PASSWORD", None)
-            env.pop("JETSON_REMOTE_SUDO_PASSWORD", None)
+            env = self.isolated_remote_env(
+                JETSON_ENV_FILE=str(env_file),
+                JETSON_REMOTE_EXEC=str(fake_remote),
+                JETSON_REMOTE_SYNC="0",
+                JETSON_REMOTE_PREPARE_MAX_CLOCKS="1",
+                FAKE_REMOTE_LOG=str(log_file),
+            )
             result = subprocess.run(
                 [
                     "bash",
@@ -509,14 +508,11 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
             fake_remote.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
             os.chmod(fake_remote, 0o755)
 
-            env = {
-                **os.environ,
-                "JETSON_REMOTE_EXEC": str(fake_remote),
-                "JETSON_REMOTE_SYNC": "0",
-                "JETSON_REMOTE_PREPARE_MAX_CLOCKS": "1",
-            }
-            env.pop("JETSON_SSH_PASSWORD", None)
-            env.pop("JETSON_REMOTE_SUDO_PASSWORD", None)
+            env = self.isolated_remote_env(
+                JETSON_REMOTE_EXEC=str(fake_remote),
+                JETSON_REMOTE_SYNC="0",
+                JETSON_REMOTE_PREPARE_MAX_CLOCKS="1",
+            )
             result = subprocess.run(
                 [
                     "bash",
@@ -568,14 +564,13 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 encoding="utf-8",
-                env={
-                    **os.environ,
-                    "JETSON_REMOTE_EXEC": str(fake_remote),
-                    "JETSON_REMOTE_SYNC": "0",
-                    "JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT": "1",
-                    "JETSON_SSH_PASSWORD": "secret-password",
-                    "FAKE_REMOTE_LOG": str(log_file),
-                },
+                env=self.isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT="1",
+                    JETSON_SSH_PASSWORD="secret-password",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
@@ -603,14 +598,11 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
             fake_remote.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
             os.chmod(fake_remote, 0o755)
 
-            env = {
-                **os.environ,
-                "JETSON_REMOTE_EXEC": str(fake_remote),
-                "JETSON_REMOTE_SYNC": "0",
-                "JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT": "1",
-            }
-            env.pop("JETSON_SSH_PASSWORD", None)
-            env.pop("JETSON_REMOTE_SUDO_PASSWORD", None)
+            env = self.isolated_remote_env(
+                JETSON_REMOTE_EXEC=str(fake_remote),
+                JETSON_REMOTE_SYNC="0",
+                JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT="1",
+            )
             result = subprocess.run(
                 [
                     "bash",
@@ -647,13 +639,12 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 encoding="utf-8",
-                env={
-                    **os.environ,
-                    "JETSON_REMOTE_EXEC": str(fake_remote),
-                    "JETSON_REMOTE_SYNC": "0",
-                    "JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT": "1",
-                    "JETSON_SSH_PASSWORD": "secret-password",
-                },
+                env=self.isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT="1",
+                    JETSON_SSH_PASSWORD="secret-password",
+                ),
             )
 
         self.assertEqual(result.returncode, 2)
@@ -700,19 +691,18 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 encoding="utf-8",
-                env={
-                    **os.environ,
-                    "JETSON_CURRENT_DEFAULTS_RUN_PREFIX": "defaults-unit",
-                    "JETSON_CURRENT_DEFAULTS_TRIAL_COUNT": "7",
-                    "JETSON_CURRENT_DEFAULTS_MAX_TOKENS": "33",
-                    "JETSON_CURRENT_DEFAULTS_FAKE_STREAM_MAX_FRAMES": "2",
-                    "JETSON_CURRENT_DEFAULTS_MIN_LFB_BLOCKS": "199",
-                    "JETSON_CURRENT_DEFAULTS_WAIT_TIMEOUT_S": "123",
-                    "JETSON_REMOTE_SYNC": "0",
-                    "JETSON_REMOTE_SWEEP": str(fake_sweep),
-                    "JETSON_REMOTE_EXEC": str(fake_remote),
-                    "FAKE_SUITE_LOG": str(log_file),
-                },
+                env=self.isolated_remote_env(
+                    JETSON_CURRENT_DEFAULTS_RUN_PREFIX="defaults-unit",
+                    JETSON_CURRENT_DEFAULTS_TRIAL_COUNT="7",
+                    JETSON_CURRENT_DEFAULTS_MAX_TOKENS="33",
+                    JETSON_CURRENT_DEFAULTS_FAKE_STREAM_MAX_FRAMES="2",
+                    JETSON_CURRENT_DEFAULTS_MIN_LFB_BLOCKS="199",
+                    JETSON_CURRENT_DEFAULTS_WAIT_TIMEOUT_S="123",
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_SWEEP=str(fake_sweep),
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    FAKE_SUITE_LOG=str(log_file),
+                ),
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -784,19 +774,18 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 encoding="utf-8",
-                env={
-                    **os.environ,
-                    "JETSON_LIGHTWEIGHT_RUN_PREFIX": "light-unit",
-                    "JETSON_LIGHTWEIGHT_TRIAL_COUNT": "6",
-                    "JETSON_LIGHTWEIGHT_MAX_TOKENS": "44",
-                    "JETSON_LIGHTWEIGHT_FAKE_STREAM_MAX_FRAMES": "4",
-                    "JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS": "177",
-                    "JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S": "321",
-                    "JETSON_REMOTE_SYNC": "0",
-                    "JETSON_REMOTE_SWEEP": str(fake_sweep),
-                    "JETSON_REMOTE_EXEC": str(fake_remote),
-                    "FAKE_SUITE_LOG": str(log_file),
-                },
+                env=self.isolated_remote_env(
+                    JETSON_LIGHTWEIGHT_RUN_PREFIX="light-unit",
+                    JETSON_LIGHTWEIGHT_TRIAL_COUNT="6",
+                    JETSON_LIGHTWEIGHT_MAX_TOKENS="44",
+                    JETSON_LIGHTWEIGHT_FAKE_STREAM_MAX_FRAMES="4",
+                    JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS="177",
+                    JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S="321",
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_SWEEP=str(fake_sweep),
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    FAKE_SUITE_LOG=str(log_file),
+                ),
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -880,18 +869,17 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 encoding="utf-8",
-                env={
-                    **os.environ,
-                    "JETSON_TENCENT_TEXT_RUN_PREFIX": "tencent-text-unit",
-                    "JETSON_TENCENT_TEXT_TRIAL_COUNT": "4",
-                    "JETSON_TENCENT_TEXT_MAX_TOKENS": "55",
-                    "JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS": "188",
-                    "JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S": "222",
-                    "JETSON_REMOTE_SYNC": "0",
-                    "JETSON_REMOTE_SWEEP": str(fake_sweep),
-                    "JETSON_REMOTE_EXEC": str(fake_remote),
-                    "FAKE_SUITE_LOG": str(log_file),
-                },
+                env=self.isolated_remote_env(
+                    JETSON_TENCENT_TEXT_RUN_PREFIX="tencent-text-unit",
+                    JETSON_TENCENT_TEXT_TRIAL_COUNT="4",
+                    JETSON_TENCENT_TEXT_MAX_TOKENS="55",
+                    JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS="188",
+                    JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S="222",
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_SWEEP=str(fake_sweep),
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    FAKE_SUITE_LOG=str(log_file),
+                ),
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
