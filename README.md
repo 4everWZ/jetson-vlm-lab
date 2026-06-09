@@ -355,8 +355,16 @@ scripts/jetson/select_qwen3_instruct_variant.sh \
 ```
 
 The selector writes a JSON decision with runtime probe, preflight sample, per-
-candidate block reasons, and the chosen variant id. Keep the same strict gate
-for both lanes unless you are intentionally doing scoped fallback triage.
+candidate block reasons, and the chosen variant id. Its standalone default
+keeps the same strict gate for both lanes unless you are intentionally doing
+scoped fallback triage.
+
+The remote lightweight suite now uses this selector automatically instead of
+pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it
+keeps the suite-wide `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS=150` primary gate and
+applies `JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS=100` only to the
+Qwen3 Instruct fallback lane. Override `JETSON_LIGHTWEIGHT_QWEN3_SELECTOR=0`
+if you need to go back to a fully manual candidate list for a scoped rerun.
 
 Remote Jetson connection settings live in the ignored `.env.jetson` file. The
 remote helpers source it automatically; do not copy SSH hosts, passwords,

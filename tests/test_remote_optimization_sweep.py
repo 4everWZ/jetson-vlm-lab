@@ -90,6 +90,57 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
         self.assertNotIn("ARG=pull\n", log_text)
         self.assertIn("ARG=--variant\nARG=qwen3-vl-2b-instruct-q4-smoke\n", log_text)
 
+    def test_remote_optimization_sweep_can_select_qwen3_fallback_variant_before_sweep(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_executable(
+                fake_remote,
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                    "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    "if printf '%s\\n' \"$@\" | grep -q 'select_qwen3_instruct_variant.sh'; then",
+                    "  printf '%s\\n' '{\"selected_variant_id\":\"qwen3-vl-2b-instruct-q8-smoke\",\"selected_reason\":\"primary_blocked_selected_fallback\"}'",
+                    "fi",
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--run-prefix",
+                    "unit-selector",
+                    "--variant",
+                    "smolvlm2-256m-q8-smoke",
+                    "--min-lfb-blocks",
+                    "150",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR="1",
+                    JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_MIN_LFB_BLOCKS="100",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 2)
+        self.assertIn("ARG=bash\nARG=scripts/jetson/select_qwen3_instruct_variant.sh\n", log_text)
+        self.assertIn("ARG=--run-prefix\nARG=unit-selector\n", log_text)
+        self.assertIn("ARG=--min-lfb-blocks\nARG=150\n", log_text)
+        self.assertIn("ARG=--fallback-min-lfb-blocks\nARG=100\n", log_text)
+        self.assertIn("ARG=--variant\nARG=smolvlm2-256m-q8-smoke\n", log_text)
+        self.assertIn("ARG=--variant\nARG=qwen3-vl-2b-instruct-q8-smoke\n", log_text)
+
     def test_remote_optimization_sweep_can_skip_git_sync(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

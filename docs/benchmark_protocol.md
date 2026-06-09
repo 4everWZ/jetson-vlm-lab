@@ -526,6 +526,14 @@ path stable, or override `JETSON_LIGHTWEIGHT_TRIAL_COUNT`,
 `JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S`, `JETSON_LIGHTWEIGHT_BASELINE_VARIANTS`,
 `JETSON_LIGHTWEIGHT_CANDIDATE_VARIANTS`, or
 `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS` for scoped validation runs.
+The suite also enables `JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR=1` by default, so
+the Qwen3-VL 2B Instruct lane is resolved remotely through
+`scripts/jetson/select_qwen3_instruct_variant.sh` after sync, max-clocks, and
+the current runtime probe. The suite keeps the primary Qwen3 gate at the global
+`JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS` value and uses
+`JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS=100` only for the Q8 fallback
+lane. Set `JETSON_LIGHTWEIGHT_QWEN3_SELECTOR=0` if you need a fully manual
+candidate list for a scoped rerun.
 The default candidate list excludes HunyuanOCR and official Youtu-VL Q8:
 HunyuanOCR loaded after its launcher-resume smoke but failed the guard with
 repetitive punctuation output, and official Youtu-VL Q8 failed before server
@@ -533,16 +541,20 @@ ready with CUDA OOM on the BF16 mmproj buffer. Pass
 `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=hunyuanocr-q8-smoke` or
 `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=youtu-vl-4b-q8-smoke` only for scoped
 quality/runtime triage reruns.
-The default Qwen candidates include both Qwen3-VL 2B Thinking Q4 and
-Qwen3-VL 2B Instruct Q4. The Instruct row is a newly configured Q4-first
-candidate with one diagnostic locked-clocks smoke on June 9, 2026:
+The default Qwen candidates include Qwen3-VL 2B Thinking Q4 plus an automatic
+Qwen3-VL 2B Instruct Q4-first / Q8 fallback lane. The Instruct Q4 row is a
+newly configured candidate with one diagnostic locked-clocks smoke on June 9,
+2026:
 `qwen3-instruct-q4-smoke-lfb32-20260609T075208Z` passed 6/6 formal records and
 1/1 fake-stream record at relaxed `--min-lfb-blocks 32`, reaching 34.349 text
 tok/s, 26.957 image tok/s, and 1.827 s fake-stream latency. The strict
 `--min-lfb-blocks 150` rerun `qwen3-instruct-q4-smoke-compact-20260609T074600Z`
 still skipped in preflight at `lfb 46x4MB` even after cache-drop plus
 `compact_memory`, so keep this row at smoke/triage scope until it can satisfy
-the conservative gate and pass quality review.
+the conservative gate and pass quality review. The suite-level selector now
+uses that strict 150-LFB gate for the primary lane and a 100-LFB fallback gate
+for Q8, so the default lightweight ladder can automatically keep a Qwen3
+Instruct row when Q4 is blocked only by fragmentation pressure.
 The scoped Q8 fallback row `qwen3-vl-2b-instruct-q8-smoke` is now executable
 through the same launcher path. Strict-gate smoke
 `qwen3-instruct-q8-smoke-20260609T082222Z` also skipped in preflight at
@@ -551,9 +563,9 @@ Relaxed-gate smoke `qwen3-instruct-q8-smoke-lfb100-20260609T082321Z` did pass
 6/6 formal records and 1/1 fake-stream record with guard pass at
 `--min-lfb-blocks 100`, reaching 31.076 text tok/s, 25.997 image tok/s, and
 2.142 s fake-stream latency, but it included a 323.05 s first-download artifact
-phase. Use `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=qwen3-vl-2b-instruct-q8-smoke`
-only for scoped fallback triage until either Q4 or Q8 can satisfy the
-conservative 150-LFB gate.
+phase. Manual `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=qwen3-vl-2b-instruct-q8-smoke`
+reruns are still useful for scoped fallback triage when you need the Q8 row
+even with `JETSON_LIGHTWEIGHT_QWEN3_SELECTOR=0`.
 A shared relaxed-gate compare `qwen3-instruct-q4q8-lfb100-20260609T091700Z`
 then ran both Instruct lanes under max clocks, per-variant cache-drop plus
 `compact_memory`, three formal trials, and one fake-stream frame. Q4 passed

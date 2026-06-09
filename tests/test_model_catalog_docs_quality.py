@@ -603,6 +603,9 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("select_qwen3_instruct_variant.sh", text)
         for text in (readme, readme_zh, protocol_doc):
             self.assertIn("fallback-min-lfb-blocks", text)
+        for text in (readme, readme_zh, protocol_doc, migration_doc):
+            self.assertIn("JETSON_LIGHTWEIGHT_QWEN3_SELECTOR", text)
+            self.assertIn("JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS", text)
 
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}

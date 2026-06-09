@@ -94,16 +94,18 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertIn("ENV_PREPARE=1\n", log_text)
         self.assertIn("ENV_DROP=1\n", log_text)
         self.assertIn("ENV_SYNC=0\n", log_text)
+        self.assertIn("ENV_QWEN3_SELECTOR=1\n", log_text)
+        self.assertIn("ENV_QWEN3_FALLBACK_MIN_LFB=100\n", log_text)
         self.assertIn("SWEEP_ARG=--run-prefix\nSWEEP_ARG=light-unit\n", log_text)
         for variant_id in (
             "minicpm-q4-baseline-b128-u32-kvq8",
             "gemma-q4-baseline-gpu12-b512-u512-kvq8",
             "smolvlm2-256m-q8-smoke",
             "qwen3-vl-2b-thinking-q4-smoke",
-            "qwen3-vl-2b-instruct-q4-smoke",
             "youtu-vl-4b-q4-thirdparty-smoke",
         ):
             self.assertIn(f"SWEEP_ARG=--variant\nSWEEP_ARG={variant_id}\n", log_text)
+        self.assertNotIn("SWEEP_ARG=--variant\nSWEEP_ARG=qwen3-vl-2b-instruct-q4-smoke\n", log_text)
         self.assertNotIn("SWEEP_ARG=--variant\nSWEEP_ARG=youtu-vl-4b-q8-smoke\n", log_text)
         self.assertNotIn("SWEEP_ARG=--variant\nSWEEP_ARG=hunyuanocr-q8-smoke\n", log_text)
         protocol_text = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")

@@ -54,7 +54,11 @@ variants are skipped with `runtime_missing_mmproj_support` when the runtime
 cannot satisfy this repo's multimodal path.
 For the Qwen3-VL 2B Instruct pair, `scripts/jetson/select_qwen3_instruct_variant.sh`
 wraps the current runtime probe plus preflight gate into one Q4-first / Q8
-fallback decision and writes the result as JSON.
+fallback decision and writes the result as JSON. The remote lightweight suite
+now calls the same selector automatically, using the suite-wide
+`JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS` gate for Q4 and
+`JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS=100` for the Q8 fallback
+lane unless `JETSON_LIGHTWEIGHT_QWEN3_SELECTOR=0`.
 
 Remote Jetson connection settings belong in the ignored `.env.jetson` file.
 `scripts/jetson/remote_exec.sh` sources it automatically. Do not put SSH hosts,

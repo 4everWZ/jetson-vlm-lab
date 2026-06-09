@@ -352,8 +352,16 @@ scripts/jetson/select_qwen3_instruct_variant.sh \
 ```
 
 selector 会写出结构化 JSON，里面包含 runtime probe、preflight sample、
-每个候选的 block reason 和最终选择的 variant id。除非明确在做 scoped
-fallback triage，否则 primary 和 fallback 应保持同一个严格 gate。
+每个候选的 block reason 和最终选择的 variant id。它作为独立入口时默认仍
+保持 primary 和 fallback 使用同一个严格 gate，除非明确在做 scoped
+fallback triage。
+
+remote lightweight suite 现在也会自动使用这个 selector，而不是把
+`qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是
+保留全局 `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS=150` 作为 primary gate，只对
+Qwen3 Instruct fallback 路线应用
+`JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS=100`。如果想回到完全手工
+控制的 candidate 列表，可以把 `JETSON_LIGHTWEIGHT_QWEN3_SELECTOR=0`。
 
 Jetson 远端连接参数在被 Git 忽略的 `.env.jetson` 中。远端 helper 会自动
 读取它；不要把 SSH host、密码、token 或私有路径写进 tracked 文档。

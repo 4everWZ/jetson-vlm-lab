@@ -56,6 +56,8 @@ def write_fake_suite_scripts(tmp_path):
             "printf 'ENV_PREPARE=%s\\n' \"${JETSON_REMOTE_PREPARE_MAX_CLOCKS:-}\" >> \"${FAKE_SUITE_LOG}\"",
             "printf 'ENV_DROP=%s\\n' \"${JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT:-}\" >> \"${FAKE_SUITE_LOG}\"",
             "printf 'ENV_SYNC=%s\\n' \"${JETSON_REMOTE_SYNC:-}\" >> \"${FAKE_SUITE_LOG}\"",
+            "printf 'ENV_QWEN3_SELECTOR=%s\\n' \"${JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR:-}\" >> \"${FAKE_SUITE_LOG}\"",
+            "printf 'ENV_QWEN3_FALLBACK_MIN_LFB=%s\\n' \"${JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_MIN_LFB_BLOCKS:-}\" >> \"${FAKE_SUITE_LOG}\"",
             "for arg in \"$@\"; do printf 'SWEEP_ARG=%s\\n' \"$arg\" >> \"${FAKE_SUITE_LOG}\"; done",
         ],
     )

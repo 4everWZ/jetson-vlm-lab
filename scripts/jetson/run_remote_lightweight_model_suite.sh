@@ -13,9 +13,11 @@ fake_stream_max_frames="${JETSON_LIGHTWEIGHT_FAKE_STREAM_MAX_FRAMES:-3}"
 min_lfb_blocks="${JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS:-150}"
 wait_timeout_s="${JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S:-600}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
+qwen3_selector="${JETSON_LIGHTWEIGHT_QWEN3_SELECTOR:-1}"
+qwen3_fallback_min_lfb_blocks="${JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS:-100}"
 
 baseline_variants_text="${JETSON_LIGHTWEIGHT_BASELINE_VARIANTS:-minicpm-q4-baseline-b128-u32-kvq8 gemma-q4-baseline-gpu12-b512-u512-kvq8}"
-candidate_variants_text="${JETSON_LIGHTWEIGHT_CANDIDATE_VARIANTS:-smolvlm2-256m-q8-smoke qwen3-vl-2b-thinking-q4-smoke qwen3-vl-2b-instruct-q4-smoke youtu-vl-4b-q4-thirdparty-smoke}"
+candidate_variants_text="${JETSON_LIGHTWEIGHT_CANDIDATE_VARIANTS:-smolvlm2-256m-q8-smoke qwen3-vl-2b-thinking-q4-smoke youtu-vl-4b-q4-thirdparty-smoke}"
 extra_variants_text="${JETSON_LIGHTWEIGHT_EXTRA_VARIANTS:-}"
 manifest_path="${JETSON_LIGHTWEIGHT_MANIFEST:-outputs/optimization_sweeps/${run_prefix}/${run_prefix}.manifest.json}"
 comparison_output="${JETSON_LIGHTWEIGHT_COMPARISON_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.md}"
@@ -42,6 +44,8 @@ done
 
 JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
 JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
+JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR="${qwen3_selector}" \
+JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_MIN_LFB_BLOCKS="${qwen3_fallback_min_lfb_blocks}" \
 "${remote_sweep}" "${sweep_args[@]}"
 
 compare_args=(
