@@ -182,8 +182,11 @@ EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
 - `dustynv/llama_cpp` was selected unexpectedly: unset `LLAMA_CPP_USE_AUTOTAG`,
   or set `LLAMA_CPP_DOCKER_IMAGE` to the self-built official llama.cpp image.
 - Sweep skipped with `runtime_missing_mmproj_support`: the selected image did
-  not expose `--mmproj` in `llama-server --help`, so use the self-built
-  official llama.cpp image or another image with confirmed multimodal support.
+  not expose the actual `--mmproj` flag in `llama-server --help`, so use the
+  self-built official llama.cpp image or another image with confirmed
+  multimodal support. On June 9, 2026, direct Jetson evidence for
+  `dustynv/llama_cpp:b5283-r36.4-cu128-24.04` still failed an actual
+  Qwen3-VL 2B Instruct Q4 smoke with `error: invalid argument: --mmproj`.
 - Selector returned no usable variant: inspect the JSON from
   `scripts/jetson/select_qwen3_instruct_variant.sh` to see whether the block was
   strict `lfb`, missing artifacts, or runtime multimodal support.

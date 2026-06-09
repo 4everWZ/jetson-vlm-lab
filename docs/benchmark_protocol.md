@@ -355,6 +355,11 @@ for the required llama.cpp multimodal path. When the runtime probe says the
 container lacks that support, the sweep skips the row before server startup with
 `preflight_reason=runtime_missing_mmproj_support` instead of paying model
 download and startup cost first.
+This exact-flag check matters in practice: on June 9, 2026, the Jetson probe
+found `/usr/local/bin/llama-server` inside
+`dustynv/llama_cpp:b5283-r36.4-cu128-24.04`, but the real Qwen3-VL 2B Instruct
+Q4 smoke still exited with `error: invalid argument: --mmproj`, so a generic
+`mmproj` substring is not enough to count as multimodal support.
 For the Qwen3-VL 2B Instruct Q4/Q8 pair, use
 `scripts/jetson/select_qwen3_instruct_variant.sh` when you need an explicit
 selection decision rather than a manual variant choice. The selector emits JSON

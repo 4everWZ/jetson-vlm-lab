@@ -592,6 +592,10 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("--mmproj", text)
             self.assertIn("runtime_missing_mmproj_support", text)
 
+        for text in (readme, readme_zh, protocol_doc, migration_doc):
+            self.assertIn("invalid argument: --mmproj", text)
+            self.assertIn("dustynv/llama_cpp:b5283-r36.4-cu128-24.04", text)
+
     def test_qwen3_selector_docs_are_wired(self):
         readme = Path("README.md").read_text(encoding="utf-8")
         readme_zh = Path("README.zh-CN.md").read_text(encoding="utf-8")

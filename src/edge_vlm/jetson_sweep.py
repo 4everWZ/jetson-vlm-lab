@@ -389,13 +389,15 @@ else
 fi
 
 markers=()
+supports_mmproj=0
 if grep -Fq -- "--mmproj" <<< "${help_output}"; then
   markers+=("--mmproj")
+  supports_mmproj=1
 fi
 if grep -Fq -- "mmproj" <<< "${help_output}"; then
   markers+=("mmproj")
 fi
-if [[ ${#markers[@]} -gt 0 ]]; then
+if [[ "${supports_mmproj}" == "1" ]]; then
   printf 'llama_server_supports_mmproj=1\\n'
 else
   printf 'llama_server_supports_mmproj=0\\n'

@@ -333,13 +333,16 @@ scripts/jetson/run_gemma4_e2b_llama_docker.sh \
 
 Jetson 脚本默认使用已验证多模态 smoke 的自编译官方 llama.cpp 镜像：
 `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`。dusty-nv
-`llama_cpp` 不是默认路径，因为它没有提供本仓库需要的多模态
-`llama-server` 路线。如果需要指定镜像，用 `LLAMA_CPP_DOCKER_IMAGE=...`
-覆盖；只有明确想用 `autotag llama_cpp` 选择镜像时，才设置
-`LLAMA_CPP_USE_AUTOTAG=1`。Jetson sweep plan 现在会在镜像里探测
-`llama-server --help`，记录 runtime 是否暴露 `--mmproj`；如果图像输入
-variant 对应的 runtime 明确不支持这条多模态路径，就会直接以
-`runtime_missing_mmproj_support` 跳过。
+`llama_cpp` 不是默认路径，因为 2026-06-09 在这台 Jetson 上的直接证据仍然
+说明它不满足本仓库的多模态 flag 路线：
+`dustynv/llama_cpp:b5283-r36.4-cu128-24.04` 虽然能让 probe 找到
+`/usr/local/bin/llama-server`，但真实的 Qwen3-VL 2B Instruct Q4 smoke
+在 ready 前就因为 `error: invalid argument: --mmproj` 退出。如果需要指定
+镜像，用 `LLAMA_CPP_DOCKER_IMAGE=...` 覆盖；只有明确想用
+`autotag llama_cpp` 选择镜像时，才设置 `LLAMA_CPP_USE_AUTOTAG=1`。
+Jetson sweep plan 现在会在镜像里探测 `llama-server --help`，记录 runtime
+是否暴露真正的 `--mmproj`；如果图像输入 variant 对应的 runtime 明确不支持
+这条多模态路径，就会直接以 `runtime_missing_mmproj_support` 跳过。
 
 对 Qwen3-VL 2B Instruct 这对 Q4/Q8，可以直接用 selector 入口做真正的
 Q4-first / Q8 fallback 决策，而不是手工挑 smoke variant：

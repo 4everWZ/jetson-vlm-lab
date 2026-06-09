@@ -334,8 +334,11 @@ scripts/jetson/run_gemma4_e2b_llama_docker.sh \
 The Jetson scripts default to the self-built official llama.cpp image used by
 the observed multimodal smoke runs:
 `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`. The dusty-nv
-`llama_cpp` image is not used by default because it has not provided the
-multimodal `llama-server` path this repo needs. Override with
+`llama_cpp` image is not used by default because direct Jetson evidence on
+June 9, 2026 still rejected the actual multimodal flag this repo uses:
+`dustynv/llama_cpp:b5283-r36.4-cu128-24.04` let the probe find
+`/usr/local/bin/llama-server`, but an actual Qwen3-VL 2B Instruct Q4 smoke
+exited before ready with `error: invalid argument: --mmproj`. Override with
 `LLAMA_CPP_DOCKER_IMAGE=...` for a specific image, or set
 `LLAMA_CPP_USE_AUTOTAG=1` only when you intentionally want `autotag llama_cpp`
 selection. The Jetson sweep plan now probes `llama-server --help` inside the

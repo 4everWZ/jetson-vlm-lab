@@ -371,10 +371,13 @@ Build rules:
   packages, caches, model weights, `.env` files, SSH files, outputs, or local
   benchmark artifacts.
 - Use the self-built official llama.cpp image as the default multimodal Jetson
-  runtime. dusty-nv `llama_cpp` image selection is opt-in and needs separate
-  multimodal evidence before it can support VLM claims.
+  runtime. dusty-nv `llama_cpp` image selection is opt-in and cannot support
+  VLM claims until it accepts the actual `--mmproj` flag: direct Jetson smoke on
+  June 9, 2026 for `dustynv/llama_cpp:b5283-r36.4-cu128-24.04` exited with
+  `error: invalid argument: --mmproj` even though `llama-server --help`
+  contained a generic `mmproj` marker.
 - Capture a runtime probe in Jetson sweep plans so image-capable rows record
-  whether `llama-server --help` exposes `--mmproj`; skip rows with
+  whether `llama-server --help` exposes the exact `--mmproj` flag; skip rows with
   `runtime_missing_mmproj_support` rather than spending download/startup time on
   an image that cannot satisfy this repo's multimodal path.
 - Record OCI labels for source revision, llama.cpp ref, build date, and base

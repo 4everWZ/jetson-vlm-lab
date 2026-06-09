@@ -431,6 +431,61 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
         self.assertEqual(runtime["llama_server_multimodal_markers"], ["--mmproj", "mmproj"])
         self.assertTrue(plan["variants"][0]["supports_images"])
 
+    def test_docker_runtime_probe_requires_explicit_mmproj_flag(self):
+        from edge_vlm.jetson_sweep import _docker_image_runtime_probe
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            fake_bin = tmp_path / "bin"
+            fake_bin.mkdir()
+            fake_server = fake_bin / "llama-server"
+            fake_server.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "if [[ \"${1:-}\" == \"--help\" ]]; then",
+                        "  printf '%s\\n' 'usage: llama-server [options]'",
+                        "  printf '%s\\n' 'multimodal projector: mmproj file path required'",
+                        "  exit 0",
+                        "fi",
+                        "exit 9",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_server, 0o755)
+            original_run = subprocess.run
+
+            def fake_run(command, **kwargs):
+                if command[:3] == ["docker", "run", "--rm"]:
+                    probe_script = command[-1]
+                    local_env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+                    local_result = original_run(
+                        ["bash", "-lc", probe_script],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        env=local_env,
+                    )
+                    return subprocess.CompletedProcess(
+                        command,
+                        local_result.returncode,
+                        stdout=local_result.stdout,
+                        stderr=local_result.stderr,
+                    )
+                raise AssertionError(f"unexpected command: {command}")
+
+            with patch("edge_vlm.jetson_sweep.subprocess.run", side_effect=fake_run):
+                runtime = _docker_image_runtime_probe("dustynv/llama_cpp:test")
+
+        self.assertTrue(runtime["llama_server_probe_ok"])
+        self.assertTrue(runtime["llama_server_found"])
+        self.assertTrue(runtime["llama_server_help_ok"])
+        self.assertFalse(runtime["llama_server_supports_mmproj"])
+        self.assertEqual(runtime["llama_server_multimodal_markers"], ["mmproj"])
+
 
 if __name__ == "__main__":
     unittest.main()
