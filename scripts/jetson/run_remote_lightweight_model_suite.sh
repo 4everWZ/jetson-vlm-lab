@@ -14,6 +14,7 @@ min_lfb_blocks="${JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS:-150}"
 wait_timeout_s="${JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S:-600}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
 quality_review_policy="${JETSON_REMOTE_QUALITY_REVIEW_POLICY:-configs/benchmark/quality_review_policy.json}"
+fail_on_promotion_precheck="${JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK:-0}"
 qwen3_selector="${JETSON_LIGHTWEIGHT_QWEN3_SELECTOR:-1}"
 qwen3_fallback_min_lfb_blocks="${JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS:-100}"
 
@@ -22,6 +23,11 @@ candidate_variants_text="${JETSON_LIGHTWEIGHT_CANDIDATE_VARIANTS:-smolvlm2-256m-
 extra_variants_text="${JETSON_LIGHTWEIGHT_EXTRA_VARIANTS:-}"
 manifest_path="${JETSON_LIGHTWEIGHT_MANIFEST:-outputs/optimization_sweeps/${run_prefix}/${run_prefix}.manifest.json}"
 comparison_output="${JETSON_LIGHTWEIGHT_COMPARISON_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.md}"
+
+if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" != "1" ]]; then
+  echo "JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK must be 0 or 1." >&2
+  exit 2
+fi
 
 read -r -a baseline_variants <<< "${baseline_variants_text}"
 read -r -a candidate_variants <<< "${candidate_variants_text}"
@@ -70,6 +76,10 @@ for baseline in "${baseline_variants[@]}"; do
     compare_args+=(--baseline-variant "${baseline}")
   fi
 done
+
+if [[ "${fail_on_promotion_precheck}" == "1" ]]; then
+  compare_args+=(--fail-on-promotion-precheck)
+fi
 
 compare_args+=(
   --ranking-min-lfb-blocks "${min_lfb_blocks}"

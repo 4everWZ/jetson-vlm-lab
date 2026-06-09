@@ -242,6 +242,10 @@ JETSON_CURRENT_DEFAULTS_RUN_PREFIX=current-defaults-clocks10-YYYYMMDDa \
 scripts/jetson/run_remote_current_defaults_suite.sh
 ```
 
+Set `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` when that wrapper
+should return non-zero after compare marks any row as failing the promotion
+gate. The default remains diagnostic-friendly and leaves this off.
+
 It fixes the two current default variants, enables remote max clocks and
 per-variant cache dropping, runs 10 formal trials plus the three-frame
 fake-stream sidecar, and generates `comparison.md` from the sweep manifest.

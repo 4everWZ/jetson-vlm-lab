@@ -583,6 +583,9 @@ scripts/jetson/run_remote_current_defaults_suite.sh
 That wrapper now also runs `edge_vlm.sweep_quality_review` on the finished
 manifest and calls compare with `--promotion-require-quality-review`, so the
 reference `Promotion precheck` includes the structured `Quality review` gate.
+Set `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper
+should return non-zero if that promotion gate fails; the default remains `0`
+so comparison evidence can still be collected during diagnostic runs.
 
 To run the fixed-policy lightweight model ladder with the current MiniCPM and
 Gemma baselines plus the guard-passing lightweight candidates, use:
@@ -601,7 +604,10 @@ baseline variants. It also runs `edge_vlm.sweep_quality_review` with
 the recorded `quality_review_json` sidecars can feed the compare report's
 `Quality review` column. The wrapper also passes
 `--promotion-require-quality-review`, so the reported `Promotion precheck`
-requires that structured sidecar to pass. Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
+requires that structured sidecar to pass. Set
+`JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
+return non-zero on a failed promotion gate; the default remains `0` so
+lightweight diagnostic ladders can still emit comparison evidence. Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
 path stable, or override `JETSON_LIGHTWEIGHT_TRIAL_COUNT`,
 `JETSON_LIGHTWEIGHT_MAX_TOKENS`, `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS`,
 `JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S`, `JETSON_LIGHTWEIGHT_BASELINE_VARIANTS`,
