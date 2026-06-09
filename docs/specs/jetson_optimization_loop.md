@@ -233,7 +233,7 @@ scripts/jetson/run_remote_optimization_sweep.sh \
 
 The wrapper uses the sudo password from stdin to feed a per-run 0600 FIFO, then
 appends a pre-variant command shaped like
-`sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches' < /tmp/...`
+`sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory' < /tmp/...`
 without putting the password in command-line arguments, the dry-run plan, or
 the sweep manifest. The command itself and the FIFO path are recorded in the
 dry-run plan and sweep manifest. If it returns a non-zero exit code, that

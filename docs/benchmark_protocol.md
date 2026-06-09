@@ -257,7 +257,7 @@ PYTHON_BIN=python3 scripts/jetson/run_optimization_sweep.sh \
   --max-tokens 64 \
   --temperature 0 \
   --min-lfb-blocks 150 \
-  --pre-variant-command "sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'"
+  --pre-variant-command "sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory'"
 ```
 
 A non-zero preparation command skips that variant before preflight and records
@@ -350,7 +350,7 @@ Set `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1` for back-to-back promotion
 comparisons where memory fragmentation can bias later variants. The wrapper
 uses the sudo password from stdin to feed a per-run 0600 FIFO, then appends a
 recorded pre-variant command shaped like
-`sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches' < /tmp/...`.
+`sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory' < /tmp/...`.
 The manifest records the command and FIFO path, not the password. Do not
 combine this env flag with a manual `--pre-variant-command`; use the lower-level
 local sweep command only when a custom preparation command is required.

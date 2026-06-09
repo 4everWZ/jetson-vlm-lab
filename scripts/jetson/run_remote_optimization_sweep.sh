@@ -94,7 +94,7 @@ trap cleanup EXIT
   done
 ) &
 pw_feeder_pid="$!"
-pre_variant_command="sudo -S -p '\'''\'' sh -c '\''sync; echo 3 > /proc/sys/vm/drop_caches'\'' < ${pw_fifo}"
+pre_variant_command="sudo -S -p '\'''\'' sh -c '\''sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory'\'' < ${pw_fifo}"
 "$@" --pre-variant-command "${pre_variant_command}"
 ' \
     remote-sweep \
