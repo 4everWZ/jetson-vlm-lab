@@ -49,6 +49,8 @@ class SweepComparisonRow:
     server_image: str | None
     server_image_id: str | None
     llama_cpp_ref: str | None
+    artifact_phase_status: str
+    artifact_phase_duration_s: float | None
     prepare_context_summary: str
     prepare_max_clocks_enabled: bool
     prepare_drop_caches_before_variant: bool
@@ -424,6 +426,54 @@ def _runtime_metadata(variant_plan: dict[str, Any]) -> dict[str, Any]:
     return runtime if isinstance(runtime, dict) else {}
 
 
+def _profile_summary(entry: dict[str, Any], variant_plan: dict[str, Any], *, manifest_path: Path) -> dict[str, Any]:
+    explicit = entry.get("profile_summary")
+    if isinstance(explicit, dict):
+        return explicit
+    paths = variant_plan.get("paths") if isinstance(variant_plan, dict) else None
+    paths = paths if isinstance(paths, dict) else {}
+    summary_path = _resolve_existing_path(
+        _path_or_none(paths.get("profile_summary_json")),
+        base=manifest_path.parent,
+    )
+    if summary_path is None:
+        return {}
+    try:
+        data = _read_json(summary_path)
+    except (FileNotFoundError, ValueError):
+        return {}
+    return data
+
+
+def _phase_timing(profile_summary: dict[str, Any], phase: str) -> dict[str, Any]:
+    phase_timings = profile_summary.get("phase_timings")
+    if not isinstance(phase_timings, dict):
+        return {}
+    timing = phase_timings.get(phase)
+    return timing if isinstance(timing, dict) else {}
+
+
+def _artifact_phase_status(profile_summary: dict[str, Any]) -> str:
+    timing = _phase_timing(profile_summary, "artifact_check_or_download")
+    details = timing.get("details")
+    if isinstance(details, dict):
+        status = details.get("status")
+        if isinstance(status, str) and status.strip():
+            return status.strip()
+    reason = timing.get("reason")
+    if isinstance(reason, str) and reason.strip() and reason != "not_recorded":
+        return reason.strip()
+    if timing.get("available") is True:
+        return "available"
+    return ""
+
+
+def _artifact_phase_duration_s(profile_summary: dict[str, Any]) -> float | None:
+    timing = _phase_timing(profile_summary, "artifact_check_or_download")
+    duration = timing.get("duration_s")
+    return float(duration) if isinstance(duration, (int, float)) else None
+
+
 def _comparison_group(variant_plan: dict[str, Any], model: str) -> str:
     variant = variant_plan.get("variant")
     if isinstance(variant, dict):
@@ -706,6 +756,7 @@ def summarize_sweep_manifest(
         benchmark_path = _path_or_none(paths.get("benchmark_jsonl"))
         benchmark_manifest_path = _path_or_none(paths.get("manifest_json"))
         fake_stream_path = _path_or_none(paths.get("fake_stream_jsonl"))
+        profile_summary = _profile_summary(entry, variant_plan, manifest_path=source)
         benchmark_metadata = _benchmark_metadata_from_manifest(benchmark_manifest_path)
         quality_review = _quality_review_summary(
             _quality_review_report_path(
@@ -766,6 +817,8 @@ def summarize_sweep_manifest(
                 server_image=str(runtime["image"]) if runtime.get("image") else None,
                 server_image_id=str(runtime["image_id"]) if runtime.get("image_id") else None,
                 llama_cpp_ref=str(runtime["llama_cpp_ref"]) if runtime.get("llama_cpp_ref") else None,
+                artifact_phase_status=_artifact_phase_status(profile_summary),
+                artifact_phase_duration_s=_artifact_phase_duration_s(profile_summary),
                 prepare_context_summary=_prepare_context_summary(plan),
                 prepare_max_clocks_enabled=_prepare_context_flag(plan, "max_clocks_enabled"),
                 prepare_drop_caches_before_variant=_prepare_context_flag(plan, "drop_caches_before_variant"),
@@ -1011,19 +1064,34 @@ def _format_sweep_comparison_report(
         if quality_review_enabled
         else ""
     )
+    artifact_phase_enabled = any(
+        row.artifact_phase_status or row.artifact_phase_duration_s is not None
+        for row in rows
+    )
+    artifact_phase_column = " | Artifact phase | Artifact s" if artifact_phase_enabled else ""
+    artifact_phase_separator = " |---|---:" if artifact_phase_enabled else ""
+    artifact_phase_note = (
+        " When profile phase timings include `artifact_check_or_download`, compare also adds `Artifact phase` and `Artifact s` so first-download rows can be separated from cached-start rows."
+        if artifact_phase_enabled
+        else ""
+    )
     lines = [
         "# Jetson Sweep Comparison Report",
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower."
         + ranking_note,
-        promotion_note + quality_review_note,
+        promotion_note + quality_review_note + artifact_phase_note,
         "",
-        "| Model | Variant | Selection | Run prefix | Runtime | Prepare ctx | Preflight lfb | Required lfb"
+        "| Model | Variant | Selection | Run prefix | Runtime"
+        + artifact_phase_column
+        + " | Prepare ctx | Preflight lfb | Required lfb"
         + ranking_column
         + promotion_column
         + quality_review_column
         + " | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
-        "|---|---|---|---|---|---|---:|---:"
+        "|---|---|---|---|---"
+        + artifact_phase_separator
+        + "|---|---:|---:"
         + ranking_separator
         + promotion_separator
         + quality_review_separator
@@ -1043,13 +1111,18 @@ def _format_sweep_comparison_report(
         if quality_review_enabled:
             quality_review_text = _format_quality_review(row, show_missing=True).replace("|", "\\|")
             quality_review = f" | {quality_review_text}"
+        artifact_phase = ""
+        if artifact_phase_enabled:
+            artifact_phase_status = row.artifact_phase_status.replace("|", "\\|")
+            artifact_phase = f" | {artifact_phase_status} | {_fmt(row.artifact_phase_duration_s)}"
         lines.append(
-            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {prepare_context} | {lfb} | {required_lfb}{ranking_precheck}{promotion_precheck}{quality_review} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime}{artifact_phase} | {prepare_context} | {lfb} | {required_lfb}{ranking_precheck}{promotion_precheck}{quality_review} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 selection=_format_selection(row).replace("|", "\\|"),
                 run_prefix=row.run_prefix,
                 runtime=_format_runtime(row),
+                artifact_phase=artifact_phase,
                 prepare_context=row.prepare_context_summary.replace("|", "\\|"),
                 lfb=row.preflight_lfb,
                 required_lfb="" if row.preflight_required_lfb_blocks is None else row.preflight_required_lfb_blocks,

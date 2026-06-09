@@ -615,6 +615,119 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertIn("Quality review", report_text)
         self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` |  | quality-compare |  |  | 160x4MB | 150 | no (1/2; text_code_short) |", report_text)
 
+    def test_optimization_comparison_report_can_surface_artifact_phase_timings(self):
+        from edge_vlm.optimization import build_sweep_comparison_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "artifact-compare"
+            benchmark_dir = output_root / "benchmarks"
+            benchmark_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+            run_id = "artifact-compare-tencent-youtu-llm-2b-q8-text-smoke"
+            benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+            benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+            profile_summary_json = output_root / "profiles" / f"{run_id}.summary.json"
+            profile_summary_json.parent.mkdir(parents=True)
+            benchmark_jsonl.write_text(
+                json.dumps(
+                    {
+                        "model": "tencent-youtu-llm-2b-q8",
+                        "run_id": run_id,
+                        "prompt_case_id": "text_case",
+                        "input_type": "text",
+                        "success": True,
+                        "latency_s": 1.861,
+                        "tokens": 64,
+                        "tokens_per_sec": 24.621,
+                        "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                        "quality_terms_any": ["memory", "bandwidth"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            benchmark_manifest.write_text(
+                json.dumps(
+                    {
+                        "run_id": run_id,
+                        "benchmark": {"trial_count": 5, "max_tokens": 64, "temperature": 0.0},
+                        "cases_written": 1,
+                        "successful": 1,
+                        "failed": 0,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            profile_summary_json.write_text(
+                json.dumps(
+                    {
+                        "phase_timings": {
+                            "artifact_check_or_download": {
+                                "available": True,
+                                "duration_s": 0.002,
+                                "source": "launcher",
+                                "details": {"status": "cached"},
+                            }
+                        }
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            manifest = output_root / "artifact-compare.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {
+                            "run_prefix": "artifact-compare",
+                            "variants": [
+                                {
+                                    "variant": {"id": "tencent-youtu-llm-2b-q8-text-smoke"},
+                                    "paths": {
+                                        "benchmark_jsonl": str(benchmark_jsonl),
+                                        "manifest_json": str(benchmark_manifest),
+                                        "profile_summary_json": str(profile_summary_json),
+                                    },
+                                }
+                            ],
+                        },
+                        "result": {
+                            "results": [
+                                {
+                                    "run_id": run_id,
+                                    "variant_id": "tencent-youtu-llm-2b-q8-text-smoke",
+                                    "preflight_required_lfb_blocks": 150,
+                                    "preflight": {
+                                        "tegrastats": {
+                                            "lfb": {"free_blocks": 198, "block_mb": 4},
+                                        }
+                                    },
+                                    "preflight_passed": True,
+                                    "server_startup_seconds": 5.015,
+                                    "benchmark_returncode": 0,
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = build_sweep_comparison_report(
+                manifest_paths=[manifest],
+                output_path=report,
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual(rows[0].artifact_phase_status, "cached")
+        self.assertEqual(rows[0].artifact_phase_duration_s, 0.002)
+        self.assertIn("Artifact phase", report_text)
+        self.assertIn("Artifact s", report_text)
+        self.assertIn("| tencent-youtu-llm-2b-q8 | `tencent-youtu-llm-2b-q8-text-smoke` |  | artifact-compare |  | cached | 0.002 |  | 198x4MB | 150 |  |  | 5 | yes | 1/1 |  | 5.015 | 24.621 |  | 1.861 |  |  |  |  |  |  |  |  | +0.00% |  | +0.00% |  |", report_text)
+
     def test_optimization_comparison_report_can_use_shared_comparison_group(self):
         from edge_vlm.optimization import build_sweep_comparison_report
 

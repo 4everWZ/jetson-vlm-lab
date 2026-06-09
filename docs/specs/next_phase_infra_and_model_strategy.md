@@ -79,7 +79,10 @@ required-LFB evidence when the manifest still carries the gate contract. When
 `prepare_context` is present, compare also emits a `Prepare ctx` summary column
 with labels such as `max_clocks` and `drop_caches`, so ranking evidence can
 distinguish strict prepared rows from unprepared or partially prepared runs
-without hand-opening the manifest JSON. Compare can now also add a
+without hand-opening the manifest JSON. When profile phase timings include
+`artifact_check_or_download`, compare also emits `Artifact phase` and
+`Artifact s` so first-download rows can be separated from cached-start rows at
+the report layer instead of by hand-opening lifecycle JSONL. Compare can now also add a
 `Promotion precheck` column with `--promotion-precheck-stage formal-repeat` or
 `--promotion-precheck-stage promotion-reference`. That precheck is
 intentionally mechanical only: it checks locked clocks, cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full benchmark success, fake-stream success for image-capable rows, and the stage-specific trial floor. Text-only rows whose configs declare `capabilities.image=false` do not need fake-stream records for this gate. The raw excerpt review remains manual, and route-sensitive promotion still requires `edge_vlm.quality_review` plus human review before any role change.

@@ -435,6 +435,10 @@ When `plan.prepare_context` is present, the comparison table also adds a
 signals as `max_clocks` and `drop_caches`, so promotion review can tell whether
 a row came from a locked-clocks run, a cache-drop plus `compact_memory` run, or
 both without reopening the raw manifest.
+When profile phase timings include `artifact_check_or_download`, compare also
+adds `Artifact phase` and `Artifact s` columns so first-download rows can be
+separated from cached-start rows without opening lifecycle or profile-summary
+sidecars by hand.
 For ranking decisions, keep only the defensible strict rows: when compare also receives
 `--ranking-min-lfb-blocks`, it adds a `Ranking precheck` column so rows that
 ran under a more relaxed gate stay in the report but are mechanically marked as
@@ -713,8 +717,9 @@ artifact under the same strict gate: lifecycle timing recorded
 `artifact_check_or_download = cached` in `0.002 s`, compare kept
 `Prepare ctx = max_clocks, drop_caches` plus `Required lfb = 150`, and the row
 still passed `Quality review = yes (20/20)` with `Promotion precheck = yes`.
-The cached row reported `5.015 s` startup, `24.621` text tok/s, and `1.861 s`
-average text latency.
+The cached row now also surfaces `Artifact phase = cached` and
+`Artifact s = 0.002` in compare, alongside `5.015 s` startup, `24.621` text
+tok/s, and `1.861 s` average text latency.
 Override
 `JETSON_TENCENT_TEXT_RUN_PREFIX`,
 `JETSON_TENCENT_TEXT_TRIAL_COUNT`, `JETSON_TENCENT_TEXT_MAX_TOKENS`,
