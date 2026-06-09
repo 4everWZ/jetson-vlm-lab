@@ -50,6 +50,18 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertIn("SWEEP_ARG=--min-lfb-blocks\nSWEEP_ARG=199\n", log_text)
         self.assertIn("SWEEP_ARG=--wait-timeout-s\nSWEEP_ARG=123\n", log_text)
         self.assertIn("REMOTE\n", log_text)
+        self.assertIn(
+            "REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.sweep_quality_review\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/defaults-unit.manifest.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--policy\nREMOTE_ARG=configs/benchmark/quality_review_policy.json\nREMOTE_ARG=--allow-failures\n",
+            log_text,
+        )
         self.assertIn("REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.optimization\nREMOTE_ARG=compare\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/defaults-unit.manifest.json\n",
@@ -119,6 +131,18 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertIn("SWEEP_ARG=--min-lfb-blocks\nSWEEP_ARG=177\n", log_text)
         self.assertIn("SWEEP_ARG=--wait-timeout-s\nSWEEP_ARG=321\n", log_text)
         self.assertIn("REMOTE\n", log_text)
+        self.assertIn(
+            "REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.sweep_quality_review\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/light-unit.manifest.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--policy\nREMOTE_ARG=configs/benchmark/quality_review_policy.json\nREMOTE_ARG=--allow-failures\n",
+            log_text,
+        )
         self.assertIn("REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.optimization\nREMOTE_ARG=compare\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/light-unit.manifest.json\n",
@@ -185,6 +209,18 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertIn("SWEEP_ARG=--min-lfb-blocks\nSWEEP_ARG=188\n", log_text)
         self.assertIn("SWEEP_ARG=--wait-timeout-s\nSWEEP_ARG=222\n", log_text)
         self.assertIn("REMOTE\n", log_text)
+        self.assertIn(
+            "REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.sweep_quality_review\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/tencent-text-unit.manifest.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--policy\nREMOTE_ARG=configs/benchmark/quality_review_policy.json\nREMOTE_ARG=--allow-failures\n",
+            log_text,
+        )
         self.assertIn("REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.optimization\nREMOTE_ARG=compare\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/tencent-text-unit.manifest.json\n",

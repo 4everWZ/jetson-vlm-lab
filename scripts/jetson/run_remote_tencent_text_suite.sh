@@ -13,6 +13,7 @@ fake_stream_max_frames="${JETSON_TENCENT_TEXT_FAKE_STREAM_MAX_FRAMES:-0}"
 min_lfb_blocks="${JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS:-150}"
 wait_timeout_s="${JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S:-600}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
+quality_review_policy="${JETSON_REMOTE_QUALITY_REVIEW_POLICY:-configs/benchmark/quality_review_policy.json}"
 
 candidate_variants_text="${JETSON_TENCENT_TEXT_VARIANTS:-tencent-hy-mt1p5-1p8b-1p25bit-text-smoke tencent-hy-mt1p5-1p8b-2bit-text-smoke tencent-hy-mt1p5-1p8b-q4-text-smoke tencent-hy-mt1p5-1p8b-q6-text-smoke tencent-hy-mt1p5-1p8b-q8-text-smoke tencent-hy-mt2-1p8b-1p25bit-text-smoke tencent-hy-mt2-1p8b-2bit-text-smoke tencent-hy-mt2-1p8b-q4-text-smoke tencent-hy-mt2-1p8b-q6-text-smoke tencent-hy-mt2-1p8b-q8-text-smoke tencent-youtu-llm-2b-q8-text-smoke}"
 extra_variants_text="${JETSON_TENCENT_TEXT_EXTRA_VARIANTS:-}"
@@ -41,6 +42,15 @@ done
 JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
 JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
 "${remote_sweep}" "${sweep_args[@]}"
+
+"${remote_exec}" \
+  "PYTHONPATH=${remote_pythonpath}" \
+  python3 \
+  -m \
+  edge_vlm.sweep_quality_review \
+  --manifest "${manifest_path}" \
+  --policy "${quality_review_policy}" \
+  --allow-failures
 
 "${remote_exec}" \
   "PYTHONPATH=${remote_pythonpath}" \

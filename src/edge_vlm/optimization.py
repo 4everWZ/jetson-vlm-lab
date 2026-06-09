@@ -60,6 +60,10 @@ class SweepComparisonRow:
     trials: int | None
     benchmark_max_tokens: int | None
     benchmark_temperature: float | None
+    quality_review_passed: bool | None
+    quality_review_records: int | None
+    quality_review_passed_records: int | None
+    quality_review_failed_case_ids: tuple[str, ...]
     guard_passed: bool
     successful: int
     records: int
@@ -361,6 +365,18 @@ def _path_or_none(value: Any) -> Path | None:
     return Path(value)
 
 
+def _resolve_existing_path(path: Path | None, *, base: Path | None = None) -> Path | None:
+    if path is None:
+        return None
+    candidates = [path]
+    if base is not None and not path.is_absolute():
+        candidates.append(base / path)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _format_lfb(preflight: Any) -> str:
     if not isinstance(preflight, dict):
         return ""
@@ -583,6 +599,51 @@ def _benchmark_metadata_from_manifest(path: Path | None) -> dict[str, Any]:
     return metadata
 
 
+def _quality_review_report_path(paths: dict[str, Any], *, manifest_path: Path, run_id: str) -> Path | None:
+    explicit = _resolve_existing_path(
+        _path_or_none(paths.get("quality_review_json")),
+        base=manifest_path.parent,
+    )
+    if explicit is not None:
+        return explicit
+    fallback = manifest_path.parent / f"{run_id}.quality.json"
+    return fallback if fallback.is_file() else None
+
+
+def _quality_review_summary(report_path: Path | None) -> dict[str, Any]:
+    summary = {
+        "passed": None,
+        "records": None,
+        "passed_records": None,
+        "failed_case_ids": (),
+    }
+    if report_path is None or not report_path.is_file():
+        return summary
+    report = _read_json(report_path)
+    passed = report.get("passed")
+    summary["passed"] = bool(passed) if isinstance(passed, bool) else None
+    records = report.get("records")
+    if isinstance(records, int):
+        summary["records"] = records
+    passed_records = report.get("passed_records")
+    if isinstance(passed_records, int):
+        summary["passed_records"] = passed_records
+    failures = report.get("failures")
+    if isinstance(failures, list):
+        failed_case_ids: list[str] = []
+        seen_case_ids: set[str] = set()
+        for failure in failures:
+            if not isinstance(failure, dict):
+                continue
+            case_id = failure.get("case_id")
+            if not isinstance(case_id, str) or not case_id or case_id in seen_case_ids:
+                continue
+            seen_case_ids.add(case_id)
+            failed_case_ids.append(case_id)
+        summary["failed_case_ids"] = tuple(failed_case_ids)
+    return summary
+
+
 def summarize_sweep_manifest(
     manifest_path: str | Path,
     *,
@@ -629,6 +690,13 @@ def summarize_sweep_manifest(
         benchmark_manifest_path = _path_or_none(paths.get("manifest_json"))
         fake_stream_path = _path_or_none(paths.get("fake_stream_jsonl"))
         benchmark_metadata = _benchmark_metadata_from_manifest(benchmark_manifest_path)
+        quality_review = _quality_review_summary(
+            _quality_review_report_path(
+                paths,
+                manifest_path=source,
+                run_id=run_id,
+            )
+        )
         summary: RunSummary | None = None
         if benchmark_path is not None and benchmark_path.is_file():
             summary = summarize_run(
@@ -697,6 +765,10 @@ def summarize_sweep_manifest(
                 trials=benchmark_metadata.get("trial_count"),
                 benchmark_max_tokens=benchmark_metadata.get("max_tokens"),
                 benchmark_temperature=benchmark_metadata.get("temperature"),
+                quality_review_passed=quality_review["passed"],
+                quality_review_records=quality_review["records"],
+                quality_review_passed_records=quality_review["passed_records"],
+                quality_review_failed_case_ids=quality_review["failed_case_ids"],
                 guard_passed=summary.guard_passed if summary is not None else False,
                 successful=summary.successful if summary is not None else 0,
                 records=summary.records if summary is not None else 0,
@@ -832,6 +904,20 @@ def _format_promotion_precheck(row: SweepComparisonRow) -> str:
     return "no"
 
 
+def _format_quality_review(row: SweepComparisonRow, *, show_missing: bool) -> str:
+    if row.quality_review_passed is None:
+        return "missing" if show_missing else ""
+    details: list[str] = []
+    if row.quality_review_passed_records is not None and row.quality_review_records is not None:
+        details.append(f"{row.quality_review_passed_records}/{row.quality_review_records}")
+    if row.quality_review_failed_case_ids:
+        details.append(", ".join(row.quality_review_failed_case_ids))
+    status = "yes" if row.quality_review_passed else "no"
+    if details:
+        return f"{status} ({'; '.join(details)})"
+    return status
+
+
 def _add_promotion_prechecks(
     rows: list[SweepComparisonRow],
     *,
@@ -868,20 +954,35 @@ def _format_sweep_comparison_report(
         if promotion_precheck_stage is not None
         else ""
     )
+    quality_review_enabled = any(
+        row.quality_review_passed is not None
+        or row.quality_review_records is not None
+        or row.quality_review_passed_records is not None
+        for row in rows
+    )
+    quality_review_column = " | Quality review" if quality_review_enabled else ""
+    quality_review_separator = " |---" if quality_review_enabled else ""
+    quality_review_note = (
+        " When per-run quality review sidecars exist, compare also adds a `Quality review` column that summarizes structured policy pass/fail plus passed-record counts. This remains separate from the mechanical promotion precheck."
+        if quality_review_enabled
+        else ""
+    )
     lines = [
         "# Jetson Sweep Comparison Report",
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower."
         + ranking_note,
-        promotion_note,
+        promotion_note + quality_review_note,
         "",
         "| Model | Variant | Selection | Run prefix | Runtime | Prepare ctx | Preflight lfb | Required lfb"
         + ranking_column
         + promotion_column
+        + quality_review_column
         + " | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
         "|---|---|---|---|---|---|---:|---:"
         + ranking_separator
         + promotion_separator
+        + quality_review_separator
         + "|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
     ]
     for row in rows:
@@ -894,8 +995,12 @@ def _format_sweep_comparison_report(
         if promotion_precheck_stage is not None:
             promotion_precheck_text = _format_promotion_precheck(row).replace("|", "\\|")
             promotion_precheck = f" | {promotion_precheck_text}"
+        quality_review = ""
+        if quality_review_enabled:
+            quality_review_text = _format_quality_review(row, show_missing=True).replace("|", "\\|")
+            quality_review = f" | {quality_review_text}"
         lines.append(
-            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {prepare_context} | {lfb} | {required_lfb}{ranking_precheck}{promotion_precheck} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {prepare_context} | {lfb} | {required_lfb}{ranking_precheck}{promotion_precheck}{quality_review} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 selection=_format_selection(row).replace("|", "\\|"),
@@ -906,6 +1011,7 @@ def _format_sweep_comparison_report(
                 required_lfb="" if row.preflight_required_lfb_blocks is None else row.preflight_required_lfb_blocks,
                 ranking_precheck=ranking_precheck,
                 promotion_precheck=promotion_precheck,
+                quality_review=quality_review,
                 prepare_lfb_delta=_fmt_signed_int(row.preflight_prepare_lfb_delta),
                 prepare_avail_delta=_fmt_signed_float(row.preflight_prepare_mem_available_mb_delta),
                 trials="" if row.trials is None else row.trials,

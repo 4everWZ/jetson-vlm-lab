@@ -463,6 +463,158 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` |  | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | max_clocks, drop_caches | 190x4MB | 150 | +40 | +488.281 | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
         self.assertIn("Baseline rows use `0.00%` deltas", report_text)
 
+    def test_optimization_comparison_report_can_surface_quality_review_sidecars(self):
+        from edge_vlm.optimization import build_sweep_comparison_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "quality-compare"
+            benchmark_dir = output_root / "benchmarks"
+            fake_dir = output_root / "fake_stream"
+            benchmark_dir.mkdir(parents=True)
+            fake_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+            run_id = "quality-compare-qwen3-vl-2b-instruct-q4-smoke"
+            benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+            fake_jsonl = fake_dir / f"{run_id}.jsonl"
+            benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+            quality_review_json = output_root / f"{run_id}.quality.json"
+            benchmark_jsonl.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "model": "qwen3-vl-2b-instruct-q4",
+                                "run_id": run_id,
+                                "prompt_case_id": "text_code_short",
+                                "input_type": "text",
+                                "success": True,
+                                "latency_s": 2.0,
+                                "tokens": 64,
+                                "tokens_per_sec": 32.0,
+                                "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                                "quality_terms_any": ["memory", "bandwidth"],
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "model": "qwen3-vl-2b-instruct-q4",
+                                "run_id": run_id,
+                                "prompt_case_id": "image_case",
+                                "input_type": "image",
+                                "success": True,
+                                "latency_s": 2.5,
+                                "tokens": 64,
+                                "tokens_per_sec": 25.6,
+                                "output_excerpt": "The image shows two contrasting square shapes on a background.",
+                                "quality_terms_any": ["square", "background"],
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_jsonl.write_text(
+                json.dumps(
+                    {
+                        "frame_id": "frame_001.png",
+                        "success": True,
+                        "latency_s": 1.9,
+                        "output_excerpt": "The frame shows a simple scene with contrasting square shapes.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            benchmark_manifest.write_text(
+                json.dumps(
+                    {
+                        "run_id": run_id,
+                        "benchmark": {"trial_count": 5, "max_tokens": 64, "temperature": 0.0},
+                        "cases_written": 2,
+                        "successful": 2,
+                        "failed": 0,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            quality_review_json.write_text(
+                json.dumps(
+                    {
+                        "run_ids": [run_id],
+                        "models": ["qwen3-vl-2b-instruct-q4"],
+                        "records": 2,
+                        "passed_records": 1,
+                        "failed_records": 1,
+                        "passed": False,
+                        "failures": [
+                            {
+                                "run_id": run_id,
+                                "case_id": "text_code_short",
+                                "failures": ["missing_all:def "],
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            manifest = output_root / "quality-compare.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {
+                            "run_prefix": "quality-compare",
+                            "variants": [
+                                {
+                                    "variant": {"id": "qwen3-vl-2b-instruct-q4-smoke"},
+                                    "paths": {
+                                        "benchmark_jsonl": str(benchmark_jsonl),
+                                        "manifest_json": str(benchmark_manifest),
+                                        "fake_stream_jsonl": str(fake_jsonl),
+                                    },
+                                }
+                            ],
+                        },
+                        "result": {
+                            "results": [
+                                {
+                                    "run_id": run_id,
+                                    "variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                                    "preflight_required_lfb_blocks": 150,
+                                    "preflight": {
+                                        "tegrastats": {
+                                            "lfb": {"free_blocks": 160, "block_mb": 4},
+                                        }
+                                    },
+                                    "preflight_passed": True,
+                                    "server_startup_seconds": 5.0,
+                                    "benchmark_returncode": 0,
+                                    "fake_stream_returncode": 0,
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = build_sweep_comparison_report(
+                manifest_paths=[manifest],
+                output_path=report,
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertFalse(rows[0].quality_review_passed)
+        self.assertEqual(rows[0].quality_review_records, 2)
+        self.assertEqual(rows[0].quality_review_passed_records, 1)
+        self.assertEqual(rows[0].quality_review_failed_case_ids, ("text_code_short",))
+        self.assertIn("Quality review", report_text)
+        self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` |  | quality-compare |  |  | 160x4MB | 150 | no (1/2; text_code_short) |", report_text)
+
     def test_optimization_comparison_report_can_use_shared_comparison_group(self):
         from edge_vlm.optimization import build_sweep_comparison_report
 

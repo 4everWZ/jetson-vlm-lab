@@ -653,6 +653,23 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("promotion-reference", text)
             self.assertIn("raw excerpt review", text)
 
+    def test_sweep_quality_review_sidecars_and_compare_docs_are_wired(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        readme_zh = Path("README.zh-CN.md").read_text(encoding="utf-8")
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        loop_doc = Path("docs/specs/jetson_optimization_loop.md").read_text(encoding="utf-8")
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(
+            encoding="utf-8"
+        )
+
+        for text in (readme, readme_zh, protocol_doc, loop_doc, strategy_doc):
+            self.assertIn("edge_vlm.sweep_quality_review", text)
+            self.assertIn("Quality review", text)
+        for text in (protocol_doc, loop_doc, strategy_doc):
+            self.assertIn("quality_review_json", text)
+            self.assertIn("quality_review_markdown", text)
+            self.assertIn("configs/benchmark/quality_review_policy.json", text)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [

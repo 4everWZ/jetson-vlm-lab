@@ -13,6 +13,7 @@ fake_stream_max_frames="${JETSON_CURRENT_DEFAULTS_FAKE_STREAM_MAX_FRAMES:-3}"
 min_lfb_blocks="${JETSON_CURRENT_DEFAULTS_MIN_LFB_BLOCKS:-150}"
 wait_timeout_s="${JETSON_CURRENT_DEFAULTS_WAIT_TIMEOUT_S:-180}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
+quality_review_policy="${JETSON_REMOTE_QUALITY_REVIEW_POLICY:-configs/benchmark/quality_review_policy.json}"
 
 minicpm_variant="${JETSON_CURRENT_DEFAULTS_MINICPM_VARIANT:-minicpm-q4-baseline-b128-u32-kvq8}"
 gemma_variant="${JETSON_CURRENT_DEFAULTS_GEMMA_VARIANT:-gemma-q4-baseline-gpu12-b512-u512-kvq8}"
@@ -31,6 +32,13 @@ JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
   --fake-stream-max-frames "${fake_stream_max_frames}" \
   --min-lfb-blocks "${min_lfb_blocks}" \
   --wait-timeout-s "${wait_timeout_s}"
+
+"${remote_exec}" \
+  "PYTHONPATH=${remote_pythonpath}" \
+  python3 -m edge_vlm.sweep_quality_review \
+  --manifest "${manifest_path}" \
+  --policy "${quality_review_policy}" \
+  --allow-failures
 
 "${remote_exec}" \
   "PYTHONPATH=${remote_pythonpath}" \

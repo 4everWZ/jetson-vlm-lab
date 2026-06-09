@@ -376,6 +376,11 @@ effective preflight gate is visible next to the observed `Preflight lfb`.
 When you also pass `--ranking-min-lfb-blocks <strict-gate>`, the report adds a
 `Ranking precheck` column so relaxed fallback rows remain visible without being
 mistaken for promotable strict-gate evidence.
+The remote suite wrappers now also run `edge_vlm.sweep_quality_review` with
+`configs/benchmark/quality_review_policy.json` after the sweep finishes. That
+writes per-run `quality_review_json` and `quality_review_markdown` sidecars
+back into the manifest paths, so `edge_vlm.optimization compare` can add a
+`Quality review` column without rerunning the policy review by hand.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

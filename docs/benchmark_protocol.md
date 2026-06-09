@@ -464,6 +464,25 @@ route-sensitive prompts such as WSL reasoning, code, safety, and translation.
 It is a structured review aid, not a replacement for human review of raw
 excerpts.
 
+For finished sweep manifests, use the sweep-level helper instead of invoking
+the review command one JSONL at a time:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.sweep_quality_review \
+  --manifest outputs/optimization_sweeps/<run-prefix>/<run-prefix>.manifest.json \
+  --policy configs/benchmark/quality_review_policy.json \
+  --allow-failures
+```
+
+This writes `<run-id>.quality.json` and `<run-id>.quality.md` sidecars next to
+the manifest, records those paths under each variant's
+`paths.quality_review_json` and `paths.quality_review_markdown`, and lets
+`edge_vlm.optimization compare` add a `Quality review` column when those
+sidecars are present. The remote current-defaults, lightweight, and Tencent
+text suite wrappers now run `edge_vlm.sweep_quality_review` automatically
+before compare so the structured review state stays attached to the same sweep
+artifact set.
+
 Successful sweep variants also write derived profile artifacts under
 `outputs/optimization_sweeps/<run-prefix>/profiles/` and launcher lifecycle
 events under `outputs/optimization_sweeps/<run-prefix>/lifecycle/`:
@@ -568,7 +587,10 @@ The wrapper runs the selected defaults for both target models with
 `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--trial-count 5`,
 `--fake-stream-max-frames 3`, `--min-lfb-blocks 150`, and
 `--wait-timeout-s 600`, then runs the mechanical comparison report against both
-baseline variants. Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
+baseline variants. It also runs `edge_vlm.sweep_quality_review` with
+`configs/benchmark/quality_review_policy.json` against the sweep manifest so
+the recorded `quality_review_json` sidecars can feed the compare report's
+`Quality review` column. Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
 path stable, or override `JETSON_LIGHTWEIGHT_TRIAL_COUNT`,
 `JETSON_LIGHTWEIGHT_MAX_TOKENS`, `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS`,
 `JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S`, `JETSON_LIGHTWEIGHT_BASELINE_VARIANTS`,

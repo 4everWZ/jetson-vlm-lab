@@ -373,6 +373,12 @@ comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight g
 `--ranking-min-lfb-blocks <strict-gate>` 时，report 还会增加
 `Ranking precheck` 列，这样 relaxed fallback row 会保留在报告里，但不会被误读成
 可直接 promotion 的 strict-gate 证据。
+这些 remote suite wrapper 现在还会在 sweep 结束后自动运行
+`edge_vlm.sweep_quality_review`，并使用
+`configs/benchmark/quality_review_policy.json`。它会把每个 run 的
+`quality_review_json` 和 `quality_review_markdown` sidecar 写回 manifest
+路径里，这样 `edge_vlm.optimization compare` 就能直接增加 `Quality review`
+列，而不需要你再手工重跑一次 policy review。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

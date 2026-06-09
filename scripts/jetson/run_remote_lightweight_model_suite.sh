@@ -13,6 +13,7 @@ fake_stream_max_frames="${JETSON_LIGHTWEIGHT_FAKE_STREAM_MAX_FRAMES:-3}"
 min_lfb_blocks="${JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS:-150}"
 wait_timeout_s="${JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S:-600}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
+quality_review_policy="${JETSON_REMOTE_QUALITY_REVIEW_POLICY:-configs/benchmark/quality_review_policy.json}"
 qwen3_selector="${JETSON_LIGHTWEIGHT_QWEN3_SELECTOR:-1}"
 qwen3_fallback_min_lfb_blocks="${JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS:-100}"
 
@@ -47,6 +48,13 @@ JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
 JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR="${qwen3_selector}" \
 JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_MIN_LFB_BLOCKS="${qwen3_fallback_min_lfb_blocks}" \
 "${remote_sweep}" "${sweep_args[@]}"
+
+"${remote_exec}" \
+  "PYTHONPATH=${remote_pythonpath}" \
+  python3 -m edge_vlm.sweep_quality_review \
+  --manifest "${manifest_path}" \
+  --policy "${quality_review_policy}" \
+  --allow-failures
 
 compare_args=(
   "PYTHONPATH=${remote_pythonpath}"

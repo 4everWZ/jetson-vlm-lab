@@ -223,6 +223,13 @@ strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full
 benchmark success, fake-stream success, and the stage-specific trial floor.
 Use `formal-repeat` for 5-trial lightweight ranking passes and `promotion-reference` for 10-trial baseline/reference refreshes. The raw excerpt review remains manual.
 
+When a sweep has route-sensitive outputs, run `edge_vlm.sweep_quality_review`
+with `configs/benchmark/quality_review_policy.json` against the manifest before
+or as part of compare. That helper writes per-run `quality_review_json` and
+`quality_review_markdown` sidecars, updates the sweep manifest paths, and lets
+the comparison table add a `Quality review` column without reopening each
+benchmark JSONL separately.
+
 For the recurring current-defaults baseline refresh, prefer the wrapper:
 
 ```bash
