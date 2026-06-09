@@ -595,9 +595,14 @@ scripts/jetson/run_remote_current_defaults_suite.sh
 That wrapper now also runs `edge_vlm.sweep_quality_review` on the finished
 manifest and calls compare with `--promotion-require-quality-review`, so the
 reference `Promotion precheck` includes the structured `Quality review` gate.
+It also passes `--startup-require-cached-artifacts` by default, so the same
+report always shows `Startup precheck` for cached versus first-download rows.
 Set `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper
 should return non-zero if that promotion gate fails; the default remains `0`
-so comparison evidence can still be collected during diagnostic runs.
+so comparison evidence can still be collected during diagnostic runs. Set
+`JETSON_CURRENT_DEFAULTS_FAIL_ON_STARTUP_PRECHECK=1` when the wrapper should
+also return non-zero if any row fails the cached-startup gate; that default
+also remains `0`.
 
 To run the fixed-policy lightweight model ladder with the current MiniCPM and
 Gemma baselines plus the guard-passing lightweight candidates, use:
@@ -616,10 +621,15 @@ baseline variants. It also runs `edge_vlm.sweep_quality_review` with
 the recorded `quality_review_json` sidecars can feed the compare report's
 `Quality review` column. The wrapper also passes
 `--promotion-require-quality-review`, so the reported `Promotion precheck`
-requires that structured sidecar to pass. Set
+requires that structured sidecar to pass. It also passes
+`--startup-require-cached-artifacts`, so the same report always includes
+`Startup precheck` for cached versus first-download rows. Set
 `JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero on a failed promotion gate; the default remains `0` so
-lightweight diagnostic ladders can still emit comparison evidence. Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
+lightweight diagnostic ladders can still emit comparison evidence. Set
+`JETSON_LIGHTWEIGHT_FAIL_ON_STARTUP_PRECHECK=1` when the wrapper should also
+return non-zero on a failed cached-startup gate; that default remains `0`.
+Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
 path stable, or override `JETSON_LIGHTWEIGHT_TRIAL_COUNT`,
 `JETSON_LIGHTWEIGHT_MAX_TOKENS`, `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS`,
 `JETSON_LIGHTWEIGHT_WAIT_TIMEOUT_S`, `JETSON_LIGHTWEIGHT_BASELINE_VARIANTS`,
@@ -696,11 +706,16 @@ The wrapper defaults to all eleven configured Tencent text GGUF rows, runs with
 locked clocks, drops caches before each variant, sets
 `--fake-stream-max-frames 0`, runs `edge_vlm.sweep_quality_review`, and writes
 a comparison report with `--promotion-precheck-stage formal-repeat` plus
-`--promotion-require-quality-review`. Because these rows are text-only,
+`--promotion-require-quality-review`. It also passes
+`--startup-require-cached-artifacts`, so the text compare report still shows
+whether startup came from cached artifacts or a first download. Because these rows are text-only,
 `Promotion precheck` skips the fake-stream requirement. Set
 `JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero if any row fails that promotion gate; the default remains `0`
-so diagnostic text ladders can still emit comparison evidence. Low-bit rows are
+so diagnostic text ladders can still emit comparison evidence. Set
+`JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK=1` when the wrapper should also
+return non-zero if any row fails the cached-startup gate; that default remains
+`0`. Low-bit rows are
 runtime-compatibility canaries inside that dedicated text suite; the first
 Hy-MT1.5 1.25bit Jetson smoke failed before server ready on the pinned llama.cpp
 image with `invalid ggml type 42`. HY-MT1.5 Q4/Q6/Q8 rows remain executable

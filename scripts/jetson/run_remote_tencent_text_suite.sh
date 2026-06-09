@@ -15,6 +15,7 @@ wait_timeout_s="${JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S:-600}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
 quality_review_policy="${JETSON_REMOTE_QUALITY_REVIEW_POLICY:-configs/benchmark/quality_review_policy.json}"
 fail_on_promotion_precheck="${JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK:-0}"
+fail_on_startup_precheck="${JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK:-0}"
 
 candidate_variants_text="${JETSON_TENCENT_TEXT_VARIANTS:-tencent-hy-mt1p5-1p8b-1p25bit-text-smoke tencent-hy-mt1p5-1p8b-2bit-text-smoke tencent-hy-mt1p5-1p8b-q4-text-smoke tencent-hy-mt1p5-1p8b-q6-text-smoke tencent-hy-mt1p5-1p8b-q8-text-smoke tencent-hy-mt2-1p8b-1p25bit-text-smoke tencent-hy-mt2-1p8b-2bit-text-smoke tencent-hy-mt2-1p8b-q4-text-smoke tencent-hy-mt2-1p8b-q6-text-smoke tencent-hy-mt2-1p8b-q8-text-smoke tencent-youtu-llm-2b-q8-text-smoke}"
 extra_variants_text="${JETSON_TENCENT_TEXT_EXTRA_VARIANTS:-}"
@@ -23,6 +24,10 @@ comparison_output="${JETSON_TENCENT_TEXT_COMPARISON_OUTPUT:-outputs/optimization
 
 if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" != "1" ]]; then
   echo "JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK must be 0 or 1." >&2
+  exit 2
+fi
+if [[ "${fail_on_startup_precheck}" != "0" && "${fail_on_startup_precheck}" != "1" ]]; then
+  echo "JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK must be 0 or 1." >&2
   exit 2
 fi
 
@@ -65,12 +70,16 @@ compare_args=(
   edge_vlm.optimization
   compare
   --manifest "${manifest_path}"
+  --startup-require-cached-artifacts
   --ranking-min-lfb-blocks "${min_lfb_blocks}"
   --promotion-precheck-stage formal-repeat
   --promotion-require-quality-review
   --output "${comparison_output}"
 )
 
+if [[ "${fail_on_startup_precheck}" == "1" ]]; then
+  compare_args+=(--fail-on-startup-precheck)
+fi
 if [[ "${fail_on_promotion_precheck}" == "1" ]]; then
   compare_args+=(--fail-on-promotion-precheck)
 fi

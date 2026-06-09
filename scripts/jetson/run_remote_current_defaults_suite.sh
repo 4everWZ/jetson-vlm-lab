@@ -15,6 +15,7 @@ wait_timeout_s="${JETSON_CURRENT_DEFAULTS_WAIT_TIMEOUT_S:-180}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
 quality_review_policy="${JETSON_REMOTE_QUALITY_REVIEW_POLICY:-configs/benchmark/quality_review_policy.json}"
 fail_on_promotion_precheck="${JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK:-0}"
+fail_on_startup_precheck="${JETSON_CURRENT_DEFAULTS_FAIL_ON_STARTUP_PRECHECK:-0}"
 
 minicpm_variant="${JETSON_CURRENT_DEFAULTS_MINICPM_VARIANT:-minicpm-q4-baseline-b128-u32-kvq8}"
 gemma_variant="${JETSON_CURRENT_DEFAULTS_GEMMA_VARIANT:-gemma-q4-baseline-gpu12-b512-u512-kvq8}"
@@ -23,6 +24,10 @@ comparison_output="${JETSON_CURRENT_DEFAULTS_COMPARISON_OUTPUT:-outputs/optimiza
 
 if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" != "1" ]]; then
   echo "JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK must be 0 or 1." >&2
+  exit 2
+fi
+if [[ "${fail_on_startup_precheck}" != "0" && "${fail_on_startup_precheck}" != "1" ]]; then
+  echo "JETSON_CURRENT_DEFAULTS_FAIL_ON_STARTUP_PRECHECK must be 0 or 1." >&2
   exit 2
 fi
 
@@ -55,12 +60,16 @@ compare_args=(
   --manifest "${manifest_path}"
   --baseline-variant "${minicpm_variant}"
   --baseline-variant "${gemma_variant}"
+  --startup-require-cached-artifacts
   --ranking-min-lfb-blocks "${min_lfb_blocks}"
   --promotion-precheck-stage promotion-reference
   --promotion-require-quality-review
   --output "${comparison_output}"
 )
 
+if [[ "${fail_on_startup_precheck}" == "1" ]]; then
+  compare_args+=(--fail-on-startup-precheck)
+fi
 if [[ "${fail_on_promotion_precheck}" == "1" ]]; then
   compare_args+=(--fail-on-promotion-precheck)
 fi

@@ -397,6 +397,14 @@ gate, enable `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` or
 so diagnostic runs can still emit a comparison report without being treated as
 a hard failure. For text-only rows, `Promotion precheck` skips the fake-stream
 requirement because their configs declare `capabilities.image=false`.
+Those same wrappers now also pass `--startup-require-cached-artifacts` by
+default, so their compare reports always show `Startup precheck` for cached
+versus first-download rows. Set
+`JETSON_CURRENT_DEFAULTS_FAIL_ON_STARTUP_PRECHECK=1` or
+`JETSON_LIGHTWEIGHT_FAIL_ON_STARTUP_PRECHECK=1` or
+`JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK=1` when a suite should return
+non-zero if any row fails that cached-startup gate; the default remains `0` so
+diagnostic runs can still keep first-download evidence in the report.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

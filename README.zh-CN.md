@@ -395,6 +395,14 @@ baseline。
 run 仍然可以先产出 comparison report，而不会立刻变成硬失败。对于 text-only
 row，`Promotion precheck` 会因为配置里声明了 `capabilities.image=false`
 而跳过 fake-stream 要求。
+这几条 remote wrapper 现在还会默认转发
+`--startup-require-cached-artifacts`，所以它们生成的 compare 报告会一直带着
+`Startup precheck`，把 cached startup 和首次下载行机械地区分开来。若希望
+suite 在这条 cached-startup gate 失败时直接退出非零，再显式开
+`JETSON_CURRENT_DEFAULTS_FAIL_ON_STARTUP_PRECHECK=1` 或
+`JETSON_LIGHTWEIGHT_FAIL_ON_STARTUP_PRECHECK=1` 或
+`JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK=1`；默认仍然是 `0`，这样诊断性
+run 仍然能把 first-download 证据保留在报告里。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

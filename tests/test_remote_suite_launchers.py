@@ -69,10 +69,12 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         )
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
+        self.assertIn("REMOTE_ARG=--startup-require-cached-artifacts\n", log_text)
         self.assertIn("REMOTE_ARG=--ranking-min-lfb-blocks\nREMOTE_ARG=199\n", log_text)
         self.assertIn("REMOTE_ARG=--promotion-precheck-stage\nREMOTE_ARG=promotion-reference\n", log_text)
         self.assertIn("REMOTE_ARG=--promotion-require-quality-review\n", log_text)
         self.assertNotIn("REMOTE_ARG=--fail-on-promotion-precheck\n", log_text)
+        self.assertNotIn("REMOTE_ARG=--fail-on-startup-precheck\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/comparison.md\n",
             log_text,
@@ -152,10 +154,12 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         )
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
+        self.assertIn("REMOTE_ARG=--startup-require-cached-artifacts\n", log_text)
         self.assertIn("REMOTE_ARG=--ranking-min-lfb-blocks\nREMOTE_ARG=177\n", log_text)
         self.assertIn("REMOTE_ARG=--promotion-precheck-stage\nREMOTE_ARG=formal-repeat\n", log_text)
         self.assertIn("REMOTE_ARG=--promotion-require-quality-review\n", log_text)
         self.assertNotIn("REMOTE_ARG=--fail-on-promotion-precheck\n", log_text)
+        self.assertNotIn("REMOTE_ARG=--fail-on-startup-precheck\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/comparison.md\n",
             log_text,
@@ -187,6 +191,33 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
 
         self.assertIn("REMOTE_ARG=--fail-on-promotion-precheck\n", log_text)
 
+    def test_remote_current_defaults_suite_can_fail_on_startup_precheck_when_enabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "suite.log"
+            fake_sweep, fake_remote = write_fake_suite_scripts(tmp_path)
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_remote_current_defaults_suite.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_CURRENT_DEFAULTS_RUN_PREFIX="defaults-startup-fail-unit",
+                    JETSON_CURRENT_DEFAULTS_FAIL_ON_STARTUP_PRECHECK="1",
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_SWEEP=str(fake_sweep),
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    FAKE_SUITE_LOG=str(log_file),
+                ),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertIn("REMOTE_ARG=--startup-require-cached-artifacts\n", log_text)
+        self.assertIn("REMOTE_ARG=--fail-on-startup-precheck\n", log_text)
+
     def test_remote_lightweight_model_suite_can_fail_on_promotion_precheck_when_enabled(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -212,6 +243,33 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
             log_text = log_file.read_text(encoding="utf-8")
 
         self.assertIn("REMOTE_ARG=--fail-on-promotion-precheck\n", log_text)
+
+    def test_remote_lightweight_model_suite_can_fail_on_startup_precheck_when_enabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "suite.log"
+            fake_sweep, fake_remote = write_fake_suite_scripts(tmp_path)
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_remote_lightweight_model_suite.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_LIGHTWEIGHT_RUN_PREFIX="light-startup-fail-unit",
+                    JETSON_LIGHTWEIGHT_FAIL_ON_STARTUP_PRECHECK="1",
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_SWEEP=str(fake_sweep),
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    FAKE_SUITE_LOG=str(log_file),
+                ),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertIn("REMOTE_ARG=--startup-require-cached-artifacts\n", log_text)
+        self.assertIn("REMOTE_ARG=--fail-on-startup-precheck\n", log_text)
 
     def test_remote_tencent_text_suite_runs_text_candidates_then_compare(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -282,10 +340,12 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
             "REMOTE_ARG=--manifest\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/tencent-text-unit.manifest.json\n",
             log_text,
         )
+        self.assertIn("REMOTE_ARG=--startup-require-cached-artifacts\n", log_text)
         self.assertIn("REMOTE_ARG=--ranking-min-lfb-blocks\nREMOTE_ARG=188\n", log_text)
         self.assertIn("REMOTE_ARG=--promotion-precheck-stage\nREMOTE_ARG=formal-repeat\n", log_text)
         self.assertIn("REMOTE_ARG=--promotion-require-quality-review\n", log_text)
         self.assertNotIn("REMOTE_ARG=--fail-on-promotion-precheck\n", log_text)
+        self.assertNotIn("REMOTE_ARG=--fail-on-startup-precheck\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/comparison.md\n",
             log_text,
@@ -316,6 +376,33 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
             log_text = log_file.read_text(encoding="utf-8")
 
         self.assertIn("REMOTE_ARG=--fail-on-promotion-precheck\n", log_text)
+
+    def test_remote_tencent_text_suite_can_fail_on_startup_precheck_when_enabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "suite.log"
+            fake_sweep, fake_remote = write_fake_suite_scripts(tmp_path)
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_remote_tencent_text_suite.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_TENCENT_TEXT_RUN_PREFIX="tencent-text-startup-fail-unit",
+                    JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK="1",
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_SWEEP=str(fake_sweep),
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    FAKE_SUITE_LOG=str(log_file),
+                ),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertIn("REMOTE_ARG=--startup-require-cached-artifacts\n", log_text)
+        self.assertIn("REMOTE_ARG=--fail-on-startup-precheck\n", log_text)
 
 
 if __name__ == "__main__":
