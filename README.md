@@ -343,6 +343,21 @@ selected image and records whether the runtime exposes `--mmproj`; image-capable
 variants are skipped with `runtime_missing_mmproj_support` when that probe says
 the runtime cannot serve this repo's multimodal path.
 
+For the Qwen3-VL 2B Instruct pair, use the selector entrypoint when you want an
+actual Q4-first / Q8 fallback decision instead of manually choosing one smoke
+variant:
+
+```bash
+scripts/jetson/select_qwen3_instruct_variant.sh \
+  --min-lfb-blocks 150 \
+  --fallback-min-lfb-blocks 100 \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.json
+```
+
+The selector writes a JSON decision with runtime probe, preflight sample, per-
+candidate block reasons, and the chosen variant id. Keep the same strict gate
+for both lanes unless you are intentionally doing scoped fallback triage.
+
 Remote Jetson connection settings live in the ignored `.env.jetson` file. The
 remote helpers source it automatically; do not copy SSH hosts, passwords,
 tokens, or private paths into tracked docs.

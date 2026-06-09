@@ -52,6 +52,9 @@ unusual. The Jetson sweep plan also probes `llama-server --help` inside the
 selected image and records whether the runtime exposes `--mmproj`; image-capable
 variants are skipped with `runtime_missing_mmproj_support` when the runtime
 cannot satisfy this repo's multimodal path.
+For the Qwen3-VL 2B Instruct pair, `scripts/jetson/select_qwen3_instruct_variant.sh`
+wraps the current runtime probe plus preflight gate into one Q4-first / Q8
+fallback decision and writes the result as JSON.
 
 Remote Jetson connection settings belong in the ignored `.env.jetson` file.
 `scripts/jetson/remote_exec.sh` sources it automatically. Do not put SSH hosts,
@@ -177,6 +180,9 @@ EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
 - Sweep skipped with `runtime_missing_mmproj_support`: the selected image did
   not expose `--mmproj` in `llama-server --help`, so use the self-built
   official llama.cpp image or another image with confirmed multimodal support.
+- Selector returned no usable variant: inspect the JSON from
+  `scripts/jetson/select_qwen3_instruct_variant.sh` to see whether the block was
+  strict `lfb`, missing artifacts, or runtime multimodal support.
 - `llama-server not found in container`: set `LLAMA_SERVER_CMD` to the server
   binary path inside that image, or switch to a tag that includes the installed
   llama.cpp server binary.

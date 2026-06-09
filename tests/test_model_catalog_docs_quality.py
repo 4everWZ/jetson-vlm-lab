@@ -592,6 +592,18 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("--mmproj", text)
             self.assertIn("runtime_missing_mmproj_support", text)
 
+    def test_qwen3_selector_docs_are_wired(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        readme_zh = Path("README.zh-CN.md").read_text(encoding="utf-8")
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        migration_doc = Path("docs/migration_wsl_to_jetson.md").read_text(encoding="utf-8")
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(encoding="utf-8")
+
+        for text in (readme, readme_zh, protocol_doc, migration_doc, strategy_doc):
+            self.assertIn("select_qwen3_instruct_variant.sh", text)
+        for text in (readme, readme_zh, protocol_doc):
+            self.assertIn("fallback-min-lfb-blocks", text)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [

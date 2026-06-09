@@ -355,6 +355,13 @@ for the required llama.cpp multimodal path. When the runtime probe says the
 container lacks that support, the sweep skips the row before server startup with
 `preflight_reason=runtime_missing_mmproj_support` instead of paying model
 download and startup cost first.
+For the Qwen3-VL 2B Instruct Q4/Q8 pair, use
+`scripts/jetson/select_qwen3_instruct_variant.sh` when you need an explicit
+selection decision rather than a manual variant choice. The selector emits JSON
+with the shared runtime probe, current preflight sample, per-candidate block
+reasons, and `selected_variant_id`. Keep the conservative gate the same for both
+lanes by default; use `--fallback-min-lfb-blocks` only for scoped diagnostic
+fallback triage.
 Set `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1` for promotion/comparison sweeps. The
 wrapper runs `sudo jetson_clocks` and captures `sudo jetson_clocks --show` under
 ignored `outputs/jetson_inspect/` before launching the sweep. It reads the sudo

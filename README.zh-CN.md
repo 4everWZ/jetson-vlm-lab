@@ -341,6 +341,20 @@ Jetson 脚本默认使用已验证多模态 smoke 的自编译官方 llama.cpp �
 variant 对应的 runtime 明确不支持这条多模态路径，就会直接以
 `runtime_missing_mmproj_support` 跳过。
 
+对 Qwen3-VL 2B Instruct 这对 Q4/Q8，可以直接用 selector 入口做真正的
+Q4-first / Q8 fallback 决策，而不是手工挑 smoke variant：
+
+```bash
+scripts/jetson/select_qwen3_instruct_variant.sh \
+  --min-lfb-blocks 150 \
+  --fallback-min-lfb-blocks 100 \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.json
+```
+
+selector 会写出结构化 JSON，里面包含 runtime probe、preflight sample、
+每个候选的 block reason 和最终选择的 variant id。除非明确在做 scoped
+fallback triage，否则 primary 和 fallback 应保持同一个严格 gate。
+
 Jetson 远端连接参数在被 Git 忽略的 `.env.jetson` 中。远端 helper 会自动
 读取它；不要把 SSH host、密码、token 或私有路径写进 tracked 文档。
 
