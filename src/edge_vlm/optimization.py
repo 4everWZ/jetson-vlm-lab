@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
-from .config import config_supports_images, load_model_config
+from .config import config_candidate_scope, config_supports_images, load_model_config
 from .eligibility_selection import build_eligibility_selection_artifact
 from .jetson_profile import summarize_tegrastats_log as summarize_jetson_profile_log
 
@@ -65,6 +65,8 @@ class SweepComparisonRow:
     benchmark_max_tokens: int | None
     benchmark_temperature: float | None
     supports_images: bool
+    candidate_leq2b: bool
+    candidate_lane: str
     quality_review_passed: bool | None
     quality_review_records: int | None
     quality_review_passed_records: int | None
@@ -747,6 +749,18 @@ def _variant_supports_images(variant_plan: dict[str, Any], *, fake_stream_path: 
     return fake_stream_path is not None
 
 
+def _variant_candidate_scope(variant_plan: dict[str, Any]) -> dict[str, Any]:
+    variant = variant_plan.get("variant")
+    if isinstance(variant, dict):
+        config_path = variant.get("config")
+        if isinstance(config_path, str) and config_path.strip():
+            try:
+                return config_candidate_scope(load_model_config(config_path))
+            except (FileNotFoundError, ValueError):
+                pass
+    return {"leq2b_candidate": False, "lane": ""}
+
+
 def summarize_sweep_manifest(
     manifest_path: str | Path,
     *,
@@ -801,6 +815,7 @@ def summarize_sweep_manifest(
                 run_id=run_id,
             )
         )
+        candidate_scope = _variant_candidate_scope(variant_plan)
         summary: RunSummary | None = None
         if benchmark_path is not None and benchmark_path.is_file():
             summary = summarize_run(
@@ -875,6 +890,8 @@ def summarize_sweep_manifest(
                     variant_plan,
                     fake_stream_path=fake_stream_path,
                 ),
+                candidate_leq2b=candidate_scope["leq2b_candidate"] is True,
+                candidate_lane=str(candidate_scope["lane"]),
                 quality_review_passed=quality_review["passed"],
                 quality_review_records=quality_review["records"],
                 quality_review_passed_records=quality_review["passed_records"],
@@ -1314,6 +1331,10 @@ def _comparison_row_artifact(row: SweepComparisonRow) -> dict[str, Any]:
             "fake_stream_successful": row.fake_stream_successful,
             "fake_stream_records": row.fake_stream_records,
         },
+        "candidate_scope": {
+            "leq2b_candidate": row.candidate_leq2b,
+            "lane": row.candidate_lane,
+        },
         "quality_review": {
             "passed": row.quality_review_passed,
             "records": row.quality_review_records,
@@ -1551,6 +1572,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     selection_parser.add_argument("--input", action="append", required=True, help="Compare eligibility JSON path; repeatable")
     selection_parser.add_argument("--gate", choices=("startup", "ranking", "promotion"), required=True)
+    selection_parser.add_argument("--require-leq2b-candidate", action="store_true")
+    selection_parser.add_argument("--candidate-lane", help="Optional candidate scope lane filter, for example vlm or text")
     selection_parser.add_argument("--output", required=True, help="Filtered selection JSON output path")
     args = parser.parse_args(argv)
 
@@ -1603,6 +1626,8 @@ def main(argv: list[str] | None = None) -> int:
             input_paths=args.input,
             gate=args.gate,
             output_path=args.output,
+            require_leq2b_candidate=args.require_leq2b_candidate,
+            candidate_lane=args.candidate_lane,
         )
         print(json.dumps({"gate": args.gate, "selected": artifact["selected_count"], "output": args.output}, ensure_ascii=False))
         return 0

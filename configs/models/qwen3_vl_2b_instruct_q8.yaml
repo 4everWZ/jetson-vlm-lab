@@ -25,6 +25,10 @@ capabilities:
   image: true
   audio: false
 
+candidate_scope:
+  leq2b_candidate: true
+  lane: vlm
+
 notes:
   status: >
     Candidate only. Uses Qwen/Qwen3-VL-2B-Instruct-GGUF Q8_0 model and mmproj

@@ -198,6 +198,14 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
             "REMOTE_ARG=--gate\nREMOTE_ARG=promotion\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/promotion.selection.json\n",
             log_text,
         )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=ranking\nREMOTE_ARG=--require-leq2b-candidate\nREMOTE_ARG=--candidate-lane\nREMOTE_ARG=vlm\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/ranking.leq2b-vlm.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=promotion\nREMOTE_ARG=--require-leq2b-candidate\nREMOTE_ARG=--candidate-lane\nREMOTE_ARG=vlm\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/promotion.leq2b-vlm.selection.json\n",
+            log_text,
+        )
 
     def test_remote_current_defaults_suite_can_fail_on_promotion_precheck_when_enabled(self):
         with tempfile.TemporaryDirectory() as tmp:

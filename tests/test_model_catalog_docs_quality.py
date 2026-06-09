@@ -183,6 +183,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "model_file": "SmolVLM2-256M-Video-Instruct-Q8_0.gguf",
                 "mmproj_file": "mmproj-SmolVLM2-256M-Video-Instruct-Q8_0.gguf",
                 "ctx_size": 512,
+                "candidate_scope": {"leq2b_candidate": True, "lane": "vlm"},
             },
             "qwen3-vl-2b-thinking-q4": {
                 "config": "configs/models/qwen3_vl_2b_thinking_q4.yaml",
@@ -190,6 +191,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "model_file": "Qwen3VL-2B-Thinking-Q4_K_M.gguf",
                 "mmproj_file": "mmproj-Qwen3VL-2B-Thinking-Q8_0.gguf",
                 "ctx_size": 1024,
+                "candidate_scope": {"leq2b_candidate": True, "lane": "vlm"},
             },
             "qwen3-vl-2b-instruct-q4": {
                 "config": "configs/models/qwen3_vl_2b_instruct_q4.yaml",
@@ -200,6 +202,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "ctx_size": 1024,
                 "batch_size": 256,
                 "ubatch_size": 64,
+                "candidate_scope": {"leq2b_candidate": True, "lane": "vlm"},
             },
             "qwen3-vl-2b-instruct-q8": {
                 "config": "configs/models/qwen3_vl_2b_instruct_q8.yaml",
@@ -210,6 +213,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "ctx_size": 1024,
                 "batch_size": 128,
                 "ubatch_size": 32,
+                "candidate_scope": {"leq2b_candidate": True, "lane": "vlm"},
             },
             "hunyuanocr-q8": {
                 "config": "configs/models/hunyuanocr_q8.yaml",
@@ -219,6 +223,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "ctx_size": 1024,
                 "batch_size": 128,
                 "ubatch_size": 32,
+                "candidate_scope": {"leq2b_candidate": True, "lane": "vlm"},
             },
             "youtu-vl-4b-q8": {
                 "config": "configs/models/youtu_vl_4b_q8.yaml",
@@ -264,6 +269,8 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                     config["runtime"]["jetson_script"],
                     "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
                 )
+                if "candidate_scope" in expected_values:
+                    self.assertEqual(config["candidate_scope"], expected_values["candidate_scope"])
 
                 variant_id = f"{model_name}-smoke"
                 variant = by_id[variant_id]
@@ -363,6 +370,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "model_ref": "tencent/Youtu-LLM-2B-GGUF:Q8_0",
                 "model_file": "Youtu-LLM-2B-Q8_0.gguf",
                 "quantization": "Q8_0",
+                "candidate_scope": {"leq2b_candidate": True, "lane": "text"},
             },
         }
         variants = [
@@ -392,6 +400,8 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                     config["runtime"]["jetson_script"],
                     "scripts/jetson/run_hf_gguf_llama_docker.sh",
                 )
+                if "candidate_scope" in expected_values:
+                    self.assertEqual(config["candidate_scope"], expected_values["candidate_scope"])
 
                 variant = by_id[f"{model_name}-text-smoke"]
                 self.assertEqual(variant["model"], model_name)
@@ -728,6 +738,10 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("select-eligible", text)
             self.assertIn("ranking.selection.json", text)
             self.assertIn("promotion.selection.json", text)
+            self.assertIn("require-leq2b-candidate", text)
+            self.assertIn("candidate-lane", text)
+            self.assertIn("ranking.leq2b-vlm.selection.json", text)
+            self.assertIn("promotion.leq2b-vlm.selection.json", text)
 
     def test_compare_docs_explain_promotion_precheck_stage(self):
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")

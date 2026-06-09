@@ -427,6 +427,12 @@ JSON sidecar 会把每一行的 `Startup precheck`、`Ranking precheck`、
 .../ranking.selection.json`，或者把 gate 换成 `promotion` 输出
 `promotion.selection.json`。这些 remote suite wrapper 现在默认也会做这两步，
 这样 ranking/promotion 自动化就不需要再去解析 Markdown 表格。
+如果要导出 scoped 的 `<=2B` 候选，还可以继续加
+`--require-leq2b-candidate` 和 `--candidate-lane <vlm|text>`。现在
+lightweight suite 会基于这两个过滤条件额外产出
+`ranking.leq2b-vlm.selection.json` 和
+`promotion.leq2b-vlm.selection.json`，同时保留未过滤的
+`ranking.selection.json` / `promotion.selection.json`。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

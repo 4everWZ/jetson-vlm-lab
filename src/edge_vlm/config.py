@@ -128,3 +128,13 @@ def config_supports_images(config: dict[str, Any]) -> bool:
     if isinstance(capabilities, dict):
         return bool(capabilities.get("image", False))
     return False
+
+
+def config_candidate_scope(config: dict[str, Any]) -> dict[str, Any]:
+    scope = config.get("candidate_scope", {})
+    if not isinstance(scope, dict):
+        return {"leq2b_candidate": False, "lane": ""}
+    leq2b_candidate = scope.get("leq2b_candidate") is True
+    lane = scope.get("lane")
+    normalized_lane = lane.strip() if isinstance(lane, str) else ""
+    return {"leq2b_candidate": leq2b_candidate, "lane": normalized_lane}

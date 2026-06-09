@@ -428,6 +428,11 @@ To turn that compare-sidecar into a filtered downstream artifact, run
 `promotion.selection.json`. The remote suite wrappers now do both by default,
 so ranking/promotion automation can consume filtered JSON directly instead of
 re-parsing Markdown tables.
+For scoped <=2B exports, the same command also accepts
+`--require-leq2b-candidate` and `--candidate-lane <vlm|text>`. The lightweight
+suite now uses those filters to emit `ranking.leq2b-vlm.selection.json` and
+`promotion.leq2b-vlm.selection.json` next to the unfiltered
+`ranking.selection.json` and `promotion.selection.json`.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

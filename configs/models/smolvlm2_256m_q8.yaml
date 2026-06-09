@@ -25,5 +25,9 @@ capabilities:
   image: true
   audio: false
 
+candidate_scope:
+  leq2b_candidate: true
+  lane: vlm
+
 notes:
   status: Candidate only. Uses the llama.cpp-compatible GGUF repository ggml-org/SmolVLM2-256M-Video-Instruct-GGUF with Q8_0 model and mmproj files downloaded to MODEL_DIR, then loaded as local -m/--mmproj files because the pinned Jetson llama.cpp container lacks HTTPS support for direct -hf downloads. Not yet observed on this repo's Jetson; first acceptance path is startup plus formal benchmark and three-frame fake-stream JSONL.

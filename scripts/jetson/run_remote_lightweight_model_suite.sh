@@ -28,6 +28,8 @@ comparison_output="${JETSON_LIGHTWEIGHT_COMPARISON_OUTPUT:-outputs/optimization_
 comparison_eligibility_output="${JETSON_LIGHTWEIGHT_ELIGIBILITY_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.eligibility.json}"
 ranking_selection_output="outputs/optimization_sweeps/${run_prefix}/ranking.selection.json"
 promotion_selection_output="outputs/optimization_sweeps/${run_prefix}/promotion.selection.json"
+ranking_leq2b_vlm_selection_output="outputs/optimization_sweeps/${run_prefix}/ranking.leq2b-vlm.selection.json"
+promotion_leq2b_vlm_selection_output="outputs/optimization_sweeps/${run_prefix}/promotion.leq2b-vlm.selection.json"
 
 if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" != "1" ]]; then
   echo "JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK must be 0 or 1." >&2
@@ -134,5 +136,25 @@ fi
   --input "${comparison_eligibility_output}" \
   --gate promotion \
   --output "${promotion_selection_output}"
+
+"${remote_exec}" \
+  "PYTHONPATH=${remote_pythonpath}" \
+  python3 -m edge_vlm.optimization \
+  select-eligible \
+  --input "${comparison_eligibility_output}" \
+  --gate ranking \
+  --require-leq2b-candidate \
+  --candidate-lane vlm \
+  --output "${ranking_leq2b_vlm_selection_output}"
+
+"${remote_exec}" \
+  "PYTHONPATH=${remote_pythonpath}" \
+  python3 -m edge_vlm.optimization \
+  select-eligible \
+  --input "${comparison_eligibility_output}" \
+  --gate promotion \
+  --require-leq2b-candidate \
+  --candidate-lane vlm \
+  --output "${promotion_leq2b_vlm_selection_output}"
 
 exit "${compare_exit}"

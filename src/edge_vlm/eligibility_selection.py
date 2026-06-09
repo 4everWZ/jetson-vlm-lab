@@ -40,10 +40,13 @@ def build_eligibility_selection_artifact(
     input_paths: Iterable[str | Path],
     gate: str,
     output_path: str | Path,
+    require_leq2b_candidate: bool = False,
+    candidate_lane: str | None = None,
 ) -> dict[str, Any]:
     if gate not in _VALID_GATES:
         raise ValueError(f"unsupported gate {gate!r}; expected one of {_VALID_GATES}")
     input_path_list = [Path(path) for path in input_paths]
+    normalized_candidate_lane = candidate_lane.strip() if isinstance(candidate_lane, str) else ""
     selected_rows: list[dict[str, Any]] = []
     for input_path in input_path_list:
         artifact = _read_json_object(input_path)
@@ -55,10 +58,23 @@ def build_eligibility_selection_artifact(
                 raise ValueError(f"{input_path}: each row must be a JSON object")
             gate_artifact = _gate_artifact(row, gate=gate, source=input_path)
             if gate_artifact.get("passed") is True:
+                candidate_scope = row.get("candidate_scope")
+                if not isinstance(candidate_scope, dict):
+                    candidate_scope = {}
+                if require_leq2b_candidate and candidate_scope.get("leq2b_candidate") is not True:
+                    continue
+                row_candidate_lane = candidate_scope.get("lane")
+                normalized_row_candidate_lane = row_candidate_lane.strip() if isinstance(row_candidate_lane, str) else ""
+                if normalized_candidate_lane and normalized_row_candidate_lane != normalized_candidate_lane:
+                    continue
                 selected_rows.append(row)
     selection_artifact = {
         "gate": gate,
         "input_paths": [str(path) for path in input_path_list],
+        "filters": {
+            "require_leq2b_candidate": require_leq2b_candidate,
+            "candidate_lane": normalized_candidate_lane,
+        },
         "selected_count": len(selected_rows),
         "selected_ids": [_selected_id(row) for row in selected_rows],
         "selected": selected_rows,

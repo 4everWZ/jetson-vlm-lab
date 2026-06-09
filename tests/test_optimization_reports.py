@@ -3443,7 +3443,10 @@ class OptimizationReportContractsTest(unittest.TestCase):
                 )
                 return {
                     "plan": {
-                        "variant": {"id": variant_id},
+                        "variant": {
+                            "id": variant_id,
+                            "config": "configs/models/tencent_youtu_llm_2b_q8.yaml",
+                        },
                         "paths": {
                             "benchmark_jsonl": str(benchmark_jsonl),
                             "manifest_json": str(benchmark_manifest),
@@ -3528,6 +3531,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(artifact["eligible"]["ranking"], artifact["eligible"]["startup"])
         self.assertEqual(artifact["eligible"]["promotion"], artifact["eligible"]["startup"])
         self.assertEqual(artifact["rows"][0]["artifact_phase"]["status"], "cached")
+        self.assertEqual(artifact["rows"][0]["candidate_scope"], {"leq2b_candidate": True, "lane": "text"})
         self.assertEqual(artifact["rows"][0]["eligibility"]["startup_precheck"], {"passed": True, "reason": ""})
         self.assertEqual(artifact["rows"][0]["eligibility"]["ranking_precheck"], {"passed": True, "reason": ""})
         self.assertEqual(artifact["rows"][0]["eligibility"]["promotion_precheck"], {"passed": True, "reason": ""})
@@ -3629,7 +3633,10 @@ class OptimizationReportContractsTest(unittest.TestCase):
                             },
                             "variants": [
                                 {
-                                    "variant": {"id": "tencent-youtu-llm-2b-q8-text-smoke"},
+                                    "variant": {
+                                        "id": "tencent-youtu-llm-2b-q8-text-smoke",
+                                        "config": "configs/models/tencent_youtu_llm_2b_q8.yaml",
+                                    },
                                     "paths": {
                                         "benchmark_jsonl": str(benchmark_jsonl),
                                         "manifest_json": str(benchmark_manifest),
@@ -3697,6 +3704,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(artifact["eligible"]["startup"], [{"run_id": run_id, "variant_id": "tencent-youtu-llm-2b-q8-text-smoke"}])
         self.assertEqual(artifact["eligible"]["ranking"], artifact["eligible"]["startup"])
         self.assertEqual(artifact["eligible"]["promotion"], artifact["eligible"]["startup"])
+        self.assertEqual(artifact["rows"][0]["candidate_scope"], {"leq2b_candidate": True, "lane": "text"})
         self.assertEqual(artifact["rows"][0]["eligibility"]["promotion_precheck"], {"passed": True, "reason": ""})
 
 

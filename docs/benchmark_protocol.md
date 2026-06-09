@@ -487,6 +487,19 @@ PYTHONPATH=src python -m edge_vlm.optimization select-eligible \
 Switch `--gate` to `promotion` and write `promotion.selection.json` when the
 consumer should only see promotion-pass rows. This command reads the compare
 eligibility JSON directly instead of scraping Markdown.
+For scoped <=2B candidate exports, add `--require-leq2b-candidate` and
+`--candidate-lane <vlm|text>`. For example, the lightweight suite now emits
+`ranking.leq2b-vlm.selection.json` and `promotion.leq2b-vlm.selection.json`
+with:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.optimization select-eligible \
+  --input outputs/optimization_sweeps/<run-prefix>/comparison.eligibility.json \
+  --gate ranking \
+  --require-leq2b-candidate \
+  --candidate-lane vlm \
+  --output outputs/optimization_sweeps/<run-prefix>/ranking.leq2b-vlm.selection.json
+```
 
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:
@@ -669,7 +682,10 @@ through compare's `--eligibility-output`, so downstream ranking/export steps
 can consume gate results without parsing Markdown.
 It also runs `edge_vlm.optimization select-eligible` for `ranking` and
 `promotion`, writing `ranking.selection.json` and `promotion.selection.json`
-next to the compare outputs.
+next to the compare outputs. It also emits the scoped <=2B VLM exports
+`ranking.leq2b-vlm.selection.json` and
+`promotion.leq2b-vlm.selection.json` by calling `select-eligible` with
+`--require-leq2b-candidate --candidate-lane vlm`.
 `JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero on a failed promotion gate; the default remains `0` so
 lightweight diagnostic ladders can still emit comparison evidence. Set
