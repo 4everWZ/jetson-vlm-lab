@@ -215,6 +215,10 @@ pre_variant_command="sudo -S -p '\'''\'' sh -c '\''sync; echo 3 > /proc/sys/vm/d
     env \
     "LLAMA_CPP_DOCKER_IMAGE=${llama_cpp_image}" \
     "PYTHONPATH=${remote_pythonpath}" \
+    "EDGE_VLM_PREPARE_MAX_CLOCKS_ENABLED=${prepare_max_clocks}" \
+    "EDGE_VLM_PREPARE_MAX_CLOCKS_CAPTURE=${clocks_capture:-}" \
+    "EDGE_VLM_DROP_CACHES_BEFORE_VARIANT=${drop_caches_before_variant}" \
+    "EDGE_VLM_PRE_VARIANT_COMMAND_SOURCE=remote_wrapper_drop_caches" \
     bash scripts/jetson/run_optimization_sweep.sh \
     "${sweep_args[@]}"
   exit $?
@@ -224,5 +228,9 @@ exec "${remote_exec}" \
   env \
   "LLAMA_CPP_DOCKER_IMAGE=${llama_cpp_image}" \
   "PYTHONPATH=${remote_pythonpath}" \
+  "EDGE_VLM_PREPARE_MAX_CLOCKS_ENABLED=${prepare_max_clocks}" \
+  "EDGE_VLM_PREPARE_MAX_CLOCKS_CAPTURE=${clocks_capture:-}" \
+  "EDGE_VLM_DROP_CACHES_BEFORE_VARIANT=${drop_caches_before_variant}" \
+  "EDGE_VLM_PRE_VARIANT_COMMAND_SOURCE=" \
   bash scripts/jetson/run_optimization_sweep.sh \
   "${sweep_args[@]}"

@@ -459,6 +459,25 @@ def _runtime_metadata(
     return metadata
 
 
+def _env_flag(source_env: dict[str, str], key: str) -> bool:
+    return str(source_env.get(key, "")).strip() == "1"
+
+
+def _prepare_context(source_env: dict[str, str]) -> dict[str, Any]:
+    context: dict[str, Any] = {}
+    if _env_flag(source_env, "EDGE_VLM_PREPARE_MAX_CLOCKS_ENABLED"):
+        context["max_clocks_enabled"] = True
+    max_clocks_capture = str(source_env.get("EDGE_VLM_PREPARE_MAX_CLOCKS_CAPTURE", "")).strip()
+    if max_clocks_capture:
+        context["max_clocks_capture"] = max_clocks_capture
+    if _env_flag(source_env, "EDGE_VLM_DROP_CACHES_BEFORE_VARIANT"):
+        context["drop_caches_before_variant"] = True
+    pre_variant_command_source = str(source_env.get("EDGE_VLM_PRE_VARIANT_COMMAND_SOURCE", "")).strip()
+    if pre_variant_command_source:
+        context["pre_variant_command_source"] = pre_variant_command_source
+    return context
+
+
 def _read_json_object(path: str | Path) -> dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as handle:
         data = json.load(handle)
@@ -795,6 +814,7 @@ def build_sweep_plan(
         "run_prefix": run_prefix,
         "port": port,
         "min_lfb_blocks": min_lfb_blocks,
+        "prepare_context": _prepare_context(source_env),
         "pre_variant_command": pre_variant_command,
         "selection_contexts": [dict(context) for context in selection_contexts],
         "variant_min_lfb_blocks": dict(variant_min_lfb_blocks or {}),

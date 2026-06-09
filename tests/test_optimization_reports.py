@@ -410,7 +410,14 @@ class OptimizationReportContractsTest(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "plan": {"run_prefix": "gemma-compare", "variants": [baseline["plan"], candidate["plan"]]},
+                        "plan": {
+                            "run_prefix": "gemma-compare",
+                            "prepare_context": {
+                                "max_clocks_enabled": True,
+                                "drop_caches_before_variant": True,
+                            },
+                            "variants": [baseline["plan"], candidate["plan"]],
+                        },
                         "result": {"results": [baseline["result"], candidate["result"]]},
                     }
                 )
@@ -440,8 +447,9 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(rows[1].delta_text_tokens_per_s_pct, 20.0)
         self.assertEqual(rows[1].delta_image_tokens_per_s_pct, -12.5)
         self.assertAlmostEqual(rows[1].delta_fake_stream_latency_pct, -11.111111, places=5)
+        self.assertEqual(rows[0].prepare_context_summary, "max_clocks, drop_caches")
         self.assertIn(
-            "| Model | Variant | Selection | Run prefix | Runtime | Preflight lfb | Required lfb | Prepare lfb delta | Prepare avail MB delta |",
+            "| Model | Variant | Selection | Run prefix | Runtime | Prepare ctx | Preflight lfb | Required lfb | Prepare lfb delta | Prepare avail MB delta |",
             report_text,
         )
         self.assertIn("Avg GR3D %", report_text)
@@ -452,7 +460,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(rows[0].avg_emc_util_pct, 83.0)
         self.assertEqual(rows[0].min_lfb_free_blocks, 180)
         self.assertIn("ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be", report_text)
-        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` |  | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | 150 | +40 | +488.281 | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
+        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` |  | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | max_clocks, drop_caches | 190x4MB | 150 | +40 | +488.281 | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
         self.assertIn("Baseline rows use `0.00%` deltas", report_text)
 
     def test_optimization_comparison_report_can_use_shared_comparison_group(self):
@@ -805,7 +813,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertIn("Selection", report_text)
         self.assertIn("Required lfb", report_text)
         self.assertIn("qwen3-vl-2b-instruct-auto (primary_usable)", report_text)
-        self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` | qwen3-vl-2b-instruct-auto (primary_usable) | qwen-auto |  | 121x4MB | 100 |", report_text)
+        self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` | qwen3-vl-2b-instruct-auto (primary_usable) | qwen-auto |  |  | 121x4MB | 100 |", report_text)
 
     def test_optimization_comparison_report_can_mark_ranking_precheck_failures(self):
         from edge_vlm.optimization import build_sweep_comparison_report
@@ -984,8 +992,8 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertFalse(rows[1].ranking_precheck_passed)
         self.assertEqual(rows[1].ranking_precheck_reason, "required_lfb 100 < ranking 150")
         self.assertIn("Ranking precheck", report_text)
-        self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` |  | qwen-q4 |  | 121x4MB | 150 | yes |", report_text)
-        self.assertIn("| qwen3-vl-2b-instruct-q8 | `qwen3-vl-2b-instruct-q8-smoke` |  | qwen-q8 |  | 121x4MB | 100 | no (required_lfb 100 < ranking 150) |", report_text)
+        self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` |  | qwen-q4 |  |  | 121x4MB | 150 | yes |", report_text)
+        self.assertIn("| qwen3-vl-2b-instruct-q8 | `qwen3-vl-2b-instruct-q8-smoke` |  | qwen-q8 |  |  | 121x4MB | 100 | no (required_lfb 100 < ranking 150) |", report_text)
 
     def test_optimization_comparison_report_can_backfill_required_lfb_from_plan(self):
         from edge_vlm.optimization import build_sweep_comparison_report
@@ -1160,8 +1168,8 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(rows[1].preflight_required_lfb_blocks, 100)
         self.assertTrue(rows[0].ranking_precheck_passed)
         self.assertFalse(rows[1].ranking_precheck_passed)
-        self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` |  | qwen-q4 |  | 121x4MB | 150 | yes |", report_text)
-        self.assertIn("| qwen3-vl-2b-instruct-q8 | `qwen3-vl-2b-instruct-q8-smoke` |  | qwen-q8 |  | 121x4MB | 100 | no (required_lfb 100 < ranking 150) |", report_text)
+        self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` |  | qwen-q4 |  |  | 121x4MB | 150 | yes |", report_text)
+        self.assertIn("| qwen3-vl-2b-instruct-q8 | `qwen3-vl-2b-instruct-q8-smoke` |  | qwen-q8 |  |  | 121x4MB | 100 | no (required_lfb 100 < ranking 150) |", report_text)
 
     def test_compare_cli_can_fail_on_ranking_precheck(self):
         with tempfile.TemporaryDirectory() as tmp:

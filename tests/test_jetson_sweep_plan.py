@@ -381,6 +381,53 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
         self.assertEqual(server_env["LLAMA_SERVER_CMD"], "/usr/local/bin/llama-server")
         self.assertEqual(server_env["DOCKER_GPU_ARGS"], "--runtime nvidia")
 
+    def test_jetson_sweep_plan_records_prepare_context_from_environment(self):
+        from edge_vlm.jetson_sweep import build_sweep_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "minicpm-unit",
+                        "model": "minicpmv46-q4",
+                        "config": "configs/models/minicpmv46_q4.yaml",
+                        "launcher": "scripts/jetson/run_minicpmv46_llama_docker.sh",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            plan = build_sweep_plan(
+                variants_path=variants,
+                run_prefix="unit",
+                output_root=tmp_path / "outputs",
+                server_log_dir=tmp_path / "logs",
+                port=18080,
+                trial_count=1,
+                max_tokens=16,
+                temperature=0,
+                python_bin="python3",
+                base_env={
+                    "EDGE_VLM_PREPARE_MAX_CLOCKS_ENABLED": "1",
+                    "EDGE_VLM_PREPARE_MAX_CLOCKS_CAPTURE": "outputs/jetson_inspect/jetson-clocks-max-20260609T120000Z.txt",
+                    "EDGE_VLM_DROP_CACHES_BEFORE_VARIANT": "1",
+                    "EDGE_VLM_PRE_VARIANT_COMMAND_SOURCE": "remote_wrapper_drop_caches",
+                },
+            )
+
+        self.assertEqual(
+            plan["prepare_context"],
+            {
+                "max_clocks_enabled": True,
+                "max_clocks_capture": "outputs/jetson_inspect/jetson-clocks-max-20260609T120000Z.txt",
+                "drop_caches_before_variant": True,
+                "pre_variant_command_source": "remote_wrapper_drop_caches",
+            },
+        )
+
     def test_jetson_sweep_plan_skips_fake_stream_for_text_only_configs(self):
         from edge_vlm.jetson_sweep import build_sweep_plan
 

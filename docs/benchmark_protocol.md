@@ -392,6 +392,12 @@ recorded pre-variant command shaped like
 The manifest records the command and FIFO path, not the password. Do not
 combine this env flag with a manual `--pre-variant-command`; use the lower-level
 local sweep command only when a custom preparation command is required.
+The remote wrapper now also forwards a structured `prepare_context` into the
+sweep plan so later compare/promote steps can recover how the run was prepared
+without inferring it from shell snippets alone. When those env flags are used,
+`plan.prepare_context` records booleans such as `max_clocks_enabled` and
+`drop_caches_before_variant`, plus supporting fields like
+`max_clocks_capture` and `pre_variant_command_source`.
 
 Build a comparison table from one or more sweep manifests with:
 
@@ -423,6 +429,11 @@ its `Required lfb` column next to the observed `Preflight lfb`. Compare first
 uses a row's explicit `preflight_required_lfb_blocks`; if that is missing, it
 backs off to `variant_min_lfb_blocks` and then `plan.min_lfb_blocks` from the
 sweep manifest before labeling the row as missing required-LFB evidence.
+When `plan.prepare_context` is present, the comparison table also adds a
+`Prepare ctx` column. Today it summarizes the mechanically important prepare
+signals as `max_clocks` and `drop_caches`, so promotion review can tell whether
+a row came from a locked-clocks run, a cache-drop plus `compact_memory` run, or
+both without reopening the raw manifest.
 For ranking decisions, keep only the defensible strict rows: when compare also receives
 `--ranking-min-lfb-blocks`, it adds a `Ranking precheck` column so rows that
 ran under a more relaxed gate stay in the report but are mechanically marked as

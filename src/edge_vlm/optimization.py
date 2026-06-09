@@ -48,6 +48,7 @@ class SweepComparisonRow:
     server_image: str | None
     server_image_id: str | None
     llama_cpp_ref: str | None
+    prepare_context_summary: str
     preflight_before_prepare_lfb: str
     preflight_lfb: str
     preflight_required_lfb_blocks: int | None
@@ -447,6 +448,18 @@ def _format_runtime(row: SweepComparisonRow) -> str:
     return " / ".join(parts)
 
 
+def _prepare_context_summary(plan: dict[str, Any]) -> str:
+    context = plan.get("prepare_context")
+    if not isinstance(context, dict):
+        return ""
+    labels: list[str] = []
+    if context.get("max_clocks_enabled") is True:
+        labels.append("max_clocks")
+    if context.get("drop_caches_before_variant") is True:
+        labels.append("drop_caches")
+    return ", ".join(labels)
+
+
 def _format_selection(row: SweepComparisonRow) -> str:
     if not row.selection_id:
         return ""
@@ -638,6 +651,7 @@ def summarize_sweep_manifest(
                 server_image=str(runtime["image"]) if runtime.get("image") else None,
                 server_image_id=str(runtime["image_id"]) if runtime.get("image_id") else None,
                 llama_cpp_ref=str(runtime["llama_cpp_ref"]) if runtime.get("llama_cpp_ref") else None,
+                prepare_context_summary=_prepare_context_summary(plan),
                 preflight_before_prepare_lfb=_format_lfb(entry.get("preflight_before_prepare")),
                 preflight_lfb=_format_lfb(entry.get("preflight")),
                 preflight_required_lfb_blocks=_effective_required_lfb_blocks(
@@ -745,10 +759,10 @@ def _format_sweep_comparison_report(
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower."
         + ranking_note,
         "",
-        "| Model | Variant | Selection | Run prefix | Runtime | Preflight lfb | Required lfb"
+        "| Model | Variant | Selection | Run prefix | Runtime | Prepare ctx | Preflight lfb | Required lfb"
         + ranking_column
         + " | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
-        "|---|---|---|---|---|---:|---:"
+        "|---|---|---|---|---|---|---:|---:"
         + ranking_separator
         + "|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
     ]
@@ -759,12 +773,13 @@ def _format_sweep_comparison_report(
             ranking_precheck_text = _format_ranking_precheck(row).replace("|", "\\|")
             ranking_precheck = f" | {ranking_precheck_text}"
         lines.append(
-            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {lfb} | {required_lfb}{ranking_precheck} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {prepare_context} | {lfb} | {required_lfb}{ranking_precheck} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 selection=_format_selection(row).replace("|", "\\|"),
                 run_prefix=row.run_prefix,
                 runtime=_format_runtime(row),
+                prepare_context=row.prepare_context_summary.replace("|", "\\|"),
                 lfb=row.preflight_lfb,
                 required_lfb="" if row.preflight_required_lfb_blocks is None else row.preflight_required_lfb_blocks,
                 ranking_precheck=ranking_precheck,
