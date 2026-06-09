@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from .config import config_supports_images, load_model_config
+from .eligibility_selection import build_eligibility_selection_artifact
 from .jetson_profile import summarize_tegrastats_log as summarize_jetson_profile_log
 
 
@@ -1544,6 +1545,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Require a passing Startup precheck when evaluating promotion precheck",
     )
     compare_parser.add_argument("--fail-on-promotion-precheck", action="store_true")
+    selection_parser = subparsers.add_parser(
+        "select-eligible",
+        help="Export rows that passed a specific precheck gate from compare eligibility JSON",
+    )
+    selection_parser.add_argument("--input", action="append", required=True, help="Compare eligibility JSON path; repeatable")
+    selection_parser.add_argument("--gate", choices=("startup", "ranking", "promotion"), required=True)
+    selection_parser.add_argument("--output", required=True, help="Filtered selection JSON output path")
     args = parser.parse_args(argv)
 
     if args.command == "compare":
@@ -1589,6 +1597,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if args.fail_on_promotion_precheck and any(row.promotion_precheck_passed is False for row in rows):
             return 1
+        return 0
+    if args.command == "select-eligible":
+        artifact = build_eligibility_selection_artifact(
+            input_paths=args.input,
+            gate=args.gate,
+            output_path=args.output,
+        )
+        print(json.dumps({"gate": args.gate, "selected": artifact["selected_count"], "output": args.output}, ensure_ascii=False))
         return 0
     if args.command != "report":
         parser.print_help()

@@ -421,6 +421,12 @@ JSON sidecar 会把每一行的 `Startup precheck`、`Ranking precheck`、
 `Promotion precheck` 状态，以及各 gate 的 eligible row 列表一起落盘。
 这些 remote suite wrapper 现在也会默认生成
 `comparison.eligibility.json`，和 `comparison.md` 放在同一个目录里。
+如果还要把这个 compare sidecar 进一步变成下游直接消费的筛选结果，就运行
+`python -m edge_vlm.optimization select-eligible --input
+.../comparison.eligibility.json --gate ranking --output
+.../ranking.selection.json`，或者把 gate 换成 `promotion` 输出
+`promotion.selection.json`。这些 remote suite wrapper 现在默认也会做这两步，
+这样 ranking/promotion 自动化就不需要再去解析 Markdown 表格。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

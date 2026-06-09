@@ -23,6 +23,8 @@ extra_variants_text="${JETSON_TENCENT_TEXT_EXTRA_VARIANTS:-}"
 manifest_path="${JETSON_TENCENT_TEXT_MANIFEST:-outputs/optimization_sweeps/${run_prefix}/${run_prefix}.manifest.json}"
 comparison_output="${JETSON_TENCENT_TEXT_COMPARISON_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.md}"
 comparison_eligibility_output="${JETSON_TENCENT_TEXT_ELIGIBILITY_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.eligibility.json}"
+ranking_selection_output="outputs/optimization_sweeps/${run_prefix}/ranking.selection.json"
+promotion_selection_output="outputs/optimization_sweeps/${run_prefix}/promotion.selection.json"
 
 if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" != "1" ]]; then
   echo "JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK must be 0 or 1." >&2
@@ -96,4 +98,27 @@ if [[ "${fail_on_promotion_precheck}" == "1" ]]; then
   compare_args+=(--fail-on-promotion-precheck)
 fi
 
-"${remote_exec}" "${compare_args[@]}"
+compare_exit=0
+if "${remote_exec}" "${compare_args[@]}"; then
+  compare_exit=0
+else
+  compare_exit=$?
+fi
+
+"${remote_exec}" \
+  "PYTHONPATH=${remote_pythonpath}" \
+  python3 -m edge_vlm.optimization \
+  select-eligible \
+  --input "${comparison_eligibility_output}" \
+  --gate ranking \
+  --output "${ranking_selection_output}"
+
+"${remote_exec}" \
+  "PYTHONPATH=${remote_pythonpath}" \
+  python3 -m edge_vlm.optimization \
+  select-eligible \
+  --input "${comparison_eligibility_output}" \
+  --gate promotion \
+  --output "${promotion_selection_output}"
+
+exit "${compare_exit}"

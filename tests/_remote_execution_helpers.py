@@ -44,7 +44,7 @@ def write_remote_arg_logger(path, *, stdin_mode=None):
     write_executable(path, lines)
 
 
-def write_fake_suite_scripts(tmp_path):
+def write_fake_suite_scripts(tmp_path, *, fail_compare=False):
     fake_sweep = tmp_path / "run_remote_optimization_sweep.sh"
     fake_remote = tmp_path / "remote_exec.sh"
     write_executable(
@@ -67,7 +67,14 @@ def write_fake_suite_scripts(tmp_path):
             "#!/usr/bin/env bash",
             "set -Eeuo pipefail",
             "printf 'REMOTE\\n' >> \"${FAKE_SUITE_LOG:?}\"",
-            "for arg in \"$@\"; do printf 'REMOTE_ARG=%s\\n' \"$arg\" >> \"${FAKE_SUITE_LOG}\"; done",
+            "is_compare=0",
+            "seen_optimization_module=0",
+            "for arg in \"$@\"; do",
+            "  printf 'REMOTE_ARG=%s\\n' \"$arg\" >> \"${FAKE_SUITE_LOG}\"",
+            "  if [[ \"$arg\" == \"edge_vlm.optimization\" ]]; then seen_optimization_module=1; fi",
+            "  if [[ \"$arg\" == \"compare\" ]]; then is_compare=1; fi",
+            "done",
+            f"if [[ \"{1 if fail_compare else 0}\" == \"1\" && \"$seen_optimization_module\" == \"1\" && \"$is_compare\" == \"1\" ]]; then exit 1; fi",
         ],
     )
     return fake_sweep, fake_remote

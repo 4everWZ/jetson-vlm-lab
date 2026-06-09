@@ -421,6 +421,13 @@ That JSON sidecar carries the same `Startup precheck`, `Ranking precheck`, and
 `Promotion precheck` states per row, plus top-level eligible row lists for each
 gate. The remote suite wrappers now emit that
 `comparison.eligibility.json` sidecar by default next to `comparison.md`.
+To turn that compare-sidecar into a filtered downstream artifact, run
+`python -m edge_vlm.optimization select-eligible --input
+.../comparison.eligibility.json --gate ranking --output
+.../ranking.selection.json` or switch the gate to `promotion` and write
+`promotion.selection.json`. The remote suite wrappers now do both by default,
+so ranking/promotion automation can consume filtered JSON directly instead of
+re-parsing Markdown tables.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

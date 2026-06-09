@@ -86,6 +86,18 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
             "REMOTE_ARG=--eligibility-output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/comparison.eligibility.json\n",
             log_text,
         )
+        self.assertIn(
+            "REMOTE_ARG=PYTHONPATH=src\nREMOTE_ARG=python3\nREMOTE_ARG=-m\nREMOTE_ARG=edge_vlm.optimization\nREMOTE_ARG=select-eligible\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=ranking\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/ranking.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=promotion\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/promotion.selection.json\n",
+            log_text,
+        )
 
     def test_remote_lightweight_model_suite_runs_baselines_and_candidates_then_compare(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -176,6 +188,14 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         )
         self.assertIn(
             "REMOTE_ARG=--eligibility-output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/comparison.eligibility.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=ranking\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/ranking.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=promotion\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/promotion.selection.json\n",
             log_text,
         )
 
@@ -423,6 +443,48 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         )
         self.assertIn(
             "REMOTE_ARG=--eligibility-output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/comparison.eligibility.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=ranking\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/ranking.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=promotion\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/promotion.selection.json\n",
+            log_text,
+        )
+
+    def test_remote_current_defaults_suite_still_exports_selection_artifacts_when_compare_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "suite.log"
+            fake_sweep, fake_remote = write_fake_suite_scripts(tmp_path, fail_compare=True)
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/run_remote_current_defaults_suite.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_CURRENT_DEFAULTS_RUN_PREFIX="defaults-compare-fails-unit",
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_SWEEP=str(fake_sweep),
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    FAKE_SUITE_LOG=str(log_file),
+                ),
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertIn("REMOTE_ARG=edge_vlm.optimization\nREMOTE_ARG=compare\n", log_text)
+        self.assertIn("REMOTE_ARG=edge_vlm.optimization\nREMOTE_ARG=select-eligible\n", log_text)
+        self.assertIn(
+            "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-compare-fails-unit/ranking.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-compare-fails-unit/promotion.selection.json\n",
             log_text,
         )
 

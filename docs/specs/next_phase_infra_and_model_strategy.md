@@ -117,6 +117,13 @@ machine-readable sidecar records the per-row `Startup precheck`,
 lists, and the remote current-defaults, lightweight, and Tencent text suite
 wrappers now emit `comparison.eligibility.json` by default next to
 `comparison.md`.
+The next downstream step now also exists in code instead of prose only:
+`python -m edge_vlm.optimization select-eligible --input
+.../comparison.eligibility.json --gate ranking --output
+.../ranking.selection.json` (or `--gate promotion` for
+`promotion.selection.json`). The suite wrappers run both exports by default, so
+later ranking/promotion automation can consume filtered JSON artifacts rather
+than duplicating Markdown parsing or gate logic.
 | HunyuanOCR 1B Q8 | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded through `ggml-org/HunyuanOCR-GGUF` after the launcher-resume fix and completed formal/fake-stream records, but the guard failed because all output excerpts were repetitive exclamation-mark strings. This is not an official Tencent-owned GGUF artifact. | Do not run formal repeats for the current Q8 artifact/runtime path. Revisit only with bounded quality triage of artifact, prompt/template handling, or runtime lane. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
 | Youtu-VL-4B third-party Q4 | 5-trial fixed-policy repeat `lightweight-repeat5-20260531T134554Z` passed guard and `edge_vlm.quality_review` passed 30/30 excerpt records, but it only reached 7.502 text tok/s, 7.249 image tok/s, 9.186 s fake latency, average GR3D 19.546%, and minimum profiled `lfb` 1 with `runtime_overhead`. It is also not official Tencent support. | Role `failed_artifact` for default ranking; revisit only for a scoped artifact/runtime A/B. |

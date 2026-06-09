@@ -475,6 +475,18 @@ outputs/optimization_sweeps/<run-prefix>/comparison.eligibility.json`. That
 JSON sidecar records the same per-row `Startup precheck`, `Ranking precheck`,
 and `Promotion precheck` results, plus top-level eligible row lists for each
 gate.
+To export a filtered downstream artifact from that sidecar, run:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.optimization select-eligible \
+  --input outputs/optimization_sweeps/<run-prefix>/comparison.eligibility.json \
+  --gate ranking \
+  --output outputs/optimization_sweeps/<run-prefix>/ranking.selection.json
+```
+
+Switch `--gate` to `promotion` and write `promotion.selection.json` when the
+consumer should only see promotion-pass rows. This command reads the compare
+eligibility JSON directly instead of scraping Markdown.
 
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:
@@ -615,6 +627,10 @@ rows.
 It also writes `comparison.eligibility.json` next to `comparison.md`, using
 compare's `--eligibility-output` to persist the same gate state in a
 machine-readable form.
+It also runs `edge_vlm.optimization select-eligible` for both `ranking` and
+`promotion`, writing `ranking.selection.json` and `promotion.selection.json`
+next to the compare outputs so downstream automation can consume filtered rows
+without re-implementing gate parsing.
 Set `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper
 should return non-zero if that promotion gate fails; the default remains `0`
 so comparison evidence can still be collected during diagnostic runs. Set
@@ -651,6 +667,9 @@ requires cached-startup evidence and that structured sidecar to pass. It also pa
 The wrapper also writes `comparison.eligibility.json` next to `comparison.md`
 through compare's `--eligibility-output`, so downstream ranking/export steps
 can consume gate results without parsing Markdown.
+It also runs `edge_vlm.optimization select-eligible` for `ranking` and
+`promotion`, writing `ranking.selection.json` and `promotion.selection.json`
+next to the compare outputs.
 `JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero on a failed promotion gate; the default remains `0` so
 lightweight diagnostic ladders can still emit comparison evidence. Set
@@ -748,6 +767,9 @@ rejects first-download rows. Because these rows are text-only,
 The wrapper also writes `comparison.eligibility.json` next to `comparison.md`
 with compare's `--eligibility-output`, so the text/router ranking flow can
 reuse the same machine-readable gate state.
+It also runs `edge_vlm.optimization select-eligible` for `ranking` and
+`promotion`, writing `ranking.selection.json` and `promotion.selection.json`
+next to the compare outputs.
 `JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero if any row fails that promotion gate; the default remains `0`
 so diagnostic text ladders can still emit comparison evidence. Set
