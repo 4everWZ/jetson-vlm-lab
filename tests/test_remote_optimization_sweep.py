@@ -142,6 +142,10 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             "ARG=--selection-context-json\nARG=outputs/optimization_sweeps/unit-selector/unit-selector.qwen3-selector.json\n",
             log_text,
         )
+        self.assertIn(
+            "ARG=--variant-min-lfb-blocks\nARG=qwen3-vl-2b-instruct-q8-smoke=100\n",
+            log_text,
+        )
         self.assertIn("ARG=--variant\nARG=smolvlm2-256m-q8-smoke\n", log_text)
         self.assertIn("ARG=--variant\nARG=qwen3-vl-2b-instruct-q8-smoke\n", log_text)
 

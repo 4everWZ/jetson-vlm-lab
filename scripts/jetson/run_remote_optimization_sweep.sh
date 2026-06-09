@@ -70,6 +70,22 @@ has_variant_arg() {
   return 1
 }
 
+has_variant_min_lfb_override_arg() {
+  local wanted_variant="$1"
+  shift
+  local previous=""
+  for arg in "$@"; do
+    if [[ "${previous}" == "--variant-min-lfb-blocks" && "${arg%%=*}" == "${wanted_variant}" ]]; then
+      return 0
+    fi
+    if [[ "${arg}" == --variant-min-lfb-blocks="${wanted_variant}="* ]]; then
+      return 0
+    fi
+    previous="${arg}"
+  done
+  return 1
+}
+
 run_remote_drop_caches_once() {
   printf '%s\n' "${sudo_password}" | "${remote_exec}" \
     sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory'
@@ -146,6 +162,11 @@ if [[ "${qwen3_selector}" == "1" ]]; then
   selected_reason="$(printf '%s' "${selector_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("selected_reason") or "")')"
   if [[ -n "${qwen3_selector_output}" ]]; then
     sweep_args+=(--selection-context-json "${qwen3_selector_output}")
+  fi
+  if [[ -n "${selected_variant_id}" && "${selected_variant_id}" == "${qwen3_fallback_variant}" && -n "${qwen3_fallback_min_lfb_blocks}" ]]; then
+    if ! has_variant_min_lfb_override_arg "${selected_variant_id}" "${sweep_args[@]}"; then
+      sweep_args+=(--variant-min-lfb-blocks "${selected_variant_id}=${qwen3_fallback_min_lfb_blocks}")
+    fi
   fi
   if [[ -n "${selected_variant_id}" ]]; then
     if ! has_variant_arg "${selected_variant_id}" "${sweep_args[@]}"; then

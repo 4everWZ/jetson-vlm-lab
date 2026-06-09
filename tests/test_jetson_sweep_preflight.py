@@ -133,6 +133,48 @@ class JetsonSweepPreflightContractsTest(unittest.TestCase):
         self.assertEqual(skipped["server_ready"], False)
         self.assertEqual(skipped["benchmark_returncode"], None)
 
+    def test_jetson_sweep_allows_selected_variant_specific_lfb_override(self):
+        from edge_vlm.jetson_sweep import run_sweep
+
+        class FakeProcess:
+            def poll(self):
+                return None
+
+            def terminate(self):
+                return None
+
+            def wait(self, timeout=None):
+                return 0
+
+            def kill(self):
+                return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report = tmp_path / "report.md"
+            plan = _build_single_variant_plan(tmp_path)
+            plan["variant_min_lfb_blocks"] = {"unit-variant": 100}
+
+            def fake_preflight(path):
+                return _write_preflight_sample(path, free_blocks=120)
+
+            with patch("edge_vlm.jetson_sweep.capture_preflight_sample", side_effect=fake_preflight):
+                with patch("edge_vlm.jetson_sweep._wait_for_server", return_value=False):
+                    with patch("edge_vlm.jetson_sweep.subprocess.Popen", return_value=FakeProcess()) as popen:
+                        result = run_sweep(
+                            plan,
+                            wait_timeout_s=1.0,
+                            report_output=report,
+                            min_lfb_blocks=150,
+                        )
+
+        self.assertTrue(popen.called)
+        entry = result["results"][0]
+        self.assertTrue(entry["preflight_passed"])
+        self.assertIsNone(entry["preflight_reason"])
+        self.assertEqual(entry["preflight_required_lfb_blocks"], 100)
+        self.assertFalse(entry["server_ready"])
+
     def test_jetson_sweep_skips_variant_when_server_port_is_already_open(self):
         from edge_vlm.jetson_sweep import run_sweep
 

@@ -368,7 +368,12 @@ reasons, and `selected_variant_id`. Keep the conservative gate the same for both
 lanes by default; use `--fallback-min-lfb-blocks` only for scoped diagnostic
 fallback triage. `edge_vlm.jetson_sweep` also accepts
 `--selection-context-json <path>` so a wrapper can forward that selector JSON
-into the sweep manifest as normalized `selection_contexts`.
+into the sweep manifest as normalized `selection_contexts`. When a selector run
+chooses a fallback lane under a relaxed gate, forward the same decision as
+`--variant-min-lfb-blocks <variant-id>=<min-blocks>`; the sweep plan records
+those per-variant overrides under `variant_min_lfb_blocks`, and execution uses
+them instead of re-applying the stricter global `--min-lfb-blocks` to the
+selected fallback row.
 Set `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1` for promotion/comparison sweeps. The
 wrapper runs `sudo jetson_clocks` and captures `sudo jetson_clocks --show` under
 ignored `outputs/jetson_inspect/` before launching the sweep. It reads the sudo
@@ -406,7 +411,9 @@ preflight deltas such as `lfb` or `MemAvailable` changes after cache-drop plus
 so Q4/Q8 fallback lanes can be compared directly. When the sweep manifest also
 includes `selection_contexts`, the report adds a `Selection` column so
 auto-selected lanes remain visible in promotion evidence instead of reading like
-anonymous static variant ids. Copy only the defensible summary rows into
+anonymous static variant ids. The sweep manifest also carries any
+`variant_min_lfb_blocks` overrides used to keep a selected fallback lane
+aligned with its selector gate. Copy only the defensible summary rows into
 tracked benchmark docs; keep raw generated reports under ignored `outputs/`.
 
 For route-specific output review, run the benchmark JSONL through the quality

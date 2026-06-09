@@ -615,6 +615,9 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         for text in (protocol_doc,):
             self.assertIn("selection_contexts", text)
             self.assertIn("--selection-context-json", text)
+            self.assertIn("variant_min_lfb_blocks", text)
+        for text in (readme, readme_zh, protocol_doc, strategy_doc):
+            self.assertIn("--variant-min-lfb-blocks", text)
 
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}

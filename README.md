@@ -371,7 +371,11 @@ if you need to go back to a fully manual candidate list for a scoped rerun.
 The remote sweep wrapper now also forwards that selector decision into the sweep
 manifest, so `edge_vlm.optimization compare` can show the auto-selected lane in
 its `Selection` column instead of leaving the Qwen3 row as an unlabeled static
-variant id.
+variant id. When the selector chooses the Q8 fallback under a relaxed fallback
+gate, the wrapper also forwards `--variant-min-lfb-blocks
+qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under
+`variant_min_lfb_blocks` so the selected fallback lane is not re-blocked by the
+stricter suite-wide `--min-lfb-blocks`.
 
 Remote Jetson connection settings live in the ignored `.env.jetson` file. The
 remote helpers source it automatically; do not copy SSH hosts, passwords,

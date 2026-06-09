@@ -549,6 +549,29 @@ def _load_selection_contexts(
     return contexts
 
 
+def _parse_variant_int_override(raw_value: str, *, flag_name: str) -> tuple[str, int]:
+    variant_id, separator, value_text = str(raw_value).partition("=")
+    variant_id = variant_id.strip()
+    value_text = value_text.strip()
+    if separator != "=" or not variant_id or not value_text:
+        raise ValueError(f"{flag_name} expects variant_id=value, got: {raw_value}")
+    try:
+        value = int(value_text)
+    except ValueError as exc:
+        raise ValueError(f"{flag_name} expects an integer value, got: {raw_value}") from exc
+    if value < 0:
+        raise ValueError(f"{flag_name} expects a non-negative integer, got: {raw_value}")
+    return variant_id, value
+
+
+def _parse_variant_int_overrides(values: Iterable[str], *, flag_name: str) -> dict[str, int]:
+    overrides: dict[str, int] = {}
+    for raw_value in values:
+        variant_id, value = _parse_variant_int_override(raw_value, flag_name=flag_name)
+        overrides[variant_id] = value
+    return overrides
+
+
 def _load_variants(path: str | Path) -> list[dict[str, Any]]:
     variants = list(_iter_jsonl(Path(path)))
     for variant in variants:
@@ -636,6 +659,7 @@ def build_sweep_plan(
     fake_stream_adaptive_interval_max_s: float | None = None,
     pre_variant_command: str | None = None,
     selection_contexts: Iterable[dict[str, Any]] = (),
+    variant_min_lfb_blocks: dict[str, int] | None = None,
     base_env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     source_env = dict(os.environ if base_env is None else base_env)
@@ -771,6 +795,7 @@ def build_sweep_plan(
         "port": port,
         "pre_variant_command": pre_variant_command,
         "selection_contexts": [dict(context) for context in selection_contexts],
+        "variant_min_lfb_blocks": dict(variant_min_lfb_blocks or {}),
         "variants": planned,
     }
 
@@ -1109,22 +1134,29 @@ def run_sweep(
     benchmark_paths: list[str] = []
     fake_stream_paths: list[str] = []
     command = pre_variant_command if pre_variant_command is not None else plan.get("pre_variant_command")
+    variant_min_lfb_blocks = plan.get("variant_min_lfb_blocks")
+    if not isinstance(variant_min_lfb_blocks, dict):
+        variant_min_lfb_blocks = {}
     for variant_plan in plan["variants"]:
+        variant_id = str(variant_plan["variant"]["id"])
         paths = variant_plan["paths"]
         preflight_before_prepare_path = _preflight_before_prepare_path(paths)
         preflight_before_prepare = None
         if command and preflight_before_prepare_path:
             preflight_before_prepare = capture_preflight_sample(preflight_before_prepare_path)
+        override_min_lfb_blocks = variant_min_lfb_blocks.get(variant_id)
+        required_lfb_blocks = int(override_min_lfb_blocks) if isinstance(override_min_lfb_blocks, int) else min_lfb_blocks
         pre_variant_result = _run_pre_variant_command(command)
         if pre_variant_result["pre_variant_command_passed"] is False:
             results.append(
                 {
                     "run_id": variant_plan["run_id"],
-                    "variant_id": variant_plan["variant"]["id"],
+                    "variant_id": variant_id,
                     "server_ready": False,
                     "server_returncode": None,
                     "benchmark_returncode": None,
                     "fake_stream_returncode": None,
+                    "preflight_required_lfb_blocks": required_lfb_blocks,
                     "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
                     "preflight_before_prepare": preflight_before_prepare,
                     "preflight_delta": None,
@@ -1142,16 +1174,17 @@ def run_sweep(
             continue
         preflight = capture_preflight_sample(paths["preflight_json"])
         preflight_delta = _preflight_prepare_delta(preflight_before_prepare, preflight)
-        preflight_reason = _preflight_block_reason(preflight, min_lfb_blocks)
+        preflight_reason = _preflight_block_reason(preflight, required_lfb_blocks)
         if preflight_reason is not None:
             results.append(
                 {
                     "run_id": variant_plan["run_id"],
-                    "variant_id": variant_plan["variant"]["id"],
+                    "variant_id": variant_id,
                     "server_ready": False,
                     "server_returncode": None,
                     "benchmark_returncode": None,
                     "fake_stream_returncode": None,
+                    "preflight_required_lfb_blocks": required_lfb_blocks,
                     "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
                     "preflight_before_prepare": preflight_before_prepare,
                     "preflight_delta": preflight_delta,
@@ -1169,11 +1202,12 @@ def run_sweep(
             results.append(
                 {
                     "run_id": variant_plan["run_id"],
-                    "variant_id": variant_plan["variant"]["id"],
+                    "variant_id": variant_id,
                     "server_ready": False,
                     "server_returncode": None,
                     "benchmark_returncode": None,
                     "fake_stream_returncode": None,
+                    "preflight_required_lfb_blocks": required_lfb_blocks,
                     "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
                     "preflight_before_prepare": preflight_before_prepare,
                     "preflight_delta": preflight_delta,
@@ -1190,11 +1224,12 @@ def run_sweep(
             results.append(
                 {
                     "run_id": variant_plan["run_id"],
-                    "variant_id": variant_plan["variant"]["id"],
+                    "variant_id": variant_id,
                     "server_ready": False,
                     "server_returncode": None,
                     "benchmark_returncode": None,
                     "fake_stream_returncode": None,
+                    "preflight_required_lfb_blocks": required_lfb_blocks,
                     "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
                     "preflight_before_prepare": preflight_before_prepare,
                     "preflight_delta": preflight_delta,
@@ -1235,11 +1270,12 @@ def run_sweep(
             if not ready:
                 result_entry = {
                     "run_id": variant_plan["run_id"],
-                    "variant_id": variant_plan["variant"]["id"],
+                    "variant_id": variant_id,
                     "server_ready": False,
                     "server_returncode": server.poll(),
                     "benchmark_returncode": None,
                     "fake_stream_returncode": None,
+                    "preflight_required_lfb_blocks": required_lfb_blocks,
                     "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
                     "preflight_before_prepare": preflight_before_prepare,
                     "preflight_delta": preflight_delta,
@@ -1273,11 +1309,12 @@ def run_sweep(
                 fake_stream_paths.append(paths["fake_stream_jsonl"])
             result_entry = {
                 "run_id": variant_plan["run_id"],
-                "variant_id": variant_plan["variant"]["id"],
+                "variant_id": variant_id,
                 "server_ready": True,
                 "server_returncode": server.poll(),
                 "benchmark_returncode": benchmark_result.returncode,
                 "fake_stream_returncode": fake_stream_returncode,
+                "preflight_required_lfb_blocks": required_lfb_blocks,
                 "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
                 "preflight_before_prepare": preflight_before_prepare,
                 "preflight_delta": preflight_delta,
@@ -1368,6 +1405,12 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         help="JSON file describing an auto-selected lane; repeatable",
     )
+    parser.add_argument(
+        "--variant-min-lfb-blocks",
+        action="append",
+        default=[],
+        help="Override min LFB blocks for a specific variant using variant_id=value; repeatable",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--plan-output", default=None)
     parser.add_argument("--report-output", default=None)
@@ -1383,6 +1426,13 @@ def main(argv: list[str] | None = None) -> int:
         for variant in variants
         if isinstance(variant, dict) and variant.get("id") is not None
     }
+    try:
+        variant_min_lfb_blocks = _parse_variant_int_overrides(
+            args.variant_min_lfb_blocks,
+            flag_name="--variant-min-lfb-blocks",
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     selection_contexts = _load_selection_contexts(
         args.selection_context_json,
         variant_groups=variant_groups,
@@ -1411,6 +1461,7 @@ def main(argv: list[str] | None = None) -> int:
         fake_stream_adaptive_interval_max_s=args.fake_stream_adaptive_interval_max_s,
         pre_variant_command=args.pre_variant_command,
         selection_contexts=selection_contexts,
+        variant_min_lfb_blocks=variant_min_lfb_blocks,
     )
     if not plan["variants"]:
         print(json.dumps({"error": "no variants selected", "variants": args.variants}, ensure_ascii=False), file=sys.stderr)

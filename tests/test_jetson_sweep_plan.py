@@ -219,6 +219,70 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
             ],
         )
 
+    def test_jetson_sweep_dry_run_preserves_variant_min_lfb_overrides(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            plan = tmp_path / "plan.json"
+            variants.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "id": "qwen3-vl-2b-instruct-q4-smoke",
+                                "model": "qwen3-vl-2b-instruct-q4",
+                                "config": "configs/models/qwen3_vl_2b_instruct_q4.yaml",
+                                "launcher": "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "id": "qwen3-vl-2b-instruct-q8-smoke",
+                                "model": "qwen3-vl-2b-instruct-q8",
+                                "config": "configs/models/qwen3_vl_2b_instruct_q8.yaml",
+                                "launcher": "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    "-m",
+                    "edge_vlm.jetson_sweep",
+                    "--variants",
+                    str(variants),
+                    "--variant",
+                    "qwen3-vl-2b-instruct-q8-smoke",
+                    "--run-prefix",
+                    "unit-variant-min-lfb",
+                    "--output-root",
+                    str(tmp_path / "outputs"),
+                    "--server-log-dir",
+                    str(tmp_path / "logs"),
+                    "--variant-min-lfb-blocks",
+                    "qwen3-vl-2b-instruct-q8-smoke=100",
+                    "--plan-output",
+                    str(plan),
+                    "--dry-run",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={**os.environ, "PYTHONPATH": "src"},
+            )
+            plan_data = json.loads(plan.read_text(encoding="utf-8"))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            plan_data["variant_min_lfb_blocks"],
+            {"qwen3-vl-2b-instruct-q8-smoke": 100},
+        )
+
     def test_jetson_sweep_plan_records_inherited_launcher_environment(self):
         from edge_vlm.jetson_sweep import build_sweep_plan
 
