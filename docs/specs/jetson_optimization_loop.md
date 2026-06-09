@@ -93,6 +93,7 @@ Outputs stay under ignored `outputs/optimization_sweeps/<run-prefix>/`:
 - `lifecycle/*.lifecycle.jsonl`
 - `profiles/*.profile.jsonl`
 - `profiles/*.summary.json`
+- `preflight/*.preflight-before-prepare.json` when a pre-variant prepare command is used
 - `preflight/*.preflight.json`
 - `server_logs/*.server.log`
 - `optimization_report.md`
@@ -102,6 +103,9 @@ Each variant captures a preflight JSON file before server startup. On Jetson,
 this includes `/proc/meminfo` and a short `tegrastats` sample with parsed
 `lfb` when available. Use this to distinguish memory-state-sensitive startup
 failures from parameter-incompatible failures.
+If the sweep uses a pre-variant prepare command, it also captures a
+before-prepare sidecar sample and stores a delta in the manifest so the effect
+of cache-drop or `compact_memory` can be measured explicitly.
 
 Each planned variant also records `server_runtime` when the launcher environment
 contains a pinned `LLAMA_CPP_DOCKER_IMAGE` and Docker can inspect it. This

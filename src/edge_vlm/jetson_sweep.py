@@ -161,6 +161,79 @@ def capture_preflight_sample(path: str | Path) -> dict[str, Any]:
     return sample
 
 
+def _preflight_before_prepare_path(paths: dict[str, Any]) -> str | None:
+    explicit = paths.get("preflight_before_prepare_json")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    preflight_path = paths.get("preflight_json")
+    if not isinstance(preflight_path, str) or not preflight_path:
+        return None
+    if preflight_path.endswith(".preflight.json"):
+        return preflight_path.removesuffix(".preflight.json") + ".preflight-before-prepare.json"
+    return preflight_path + ".before-prepare"
+
+
+def _extract_preflight_lfb_free_blocks(preflight: dict[str, Any] | None) -> int | None:
+    if not isinstance(preflight, dict):
+        return None
+    tegrastats = preflight.get("tegrastats")
+    if not isinstance(tegrastats, dict):
+        return None
+    lfb = tegrastats.get("lfb")
+    if not isinstance(lfb, dict):
+        return None
+    free_blocks = lfb.get("free_blocks")
+    return int(free_blocks) if isinstance(free_blocks, int) else None
+
+
+def _extract_preflight_mem_available_kb(preflight: dict[str, Any] | None) -> int | None:
+    if not isinstance(preflight, dict):
+        return None
+    meminfo = preflight.get("meminfo_kb")
+    if not isinstance(meminfo, dict):
+        return None
+    mem_available = meminfo.get("MemAvailable")
+    return int(mem_available) if isinstance(mem_available, int) else None
+
+
+def _extract_preflight_buddyinfo_max_order(preflight: dict[str, Any] | None) -> int | None:
+    if not isinstance(preflight, dict):
+        return None
+    buddyinfo = preflight.get("buddyinfo")
+    if not isinstance(buddyinfo, dict):
+        return None
+    max_order = buddyinfo.get("max_order_with_free_block")
+    return int(max_order) if isinstance(max_order, int) else None
+
+
+def _delta_or_none(before: int | None, after: int | None) -> int | None:
+    if before is None or after is None:
+        return None
+    return after - before
+
+
+def _preflight_prepare_delta(
+    before_prepare: dict[str, Any] | None,
+    after_prepare: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if before_prepare is None or after_prepare is None:
+        return None
+    return {
+        "lfb_free_blocks_delta": _delta_or_none(
+            _extract_preflight_lfb_free_blocks(before_prepare),
+            _extract_preflight_lfb_free_blocks(after_prepare),
+        ),
+        "mem_available_kb_delta": _delta_or_none(
+            _extract_preflight_mem_available_kb(before_prepare),
+            _extract_preflight_mem_available_kb(after_prepare),
+        ),
+        "buddyinfo_max_order_delta": _delta_or_none(
+            _extract_preflight_buddyinfo_max_order(before_prepare),
+            _extract_preflight_buddyinfo_max_order(after_prepare),
+        ),
+    }
+
+
 _ENV_REF_RE = re.compile(r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))")
 
 
@@ -349,6 +422,7 @@ def build_sweep_plan(
         lifecycle_jsonl = output_base / "lifecycle" / f"{run_id}.lifecycle.jsonl"
         fake_stream_jsonl = output_base / "fake_stream" / f"{run_id}.jsonl"
         server_log = log_base / f"{run_id}.server.log"
+        preflight_before_prepare_json = output_base / "preflight" / f"{run_id}.preflight-before-prepare.json"
         preflight_json = output_base / "preflight" / f"{run_id}.preflight.json"
         server_env = {
             **inherited_server_env,
@@ -434,6 +508,7 @@ def build_sweep_plan(
                     "lifecycle_jsonl": str(lifecycle_jsonl),
                     "fake_stream_jsonl": str(fake_stream_jsonl),
                     "server_log": str(server_log),
+                    "preflight_before_prepare_json": str(preflight_before_prepare_json),
                     "preflight_json": str(preflight_json),
                 },
             }
@@ -783,6 +858,10 @@ def run_sweep(
     command = pre_variant_command if pre_variant_command is not None else plan.get("pre_variant_command")
     for variant_plan in plan["variants"]:
         paths = variant_plan["paths"]
+        preflight_before_prepare_path = _preflight_before_prepare_path(paths)
+        preflight_before_prepare = None
+        if command and preflight_before_prepare_path:
+            preflight_before_prepare = capture_preflight_sample(preflight_before_prepare_path)
         pre_variant_result = _run_pre_variant_command(command)
         if pre_variant_result["pre_variant_command_passed"] is False:
             results.append(
@@ -793,6 +872,9 @@ def run_sweep(
                     "server_returncode": None,
                     "benchmark_returncode": None,
                     "fake_stream_returncode": None,
+                    "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
+                    "preflight_before_prepare": preflight_before_prepare,
+                    "preflight_delta": None,
                     "preflight_path": paths["preflight_json"],
                     "preflight": None,
                     "preflight_passed": False,
@@ -806,6 +888,7 @@ def run_sweep(
             )
             continue
         preflight = capture_preflight_sample(paths["preflight_json"])
+        preflight_delta = _preflight_prepare_delta(preflight_before_prepare, preflight)
         preflight_reason = _preflight_block_reason(preflight, min_lfb_blocks)
         if preflight_reason is not None:
             results.append(
@@ -816,6 +899,9 @@ def run_sweep(
                     "server_returncode": None,
                     "benchmark_returncode": None,
                     "fake_stream_returncode": None,
+                    "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
+                    "preflight_before_prepare": preflight_before_prepare,
+                    "preflight_delta": preflight_delta,
                     "preflight_path": paths["preflight_json"],
                     "preflight": preflight,
                     "preflight_passed": False,
@@ -834,6 +920,9 @@ def run_sweep(
                     "server_returncode": None,
                     "benchmark_returncode": None,
                     "fake_stream_returncode": None,
+                    "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
+                    "preflight_before_prepare": preflight_before_prepare,
+                    "preflight_delta": preflight_delta,
                     "preflight_path": paths["preflight_json"],
                     "preflight": preflight,
                     "preflight_passed": True,
@@ -876,6 +965,9 @@ def run_sweep(
                     "server_returncode": server.poll(),
                     "benchmark_returncode": None,
                     "fake_stream_returncode": None,
+                    "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
+                    "preflight_before_prepare": preflight_before_prepare,
+                    "preflight_delta": preflight_delta,
                     "preflight_path": paths["preflight_json"],
                     "preflight": preflight,
                     "preflight_passed": True,
@@ -911,6 +1003,9 @@ def run_sweep(
                 "server_returncode": server.poll(),
                 "benchmark_returncode": benchmark_result.returncode,
                 "fake_stream_returncode": fake_stream_returncode,
+                "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
+                "preflight_before_prepare": preflight_before_prepare,
+                "preflight_delta": preflight_delta,
                 "preflight_path": paths["preflight_json"],
                 "preflight": preflight,
                 "preflight_passed": True,

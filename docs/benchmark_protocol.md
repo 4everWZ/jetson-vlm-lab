@@ -244,6 +244,12 @@ the promotion rules are documented in `docs/specs/jetson_optimization_loop.md`.
 Each variant also writes `preflight/*.preflight.json` under the sweep output
 root so `meminfo_kb`, `/proc/buddyinfo`, and structured `tegrastats` `lfb`
 state are visible before server startup.
+When `--pre-variant-command` is used, the sweep now also writes
+`preflight/*.preflight-before-prepare.json` first, keeps
+`preflight/*.preflight.json` as the post-prepare gate sample, and records a
+machine-readable delta in the sweep manifest so the effect of
+cache-drop/`compact_memory` can be compared directly instead of inferred from a
+single snapshot.
 For promotion sweeps, add `--min-lfb-blocks 150` or a stricter threshold learned
 from prior runs so memory-fragmented starts are skipped and labeled before
 Docker launches.

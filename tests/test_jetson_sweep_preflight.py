@@ -26,6 +26,9 @@ def _build_single_variant_plan(tmp_path):
                     "benchmark_jsonl": str(tmp_path / "benchmarks" / "unit-run.jsonl"),
                     "fake_stream_jsonl": str(tmp_path / "fake_stream" / "unit-run.jsonl"),
                     "server_log": str(tmp_path / "logs" / "server.log"),
+                    "preflight_before_prepare_json": str(
+                        tmp_path / "preflight" / "unit-run.preflight-before-prepare.json"
+                    ),
                     "preflight_json": str(tmp_path / "preflight" / "unit-run.preflight.json"),
                 },
             }
@@ -33,9 +36,22 @@ def _build_single_variant_plan(tmp_path):
     }
 
 
-def _write_preflight_sample(path, *, free_blocks):
+def _write_preflight_sample(path, *, free_blocks, mem_available=6911728, max_order=12):
     sample = {
         "captured_at": "2026-05-30T00:00:00+00:00",
+        "meminfo_kb": {"MemAvailable": mem_available},
+        "buddyinfo": {
+            "available": True,
+            "zones": [
+                {
+                    "node": 0,
+                    "zone": "Normal",
+                    "free_blocks_by_order": [752, 1866, 1691],
+                    "max_order_with_free_block": max_order,
+                }
+            ],
+            "max_order_with_free_block": max_order,
+        },
         "tegrastats": {
             "available": True,
             "raw": f"RAM 716/7620MB (lfb {free_blocks}x4MB)",
@@ -107,7 +123,7 @@ class JetsonSweepPreflightContractsTest(unittest.TestCase):
         self.assertEqual(skipped["server_ready"], False)
         self.assertEqual(skipped["benchmark_returncode"], None)
 
-    def test_jetson_sweep_runs_pre_variant_command_before_preflight(self):
+    def test_jetson_sweep_records_before_and_after_prepare_preflight_samples(self):
         from edge_vlm.jetson_sweep import run_sweep
 
         class FakeProcess:
@@ -131,18 +147,21 @@ class JetsonSweepPreflightContractsTest(unittest.TestCase):
             plan = _build_single_variant_plan(tmp_path)
 
             def fake_preflight(path):
+                if str(path).endswith(".preflight-before-prepare.json"):
+                    events.append("before_prepare")
+                    return _write_preflight_sample(
+                        path,
+                        free_blocks=120,
+                        mem_available=6400000,
+                        max_order=10,
+                    )
                 events.append("preflight")
-                sample = {
-                    "captured_at": "2026-05-31T00:00:00+00:00",
-                    "tegrastats": {
-                        "available": True,
-                        "raw": "RAM 645/7620MB (lfb 180x4MB)",
-                        "lfb": {"free_blocks": 180, "block_mb": 4},
-                    },
-                }
-                Path(path).parent.mkdir(parents=True, exist_ok=True)
-                Path(path).write_text(json.dumps(sample), encoding="utf-8")
-                return sample
+                return _write_preflight_sample(
+                    path,
+                    free_blocks=180,
+                    mem_available=6900000,
+                    max_order=12,
+                )
 
             def fake_run(command, **_kwargs):
                 if command == "sync; echo 3 > /proc/sys/vm/drop_caches":
@@ -181,9 +200,47 @@ class JetsonSweepPreflightContractsTest(unittest.TestCase):
                                 pre_variant_command="sync; echo 3 > /proc/sys/vm/drop_caches",
                             )
 
-        self.assertEqual(events[:2], ["cleanup", "preflight"])
+        self.assertEqual(events[:3], ["before_prepare", "cleanup", "preflight"])
         self.assertEqual(result["results"][0]["pre_variant_command_returncode"], 0)
+        self.assertEqual(
+            result["results"][0]["preflight_before_prepare_path"],
+            plan["variants"][0]["paths"]["preflight_before_prepare_json"],
+        )
+        self.assertEqual(
+            result["results"][0]["preflight_before_prepare"]["tegrastats"]["lfb"]["free_blocks"],
+            120,
+        )
         self.assertEqual(result["results"][0]["preflight"]["tegrastats"]["lfb"]["free_blocks"], 180)
+        self.assertEqual(result["results"][0]["preflight_delta"]["lfb_free_blocks_delta"], 60)
+        self.assertEqual(result["results"][0]["preflight_delta"]["mem_available_kb_delta"], 500000)
+        self.assertEqual(result["results"][0]["preflight_delta"]["buddyinfo_max_order_delta"], 2)
+
+    def test_jetson_sweep_without_prepare_command_omits_before_prepare_sample(self):
+        from edge_vlm.jetson_sweep import run_sweep
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report = tmp_path / "report.md"
+            plan = _build_single_variant_plan(tmp_path)
+
+            def fake_preflight(path):
+                return _write_preflight_sample(path, free_blocks=71)
+
+            with patch("edge_vlm.jetson_sweep.capture_preflight_sample", side_effect=fake_preflight):
+                with patch("edge_vlm.jetson_sweep.subprocess.Popen") as popen:
+                    result = run_sweep(
+                        plan,
+                        wait_timeout_s=1.0,
+                        report_output=report,
+                        min_lfb_blocks=150,
+                    )
+
+        self.assertFalse(popen.called)
+        entry = result["results"][0]
+        self.assertIsNone(entry["preflight_before_prepare_path"])
+        self.assertIsNone(entry["preflight_before_prepare"])
+        self.assertIsNone(entry["preflight_delta"])
+        self.assertEqual(entry["preflight_reason"], "lfb_free_blocks 71 < required 150")
 
     def test_jetson_sweep_skips_variant_when_pre_variant_command_fails(self):
         from edge_vlm.jetson_sweep import run_sweep
@@ -211,12 +268,20 @@ class JetsonSweepPreflightContractsTest(unittest.TestCase):
                             pre_variant_command="sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'",
                         )
 
-        self.assertFalse(preflight.called)
+        self.assertTrue(preflight.called)
+        self.assertEqual(preflight.call_count, 1)
         self.assertFalse(popen.called)
         self.assertEqual(result["report_output"], None)
         failed = result["results"][0]
         self.assertFalse(failed["pre_variant_command_passed"])
         self.assertEqual(failed["pre_variant_command_returncode"], 1)
+        self.assertEqual(
+            failed["preflight_before_prepare_path"],
+            plan["variants"][0]["paths"]["preflight_before_prepare_json"],
+        )
+        self.assertIsNotNone(failed["preflight_before_prepare"])
+        self.assertIsNone(failed["preflight"])
+        self.assertIsNone(failed["preflight_delta"])
         self.assertEqual(failed["preflight_reason"], "pre_variant_command_failed returncode 1")
 
     def test_jetson_sweep_parses_tegrastats_lfb(self):

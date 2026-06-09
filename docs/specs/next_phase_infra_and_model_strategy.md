@@ -333,6 +333,10 @@ Formal comparison runs must:
 - Record preflight `lfb` plus `/proc/buddyinfo` fragmentation state; skip and
   label variants below threshold instead of mixing fragmented-memory failures
   into parameter rankings.
+- When prepare commands such as cache-drop plus `compact_memory` are enabled,
+  record both before-prepare and after-prepare preflight samples plus a delta so
+  fragmentation changes are measured directly instead of guessed from a single
+  sample.
 - Capture `EMC_FREQ`, `GR3D_FREQ`, CPU frequencies, RAM/SWAP, power, and
   temperatures across the request window.
 - Record whether a failure happened before server ready, during first image

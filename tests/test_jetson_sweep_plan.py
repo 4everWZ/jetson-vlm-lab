@@ -111,6 +111,11 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
         self.assertIn("--cache-type-k", variant_plan["server_command"])
         self.assertTrue(variant_plan["paths"]["benchmark_jsonl"].endswith("unit-sweep-minicpm-unit.jsonl"))
         self.assertTrue(variant_plan["paths"]["preflight_json"].endswith("unit-sweep-minicpm-unit.preflight.json"))
+        self.assertTrue(
+            variant_plan["paths"]["preflight_before_prepare_json"].endswith(
+                "unit-sweep-minicpm-unit.preflight-before-prepare.json"
+            )
+        )
         self.assertTrue(variant_plan["paths"]["lifecycle_jsonl"].endswith("unit-sweep-minicpm-unit.lifecycle.jsonl"))
         self.assertEqual(
             variant_plan["server_env"]["EDGE_VLM_LAUNCH_PHASE_LOG"],
