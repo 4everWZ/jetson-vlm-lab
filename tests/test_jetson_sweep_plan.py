@@ -394,6 +394,10 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
                         stderr="",
                     )
                 if command[:3] == ["docker", "run", "--rm"]:
+                    self.assertIn("--runtime", command)
+                    runtime_index = command.index("--runtime")
+                    self.assertLess(runtime_index + 1, len(command))
+                    self.assertEqual(command[runtime_index + 1], "nvidia")
                     return subprocess.CompletedProcess(
                         command,
                         0,

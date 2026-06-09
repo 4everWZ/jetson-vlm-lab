@@ -334,7 +334,11 @@ def _parse_probe_bool(value: str | None) -> bool | None:
     return None
 
 
-def _docker_image_runtime_probe(image: str | None, llama_server_cmd: str | None = None) -> dict[str, Any]:
+def _docker_image_runtime_probe(
+    image: str | None,
+    llama_server_cmd: str | None = None,
+    docker_gpu_args: str | None = None,
+) -> dict[str, Any]:
     probe = _llama_server_probe_default()
     if not image:
         probe["llama_server_probe_error"] = "LLAMA_CPP_DOCKER_IMAGE not set in sweep environment"
@@ -404,9 +408,11 @@ printf 'llama_server_multimodal_markers=%s\\n' "$(IFS=,; printf '%s' "${markers[
             **os.environ,
             "EDGE_VLM_LLAMA_SERVER_CMD": str(llama_server_cmd),
         }
+    gpu_args_text = str(docker_gpu_args or "--runtime nvidia").strip()
+    gpu_args = gpu_args_text.split() if gpu_args_text else []
     try:
         result = subprocess.run(
-            ["docker", "run", "--rm", "--entrypoint", "/bin/bash", image, "-lc", probe_script],
+            ["docker", "run", "--rm", *gpu_args, "--entrypoint", "/bin/bash", image, "-lc", probe_script],
             check=False,
             capture_output=True,
             text=True,
@@ -441,9 +447,13 @@ printf 'llama_server_multimodal_markers=%s\\n' "$(IFS=,; printf '%s' "${markers[
     return probe
 
 
-def _runtime_metadata(image: str | None, llama_server_cmd: str | None = None) -> dict[str, Any]:
+def _runtime_metadata(
+    image: str | None,
+    llama_server_cmd: str | None = None,
+    docker_gpu_args: str | None = None,
+) -> dict[str, Any]:
     metadata = _docker_image_metadata(image)
-    metadata.update(_docker_image_runtime_probe(image, llama_server_cmd))
+    metadata.update(_docker_image_runtime_probe(image, llama_server_cmd, docker_gpu_args))
     return metadata
 
 
@@ -547,7 +557,7 @@ def build_sweep_plan(
     selected_models = set(model_filters)
     selected_variants = set(variant_filters)
     planned: list[dict[str, Any]] = []
-    runtime_by_image: dict[tuple[str | None, str | None], dict[str, Any]] = {}
+    runtime_by_image: dict[tuple[str | None, str | None, str | None], dict[str, Any]] = {}
     for variant in _load_variants(variants_path):
         if not _matches_filters(variant, selected_models, selected_variants):
             continue
@@ -580,9 +590,14 @@ def build_sweep_plan(
         }
         image = server_env.get("LLAMA_CPP_DOCKER_IMAGE")
         llama_server_cmd = server_env.get("LLAMA_SERVER_CMD")
-        runtime_key = (image, llama_server_cmd)
+        docker_gpu_args = server_env.get("DOCKER_GPU_ARGS")
+        runtime_key = (image, llama_server_cmd, docker_gpu_args)
         if runtime_key not in runtime_by_image:
-            runtime_by_image[runtime_key] = _runtime_metadata(image, llama_server_cmd)
+            runtime_by_image[runtime_key] = _runtime_metadata(
+                image,
+                llama_server_cmd,
+                docker_gpu_args,
+            )
         benchmark_env = {
             **server_env,
             "EDGE_VLM_FORMAL_RUN_ID": run_id,
