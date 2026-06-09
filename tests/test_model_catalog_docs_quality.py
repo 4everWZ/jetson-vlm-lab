@@ -641,6 +641,18 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("max_clocks", text)
             self.assertIn("drop_caches", text)
 
+    def test_compare_docs_explain_promotion_precheck_stage(self):
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        loop_doc = Path("docs/specs/jetson_optimization_loop.md").read_text(encoding="utf-8")
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(encoding="utf-8")
+
+        for text in (protocol_doc, loop_doc, strategy_doc):
+            self.assertIn("promotion-precheck-stage", text)
+            self.assertIn("Promotion precheck", text)
+            self.assertIn("formal-repeat", text)
+            self.assertIn("promotion-reference", text)
+            self.assertIn("raw excerpt review", text)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [

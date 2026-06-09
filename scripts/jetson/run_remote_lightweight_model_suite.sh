@@ -65,6 +65,7 @@ done
 
 compare_args+=(
   --ranking-min-lfb-blocks "${min_lfb_blocks}"
+  --promotion-precheck-stage formal-repeat
   --output "${comparison_output}"
 )
 

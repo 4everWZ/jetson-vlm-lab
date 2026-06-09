@@ -49,6 +49,8 @@ class SweepComparisonRow:
     server_image_id: str | None
     llama_cpp_ref: str | None
     prepare_context_summary: str
+    prepare_max_clocks_enabled: bool
+    prepare_drop_caches_before_variant: bool
     preflight_before_prepare_lfb: str
     preflight_lfb: str
     preflight_required_lfb_blocks: int | None
@@ -56,6 +58,8 @@ class SweepComparisonRow:
     preflight_prepare_mem_available_mb_delta: float | None
     preflight_prepare_buddyinfo_max_order_delta: int | None
     trials: int | None
+    benchmark_max_tokens: int | None
+    benchmark_temperature: float | None
     guard_passed: bool
     successful: int
     records: int
@@ -80,6 +84,18 @@ class SweepComparisonRow:
     delta_fake_stream_latency_pct: float | None = None
     ranking_precheck_passed: bool | None = None
     ranking_precheck_reason: str = ""
+    promotion_precheck_passed: bool | None = None
+    promotion_precheck_reason: str = ""
+
+
+_PROMOTION_PRECHECK_STAGES: dict[str, dict[str, int]] = {
+    "formal-repeat": {
+        "min_trials": 5,
+    },
+    "promotion-reference": {
+        "min_trials": 10,
+    },
+}
 
 
 def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
@@ -460,6 +476,13 @@ def _prepare_context_summary(plan: dict[str, Any]) -> str:
     return ", ".join(labels)
 
 
+def _prepare_context_flag(plan: dict[str, Any], key: str) -> bool:
+    context = plan.get("prepare_context")
+    if not isinstance(context, dict):
+        return False
+    return context.get(key) is True
+
+
 def _format_selection(row: SweepComparisonRow) -> str:
     if not row.selection_id:
         return ""
@@ -533,25 +556,31 @@ def _infer_run_prefix(run_id: str, variant_id: str, fallback: str) -> str:
     return fallback
 
 
-def _trial_count_from_manifest(path: Path | None) -> int | None:
+def _benchmark_metadata_from_manifest(path: Path | None) -> dict[str, Any]:
+    metadata = {
+        "trial_count": None,
+        "max_tokens": None,
+        "temperature": None,
+        "tegrastats_log": None,
+    }
     if path is None or not path.is_file():
-        return None
+        return metadata
     data = _read_json(path)
     benchmark = data.get("benchmark")
-    if not isinstance(benchmark, dict):
-        return None
-    trial_count = benchmark.get("trial_count")
-    return int(trial_count) if isinstance(trial_count, int) else None
-
-
-def _tegrastats_log_from_manifest(path: Path | None) -> Path | None:
-    if path is None or not path.is_file():
-        return None
-    data = _read_json(path)
+    if isinstance(benchmark, dict):
+        trial_count = benchmark.get("trial_count")
+        if isinstance(trial_count, int):
+            metadata["trial_count"] = trial_count
+        max_tokens = benchmark.get("max_tokens")
+        if isinstance(max_tokens, int):
+            metadata["max_tokens"] = max_tokens
+        temperature = benchmark.get("temperature")
+        if isinstance(temperature, (int, float)):
+            metadata["temperature"] = float(temperature)
     jetson = data.get("jetson")
-    if not isinstance(jetson, dict):
-        return None
-    return _path_or_none(jetson.get("tegrastats_log"))
+    if isinstance(jetson, dict):
+        metadata["tegrastats_log"] = _path_or_none(jetson.get("tegrastats_log"))
+    return metadata
 
 
 def summarize_sweep_manifest(
@@ -599,6 +628,7 @@ def summarize_sweep_manifest(
         benchmark_path = _path_or_none(paths.get("benchmark_jsonl"))
         benchmark_manifest_path = _path_or_none(paths.get("manifest_json"))
         fake_stream_path = _path_or_none(paths.get("fake_stream_jsonl"))
+        benchmark_metadata = _benchmark_metadata_from_manifest(benchmark_manifest_path)
         summary: RunSummary | None = None
         if benchmark_path is not None and benchmark_path.is_file():
             summary = summarize_run(
@@ -607,7 +637,7 @@ def summarize_sweep_manifest(
                 min_output_chars=min_output_chars,
                 max_repeat_ratio=max_repeat_ratio,
             )
-        tegrastats_log = _tegrastats_log_from_manifest(benchmark_manifest_path)
+        tegrastats_log = benchmark_metadata.get("tegrastats_log")
         tegrastats_summary = (
             summarize_jetson_profile_log(tegrastats_log)
             if tegrastats_log is not None and tegrastats_log.is_file()
@@ -652,6 +682,8 @@ def summarize_sweep_manifest(
                 server_image_id=str(runtime["image_id"]) if runtime.get("image_id") else None,
                 llama_cpp_ref=str(runtime["llama_cpp_ref"]) if runtime.get("llama_cpp_ref") else None,
                 prepare_context_summary=_prepare_context_summary(plan),
+                prepare_max_clocks_enabled=_prepare_context_flag(plan, "max_clocks_enabled"),
+                prepare_drop_caches_before_variant=_prepare_context_flag(plan, "drop_caches_before_variant"),
                 preflight_before_prepare_lfb=_format_lfb(entry.get("preflight_before_prepare")),
                 preflight_lfb=_format_lfb(entry.get("preflight")),
                 preflight_required_lfb_blocks=_effective_required_lfb_blocks(
@@ -662,7 +694,9 @@ def summarize_sweep_manifest(
                 preflight_prepare_lfb_delta=_preflight_prepare_lfb_delta(entry),
                 preflight_prepare_mem_available_mb_delta=_preflight_prepare_mem_available_mb_delta(entry),
                 preflight_prepare_buddyinfo_max_order_delta=_preflight_prepare_buddyinfo_max_order_delta(entry),
-                trials=_trial_count_from_manifest(benchmark_manifest_path),
+                trials=benchmark_metadata.get("trial_count"),
+                benchmark_max_tokens=benchmark_metadata.get("max_tokens"),
+                benchmark_temperature=benchmark_metadata.get("temperature"),
                 guard_passed=summary.guard_passed if summary is not None else False,
                 successful=summary.successful if summary is not None else 0,
                 records=summary.records if summary is not None else 0,
@@ -741,10 +775,82 @@ def _add_ranking_prechecks(rows: list[SweepComparisonRow], ranking_min_lfb_block
         )
 
 
+def _promotion_precheck(
+    row: SweepComparisonRow,
+    *,
+    promotion_precheck_stage: str | None,
+    ranking_min_lfb_blocks: int | None,
+) -> tuple[bool | None, str]:
+    if promotion_precheck_stage is None:
+        return None, ""
+    stage_requirements = _PROMOTION_PRECHECK_STAGES[promotion_precheck_stage]
+    required_lfb_floor = ranking_min_lfb_blocks if ranking_min_lfb_blocks is not None else 150
+    failures: list[str] = []
+    required_lfb_blocks = row.preflight_required_lfb_blocks
+    if required_lfb_blocks is None:
+        failures.append("missing_required_lfb")
+    elif required_lfb_blocks < required_lfb_floor:
+        failures.append(f"required_lfb {required_lfb_blocks} < required {required_lfb_floor}")
+    if not row.prepare_max_clocks_enabled:
+        failures.append("missing_max_clocks")
+    if not row.prepare_drop_caches_before_variant:
+        failures.append("missing_drop_caches")
+    if row.trials is None:
+        failures.append("missing_trial_count")
+    elif row.trials < stage_requirements["min_trials"]:
+        failures.append(f"trial_count {row.trials} < required {stage_requirements['min_trials']}")
+    if row.benchmark_max_tokens is None:
+        failures.append("missing_max_tokens")
+    elif row.benchmark_max_tokens < 64:
+        failures.append(f"max_tokens {row.benchmark_max_tokens} < required 64")
+    if row.benchmark_temperature is None:
+        failures.append("missing_temperature")
+    elif abs(row.benchmark_temperature) > 1e-9:
+        failures.append(f"temperature {row.benchmark_temperature:g} != required 0")
+    if not row.guard_passed:
+        failures.append("guard_failed")
+    if row.records > 0 and row.successful < row.records:
+        failures.append(f"benchmark_success {row.successful}/{row.records} < {row.records}/{row.records}")
+    if row.fake_stream_records < 1:
+        failures.append("missing_fake_stream_records")
+    elif row.fake_stream_successful < row.fake_stream_records:
+        failures.append(
+            f"fake_stream_success {row.fake_stream_successful}/{row.fake_stream_records} < {row.fake_stream_records}/{row.fake_stream_records}"
+        )
+    if failures:
+        return False, "; ".join(failures)
+    return True, ""
+
+
+def _format_promotion_precheck(row: SweepComparisonRow) -> str:
+    if row.promotion_precheck_passed is None:
+        return ""
+    if row.promotion_precheck_passed:
+        return "yes"
+    if row.promotion_precheck_reason:
+        return f"no ({row.promotion_precheck_reason})"
+    return "no"
+
+
+def _add_promotion_prechecks(
+    rows: list[SweepComparisonRow],
+    *,
+    ranking_min_lfb_blocks: int | None,
+    promotion_precheck_stage: str | None,
+) -> None:
+    for row in rows:
+        row.promotion_precheck_passed, row.promotion_precheck_reason = _promotion_precheck(
+            row,
+            promotion_precheck_stage=promotion_precheck_stage,
+            ranking_min_lfb_blocks=ranking_min_lfb_blocks,
+        )
+
+
 def _format_sweep_comparison_report(
     rows: list[SweepComparisonRow],
     *,
     ranking_min_lfb_blocks: int | None,
+    promotion_precheck_stage: str | None,
 ) -> str:
     ranking_column = " | Ranking precheck" if ranking_min_lfb_blocks is not None else ""
     ranking_separator = " |---" if ranking_min_lfb_blocks is not None else ""
@@ -753,17 +859,29 @@ def _format_sweep_comparison_report(
         if ranking_min_lfb_blocks is not None
         else ""
     )
+    promotion_column = " | Promotion precheck" if promotion_precheck_stage is not None else ""
+    promotion_separator = " |---" if promotion_precheck_stage is not None else ""
+    promotion_note = (
+        " `Promotion precheck` uses `--promotion-precheck-stage {stage}` to enforce the mechanical promotion gate: locked clocks, cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full benchmark success, fake-stream success, and the stage trial floor. Raw excerpt review remains manual.".format(
+            stage=promotion_precheck_stage,
+        )
+        if promotion_precheck_stage is not None
+        else ""
+    )
     lines = [
         "# Jetson Sweep Comparison Report",
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower."
         + ranking_note,
+        promotion_note,
         "",
         "| Model | Variant | Selection | Run prefix | Runtime | Prepare ctx | Preflight lfb | Required lfb"
         + ranking_column
+        + promotion_column
         + " | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
         "|---|---|---|---|---|---|---:|---:"
         + ranking_separator
+        + promotion_separator
         + "|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
     ]
     for row in rows:
@@ -772,8 +890,12 @@ def _format_sweep_comparison_report(
         if ranking_min_lfb_blocks is not None:
             ranking_precheck_text = _format_ranking_precheck(row).replace("|", "\\|")
             ranking_precheck = f" | {ranking_precheck_text}"
+        promotion_precheck = ""
+        if promotion_precheck_stage is not None:
+            promotion_precheck_text = _format_promotion_precheck(row).replace("|", "\\|")
+            promotion_precheck = f" | {promotion_precheck_text}"
         lines.append(
-            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {prepare_context} | {lfb} | {required_lfb}{ranking_precheck} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {prepare_context} | {lfb} | {required_lfb}{ranking_precheck}{promotion_precheck} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 selection=_format_selection(row).replace("|", "\\|"),
@@ -783,6 +905,7 @@ def _format_sweep_comparison_report(
                 lfb=row.preflight_lfb,
                 required_lfb="" if row.preflight_required_lfb_blocks is None else row.preflight_required_lfb_blocks,
                 ranking_precheck=ranking_precheck,
+                promotion_precheck=promotion_precheck,
                 prepare_lfb_delta=_fmt_signed_int(row.preflight_prepare_lfb_delta),
                 prepare_avail_delta=_fmt_signed_float(row.preflight_prepare_mem_available_mb_delta),
                 trials="" if row.trials is None else row.trials,
@@ -823,6 +946,7 @@ def build_sweep_comparison_report(
     min_output_chars: int = 32,
     max_repeat_ratio: float = 0.65,
     ranking_min_lfb_blocks: int | None = None,
+    promotion_precheck_stage: str | None = None,
 ) -> list[SweepComparisonRow]:
     rows: list[SweepComparisonRow] = []
     for manifest_path in manifest_paths:
@@ -835,10 +959,19 @@ def build_sweep_comparison_report(
         )
     _add_comparison_deltas(rows, baseline_variant_ids)
     _add_ranking_prechecks(rows, ranking_min_lfb_blocks)
+    _add_promotion_prechecks(
+        rows,
+        ranking_min_lfb_blocks=ranking_min_lfb_blocks,
+        promotion_precheck_stage=promotion_precheck_stage,
+    )
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
-        _format_sweep_comparison_report(rows, ranking_min_lfb_blocks=ranking_min_lfb_blocks),
+        _format_sweep_comparison_report(
+            rows,
+            ranking_min_lfb_blocks=ranking_min_lfb_blocks,
+            promotion_precheck_stage=promotion_precheck_stage,
+        ),
         encoding="utf-8",
     )
     return rows
@@ -894,11 +1027,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Strict ranking gate for preflight LFB requirements; rows below this remain in the report but fail ranking precheck",
     )
     compare_parser.add_argument("--fail-on-ranking-precheck", action="store_true")
+    compare_parser.add_argument(
+        "--promotion-precheck-stage",
+        choices=sorted(_PROMOTION_PRECHECK_STAGES),
+        help="Mechanical promotion gate profile for comparison rows; raw excerpt review remains manual",
+    )
+    compare_parser.add_argument("--fail-on-promotion-precheck", action="store_true")
     args = parser.parse_args(argv)
 
     if args.command == "compare":
         if args.fail_on_ranking_precheck and args.ranking_min_lfb_blocks is None:
             parser.error("--fail-on-ranking-precheck requires --ranking-min-lfb-blocks")
+        if args.fail_on_promotion_precheck and args.promotion_precheck_stage is None:
+            parser.error("--fail-on-promotion-precheck requires --promotion-precheck-stage")
         rows = build_sweep_comparison_report(
             manifest_paths=args.manifest,
             output_path=args.output,
@@ -906,11 +1047,14 @@ def main(argv: list[str] | None = None) -> int:
             min_output_chars=args.min_output_chars,
             max_repeat_ratio=args.max_repeat_ratio,
             ranking_min_lfb_blocks=args.ranking_min_lfb_blocks,
+            promotion_precheck_stage=args.promotion_precheck_stage,
         )
         print(json.dumps({"runs": len(rows), "output": args.output}, ensure_ascii=False))
         if args.fail_on_guard and any(not row.guard_passed for row in rows):
             return 1
         if args.fail_on_ranking_precheck and any(row.ranking_precheck_passed is False for row in rows):
+            return 1
+        if args.fail_on_promotion_precheck and any(row.promotion_precheck_passed is False for row in rows):
             return 1
         return 0
     if args.command != "report":

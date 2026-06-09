@@ -406,6 +406,7 @@ PYTHONPATH=src python -m edge_vlm.optimization compare \
   --manifest outputs/optimization_sweeps/minicpm-promo-iso-001/minicpm-promo-iso-001.manifest.json \
   --baseline-variant minicpm-q4-baseline-b128-u32-kvq8 \
   --ranking-min-lfb-blocks 150 \
+  --promotion-precheck-stage formal-repeat \
   --output outputs/optimization_sweeps/minicpm-promo-iso-001/comparison.md
 ```
 
@@ -439,6 +440,13 @@ For ranking decisions, keep only the defensible strict rows: when compare also r
 ran under a more relaxed gate stay in the report but are mechanically marked as
 non-ranking evidence. Copy only the defensible summary rows into tracked
 benchmark docs; keep raw generated reports under ignored `outputs/`.
+For promotion-oriented review, compare also accepts
+`--promotion-precheck-stage formal-repeat` and
+`--promotion-precheck-stage promotion-reference`. This adds a
+`Promotion precheck` column that checks the mechanical gate only: locked clocks,
+cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`,
+full benchmark success, fake-stream success, and the stage-specific trial
+floor. Use `formal-repeat` for the 5-trial lightweight ladder and `promotion-reference` for 10-trial baseline/reference refreshes. The raw excerpt review remains manual and is not replaced by this column.
 
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:

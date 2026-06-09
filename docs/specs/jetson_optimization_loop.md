@@ -193,6 +193,7 @@ before writing tracked benchmark notes:
 PYTHONPATH=src python -m edge_vlm.optimization compare \
   --manifest outputs/optimization_sweeps/minicpm-promo-001/minicpm-promo-001.manifest.json \
   --baseline-variant minicpm-q4-baseline-b128-u32-kvq8 \
+  --promotion-precheck-stage promotion-reference \
   --output outputs/optimization_sweeps/minicpm-promo-001/comparison.md
 ```
 
@@ -215,6 +216,12 @@ in a `Required lfb` column so reviewers can see immediately whether a row ran
 under a relaxed fallback threshold. Treat this as
 the source table for tracked benchmark docs; do not hand-copy raw metrics from
 multiple JSON files when the comparison command can derive them.
+When compare also receives `--promotion-precheck-stage formal-repeat` or
+`--promotion-precheck-stage promotion-reference`, it adds a `Promotion
+precheck` column for the mechanical gate only: locked clocks, cache drop,
+strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full
+benchmark success, fake-stream success, and the stage-specific trial floor.
+Use `formal-repeat` for 5-trial lightweight ranking passes and `promotion-reference` for 10-trial baseline/reference refreshes. The raw excerpt review remains manual.
 
 For the recurring current-defaults baseline refresh, prefer the wrapper:
 
@@ -268,11 +275,14 @@ A candidate can become the new baseline only when:
 2. the fake-stream check completes successfully; use the default multi-frame
    `data/sample_stream` set for streaming-sensitive candidates
 3. the optimization report marks the candidate guard as `yes`
-4. its throughput or latency improves over the prior baseline
-5. the fake-stream latency is not worse enough to invalidate the use case
-6. the exact server parameters and Jetson memory notes are documented in a
+4. when compare is run with `--promotion-precheck-stage promotion-reference`,
+   the optimization report marks the candidate `Promotion precheck` as `yes`
+5. raw excerpt review has been completed by a human reviewer
+6. its throughput or latency improves over the prior baseline
+7. the fake-stream latency is not worse enough to invalidate the use case
+8. the exact server parameters and Jetson memory notes are documented in a
    tracked benchmark result file
-7. promotion comparisons were run under confirmed `sudo jetson_clocks`, unless
+9. promotion comparisons were run under confirmed `sudo jetson_clocks`, unless
    the candidate is explicitly scoped to dynamic-clock operation
 
 If a faster run fails the sanity guard, keep it as a failed optimization

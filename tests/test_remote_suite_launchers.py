@@ -58,6 +58,7 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
         self.assertIn("REMOTE_ARG=--ranking-min-lfb-blocks\nREMOTE_ARG=199\n", log_text)
+        self.assertIn("REMOTE_ARG=--promotion-precheck-stage\nREMOTE_ARG=promotion-reference\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/comparison.md\n",
             log_text,
@@ -126,6 +127,7 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
         self.assertIn("REMOTE_ARG=--baseline-variant\nREMOTE_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
         self.assertIn("REMOTE_ARG=--ranking-min-lfb-blocks\nREMOTE_ARG=177\n", log_text)
+        self.assertIn("REMOTE_ARG=--promotion-precheck-stage\nREMOTE_ARG=formal-repeat\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/comparison.md\n",
             log_text,
@@ -189,6 +191,7 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
             log_text,
         )
         self.assertIn("REMOTE_ARG=--ranking-min-lfb-blocks\nREMOTE_ARG=188\n", log_text)
+        self.assertNotIn("REMOTE_ARG=--promotion-precheck-stage\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/comparison.md\n",
             log_text,

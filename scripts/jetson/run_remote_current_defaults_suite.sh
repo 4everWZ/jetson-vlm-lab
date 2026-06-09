@@ -39,4 +39,5 @@ JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
   --baseline-variant "${minicpm_variant}" \
   --baseline-variant "${gemma_variant}" \
   --ranking-min-lfb-blocks "${min_lfb_blocks}" \
+  --promotion-precheck-stage promotion-reference \
   --output "${comparison_output}"
