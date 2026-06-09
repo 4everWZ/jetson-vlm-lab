@@ -386,8 +386,10 @@ baseline。
 路径里，这样 `edge_vlm.optimization compare` 就能直接增加 `Quality review`
 列，而不需要你再手工重跑一次 policy review。
 如果 compare 是拿来做 promotion 审查，再加上
+`--promotion-require-startup-precheck` 和
 `--promotion-require-quality-review`，这样 `Promotion precheck` 就不再只看
-机械条件，还会要求结构化 `Quality review` sidecar 通过。
+机械条件，还会同时要求 cached-startup 证据和结构化
+`Quality review` sidecar 通过。
 如果还希望 remote promotion wrapper 在这层 gate 失败时直接退出非零，就显式开
 `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` 或
 `JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` 或

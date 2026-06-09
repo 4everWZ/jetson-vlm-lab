@@ -63,6 +63,7 @@ compare_args=(
   --startup-require-cached-artifacts
   --ranking-min-lfb-blocks "${min_lfb_blocks}"
   --promotion-precheck-stage promotion-reference
+  --promotion-require-startup-precheck
   --promotion-require-quality-review
   --output "${comparison_output}"
 )

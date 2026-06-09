@@ -718,6 +718,9 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("promotion-require-quality-review", text)
             self.assertIn("Quality review", text)
         for text in (protocol_doc, readme, readme_zh):
+            self.assertIn("promotion-require-startup-precheck", text)
+            self.assertIn("Startup precheck", text)
+        for text in (protocol_doc, readme, readme_zh):
             self.assertIn("JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK", text)
             self.assertIn("JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK", text)
             self.assertIn("JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK", text)

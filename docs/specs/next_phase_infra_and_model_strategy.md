@@ -91,6 +91,10 @@ without that phase remain visible but fail the startup precheck. Compare can now
 `Promotion precheck` column with `--promotion-precheck-stage formal-repeat` or
 `--promotion-precheck-stage promotion-reference`. That precheck is
 intentionally mechanical only: it checks locked clocks, cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full benchmark success, fake-stream success for image-capable rows, and the stage-specific trial floor. Text-only rows whose configs declare `capabilities.image=false` do not need fake-stream records for this gate. The raw excerpt review remains manual, and route-sensitive promotion still requires `edge_vlm.quality_review` plus human review before any role change.
+When compare also receives `--promotion-require-startup-precheck`, the same
+`Promotion precheck` gate also requires a passing `Startup precheck`, which in
+practice means the row already proved cached-startup evidence under
+`--startup-require-cached-artifacts`.
 When compare also receives `--promotion-require-quality-review`, the same
 `Promotion precheck` gate requires the structured `Quality review` sidecar to
 pass as well. This still does not replace human raw excerpt review; it only

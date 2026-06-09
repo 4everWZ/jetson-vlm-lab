@@ -964,6 +964,7 @@ def _promotion_precheck(
     promotion_precheck_stage: str | None,
     ranking_min_lfb_blocks: int | None,
     promotion_require_quality_review: bool,
+    promotion_require_startup_precheck: bool,
 ) -> tuple[bool | None, str]:
     if promotion_precheck_stage is None:
         return None, ""
@@ -1002,6 +1003,11 @@ def _promotion_precheck(
             failures.append(
                 f"fake_stream_success {row.fake_stream_successful}/{row.fake_stream_records} < {row.fake_stream_records}/{row.fake_stream_records}"
             )
+    if promotion_require_startup_precheck:
+        if row.startup_precheck_passed is None:
+            failures.append("missing_startup_precheck")
+        elif not row.startup_precheck_passed:
+            failures.append("startup_precheck_failed")
     if promotion_require_quality_review:
         if row.quality_review_passed is None:
             failures.append("missing_quality_review")
@@ -1050,6 +1056,7 @@ def _add_promotion_prechecks(
     ranking_min_lfb_blocks: int | None,
     promotion_precheck_stage: str | None,
     promotion_require_quality_review: bool,
+    promotion_require_startup_precheck: bool,
 ) -> None:
     for row in rows:
         row.promotion_precheck_passed, row.promotion_precheck_reason = _promotion_precheck(
@@ -1057,6 +1064,7 @@ def _add_promotion_prechecks(
             promotion_precheck_stage=promotion_precheck_stage,
             ranking_min_lfb_blocks=ranking_min_lfb_blocks,
             promotion_require_quality_review=promotion_require_quality_review,
+            promotion_require_startup_precheck=promotion_require_startup_precheck,
         )
 
 
@@ -1067,6 +1075,7 @@ def _format_sweep_comparison_report(
     ranking_min_lfb_blocks: int | None,
     promotion_precheck_stage: str | None,
     promotion_require_quality_review: bool,
+    promotion_require_startup_precheck: bool,
 ) -> str:
     startup_column = " | Startup precheck" if startup_require_cached_artifacts else ""
     startup_separator = " |---" if startup_require_cached_artifacts else ""
@@ -1088,9 +1097,18 @@ def _format_sweep_comparison_report(
         " `Promotion precheck` uses `--promotion-precheck-stage {stage}` to enforce the mechanical promotion gate: locked clocks, cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full benchmark success, fake-stream success for image-capable rows, and the stage trial floor.{quality_gate} Raw excerpt review remains manual.".format(
             stage=promotion_precheck_stage,
             quality_gate=(
-                " When `--promotion-require-quality-review` is also set, the row must have a passing structured quality review sidecar."
-                if promotion_require_quality_review
-                else ""
+                "{startup_gate}{quality_gate}".format(
+                    startup_gate=(
+                        " When `--promotion-require-startup-precheck` is also set, the row must already pass `Startup precheck`."
+                        if promotion_require_startup_precheck
+                        else ""
+                    ),
+                    quality_gate=(
+                        " When `--promotion-require-quality-review` is also set, the row must have a passing structured quality review sidecar."
+                        if promotion_require_quality_review
+                        else ""
+                    ),
+                )
             ),
         )
         if promotion_precheck_stage is not None
@@ -1225,6 +1243,7 @@ def build_sweep_comparison_report(
     ranking_min_lfb_blocks: int | None = None,
     promotion_precheck_stage: str | None = None,
     promotion_require_quality_review: bool = False,
+    promotion_require_startup_precheck: bool = False,
 ) -> list[SweepComparisonRow]:
     rows: list[SweepComparisonRow] = []
     for manifest_path in manifest_paths:
@@ -1243,6 +1262,7 @@ def build_sweep_comparison_report(
         ranking_min_lfb_blocks=ranking_min_lfb_blocks,
         promotion_precheck_stage=promotion_precheck_stage,
         promotion_require_quality_review=promotion_require_quality_review,
+        promotion_require_startup_precheck=promotion_require_startup_precheck,
     )
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -1253,6 +1273,7 @@ def build_sweep_comparison_report(
             ranking_min_lfb_blocks=ranking_min_lfb_blocks,
             promotion_precheck_stage=promotion_precheck_stage,
             promotion_require_quality_review=promotion_require_quality_review,
+            promotion_require_startup_precheck=promotion_require_startup_precheck,
         ),
         encoding="utf-8",
     )
@@ -1325,6 +1346,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Require a passing structured quality review sidecar when evaluating promotion precheck",
     )
+    compare_parser.add_argument(
+        "--promotion-require-startup-precheck",
+        action="store_true",
+        help="Require a passing Startup precheck when evaluating promotion precheck",
+    )
     compare_parser.add_argument("--fail-on-promotion-precheck", action="store_true")
     args = parser.parse_args(argv)
 
@@ -1337,6 +1363,10 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--fail-on-promotion-precheck requires --promotion-precheck-stage")
         if args.promotion_require_quality_review and args.promotion_precheck_stage is None:
             parser.error("--promotion-require-quality-review requires --promotion-precheck-stage")
+        if args.promotion_require_startup_precheck and args.promotion_precheck_stage is None:
+            parser.error("--promotion-require-startup-precheck requires --promotion-precheck-stage")
+        if args.promotion_require_startup_precheck and not args.startup_require_cached_artifacts:
+            parser.error("--promotion-require-startup-precheck requires --startup-require-cached-artifacts")
         rows = build_sweep_comparison_report(
             manifest_paths=args.manifest,
             output_path=args.output,
@@ -1347,6 +1377,7 @@ def main(argv: list[str] | None = None) -> int:
             ranking_min_lfb_blocks=args.ranking_min_lfb_blocks,
             promotion_precheck_stage=args.promotion_precheck_stage,
             promotion_require_quality_review=args.promotion_require_quality_review,
+            promotion_require_startup_precheck=args.promotion_require_startup_precheck,
         )
         print(json.dumps({"runs": len(rows), "output": args.output}, ensure_ascii=False))
         if args.fail_on_guard and any(not row.guard_passed for row in rows):

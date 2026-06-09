@@ -94,6 +94,7 @@ fi
 compare_args+=(
   --ranking-min-lfb-blocks "${min_lfb_blocks}"
   --promotion-precheck-stage formal-repeat
+  --promotion-require-startup-precheck
   --promotion-require-quality-review
   --output "${comparison_output}"
 )

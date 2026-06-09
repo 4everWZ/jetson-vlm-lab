@@ -223,6 +223,8 @@ strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full
 benchmark success, fake-stream success for image-capable rows, and the
 stage-specific trial floor. Text-only rows whose configs declare
 `capabilities.image=false` do not need fake-stream records for this gate. Add
+`--promotion-require-startup-precheck` when the gate should also require
+cached-startup evidence through a passing `Startup precheck`. Add
 `--promotion-require-quality-review` when the gate should also require a
 passing structured `Quality review` sidecar. Use `formal-repeat` for 5-trial
 lightweight ranking passes and `promotion-reference` for 10-trial

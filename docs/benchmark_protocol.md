@@ -458,6 +458,9 @@ cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`,
 full benchmark success, fake-stream success for image-capable rows, and the
 stage-specific trial floor. Text-only rows whose configs declare
 `capabilities.image=false` do not need fake-stream records for this gate. Add
+`--promotion-require-startup-precheck` when the promotion gate should also
+require a passing `Startup precheck`, which means the same row already proved
+cached-startup evidence under `--startup-require-cached-artifacts`. Add
 `--promotion-require-quality-review` when the promotion gate should also require
 a passing structured `Quality review` sidecar. Use
 `formal-repeat` for the 5-trial lightweight ladder and
@@ -593,10 +596,12 @@ scripts/jetson/run_remote_current_defaults_suite.sh
 ```
 
 That wrapper now also runs `edge_vlm.sweep_quality_review` on the finished
-manifest and calls compare with `--promotion-require-quality-review`, so the
-reference `Promotion precheck` includes the structured `Quality review` gate.
-It also passes `--startup-require-cached-artifacts` by default, so the same
-report always shows `Startup precheck` for cached versus first-download rows.
+manifest and calls compare with `--promotion-require-startup-precheck` plus
+`--promotion-require-quality-review`, so the reference `Promotion precheck`
+includes both the cached-startup gate and the structured `Quality review`
+gate. It also passes `--startup-require-cached-artifacts` by default, so the
+same report always shows `Startup precheck` for cached versus first-download
+rows.
 Set `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper
 should return non-zero if that promotion gate fails; the default remains `0`
 so comparison evidence can still be collected during diagnostic runs. Set
@@ -620,8 +625,9 @@ baseline variants. It also runs `edge_vlm.sweep_quality_review` with
 `configs/benchmark/quality_review_policy.json` against the sweep manifest so
 the recorded `quality_review_json` sidecars can feed the compare report's
 `Quality review` column. The wrapper also passes
+`--promotion-require-startup-precheck` and
 `--promotion-require-quality-review`, so the reported `Promotion precheck`
-requires that structured sidecar to pass. It also passes
+requires cached-startup evidence and that structured sidecar to pass. It also passes
 `--startup-require-cached-artifacts`, so the same report always includes
 `Startup precheck` for cached versus first-download rows. Set
 `JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
@@ -706,9 +712,11 @@ The wrapper defaults to all eleven configured Tencent text GGUF rows, runs with
 locked clocks, drops caches before each variant, sets
 `--fake-stream-max-frames 0`, runs `edge_vlm.sweep_quality_review`, and writes
 a comparison report with `--promotion-precheck-stage formal-repeat` plus
+`--promotion-require-startup-precheck` and
 `--promotion-require-quality-review`. It also passes
 `--startup-require-cached-artifacts`, so the text compare report still shows
-whether startup came from cached artifacts or a first download. Because these rows are text-only,
+whether startup came from cached artifacts or a first download, and
+`Promotion precheck` now consumes that cached-startup gate as well. Because these rows are text-only,
 `Promotion precheck` skips the fake-stream requirement. Set
 `JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero if any row fails that promotion gate; the default remains `0`

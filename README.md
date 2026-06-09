@@ -387,9 +387,10 @@ writes per-run `quality_review_json` and `quality_review_markdown` sidecars
 back into the manifest paths, so `edge_vlm.optimization compare` can add a
 `Quality review` column without rerunning the policy review by hand.
 When compare is used for promotion-oriented review, add
-`--promotion-require-quality-review` so `Promotion precheck` also requires the
-structured `Quality review` sidecar to pass instead of only checking the
-mechanical run conditions.
+`--promotion-require-startup-precheck` and
+`--promotion-require-quality-review` so `Promotion precheck` also requires
+cached-startup evidence plus the structured `Quality review` sidecar instead
+of only checking the mechanical run conditions.
 If you want the remote promotion-oriented wrappers to stop the suite on that
 gate, enable `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` or
 `JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` or
