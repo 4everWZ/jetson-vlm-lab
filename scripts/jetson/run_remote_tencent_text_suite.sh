@@ -22,6 +22,7 @@ candidate_variants_text="${JETSON_TENCENT_TEXT_VARIANTS:-tencent-hy-mt1p5-1p8b-1
 extra_variants_text="${JETSON_TENCENT_TEXT_EXTRA_VARIANTS:-}"
 manifest_path="${JETSON_TENCENT_TEXT_MANIFEST:-outputs/optimization_sweeps/${run_prefix}/${run_prefix}.manifest.json}"
 comparison_output="${JETSON_TENCENT_TEXT_COMPARISON_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.md}"
+comparison_eligibility_output="${JETSON_TENCENT_TEXT_ELIGIBILITY_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.eligibility.json}"
 
 if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" != "1" ]]; then
   echo "JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK must be 0 or 1." >&2
@@ -82,6 +83,7 @@ compare_args=(
   --promotion-require-startup-precheck
   --promotion-require-quality-review
   --output "${comparison_output}"
+  --eligibility-output "${comparison_eligibility_output}"
 )
 
 if [[ "${fail_on_startup_precheck}" == "1" ]]; then

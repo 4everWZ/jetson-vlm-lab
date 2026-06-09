@@ -407,7 +407,8 @@ PYTHONPATH=src python -m edge_vlm.optimization compare \
   --baseline-variant minicpm-q4-baseline-b128-u32-kvq8 \
   --ranking-min-lfb-blocks 150 \
   --promotion-precheck-stage formal-repeat \
-  --output outputs/optimization_sweeps/minicpm-promo-iso-001/comparison.md
+  --output outputs/optimization_sweeps/minicpm-promo-iso-001/comparison.md \
+  --eligibility-output outputs/optimization_sweeps/minicpm-promo-iso-001/comparison.eligibility.json
 ```
 
 The comparison report reads each sweep manifest, matching benchmark JSONL,
@@ -468,6 +469,12 @@ cached-startup evidence under `--startup-require-cached-artifacts`. Add
 a passing structured `Quality review` sidecar. Use
 `formal-repeat` for the 5-trial lightweight ladder and
 `promotion-reference` for 10-trial baseline/reference refreshes. The raw excerpt review remains manual and is not replaced by this column.
+When ranking/export automation needs the same gate state without scraping the
+Markdown table, add `--eligibility-output
+outputs/optimization_sweeps/<run-prefix>/comparison.eligibility.json`. That
+JSON sidecar records the same per-row `Startup precheck`, `Ranking precheck`,
+and `Promotion precheck` results, plus top-level eligible row lists for each
+gate.
 
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:
@@ -605,6 +612,9 @@ includes both the cached-startup gate and the structured `Quality review`
 gate. It also passes `--startup-require-cached-artifacts` by default, so the
 same report always shows `Startup precheck` for cached versus first-download
 rows.
+It also writes `comparison.eligibility.json` next to `comparison.md`, using
+compare's `--eligibility-output` to persist the same gate state in a
+machine-readable form.
 Set `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper
 should return non-zero if that promotion gate fails; the default remains `0`
 so comparison evidence can still be collected during diagnostic runs. Set
@@ -638,6 +648,9 @@ the recorded `quality_review_json` sidecars can feed the compare report's
 requires cached-startup evidence and that structured sidecar to pass. It also passes
 `--startup-require-cached-artifacts`, so the same report always includes
 `Startup precheck` for cached versus first-download rows. Set
+The wrapper also writes `comparison.eligibility.json` next to `comparison.md`
+through compare's `--eligibility-output`, so downstream ranking/export steps
+can consume gate results without parsing Markdown.
 `JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero on a failed promotion gate; the default remains `0` so
 lightweight diagnostic ladders can still emit comparison evidence. Set
@@ -732,6 +745,9 @@ whether startup came from cached artifacts or a first download, and
 passes `--ranking-require-startup-precheck`, so `Ranking precheck` likewise
 rejects first-download rows. Because these rows are text-only,
 `Promotion precheck` skips the fake-stream requirement. Set
+The wrapper also writes `comparison.eligibility.json` next to `comparison.md`
+with compare's `--eligibility-output`, so the text/router ranking flow can
+reuse the same machine-readable gate state.
 `JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero if any row fails that promotion gate; the default remains `0`
 so diagnostic text ladders can still emit comparison evidence. Set

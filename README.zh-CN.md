@@ -414,6 +414,13 @@ suite 在 ranking gate 失败时直接退出非零，再显式开
 `JETSON_CURRENT_DEFAULTS_FAIL_ON_RANKING_PRECHECK=1` 或
 `JETSON_LIGHTWEIGHT_FAIL_ON_RANKING_PRECHECK=1` 或
 `JETSON_TENCENT_TEXT_FAIL_ON_RANKING_PRECHECK=1`；默认同样保持 `0`。
+如果后续的 ranking/export 自动化需要机器可读的 gate 结果，而不只是 Markdown
+报告，再加上 `--eligibility-output
+outputs/optimization_sweeps/<run-prefix>/comparison.eligibility.json`。这个
+JSON sidecar 会把每一行的 `Startup precheck`、`Ranking precheck`、
+`Promotion precheck` 状态，以及各 gate 的 eligible row 列表一起落盘。
+这些 remote suite wrapper 现在也会默认生成
+`comparison.eligibility.json`，和 `comparison.md` 放在同一个目录里。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

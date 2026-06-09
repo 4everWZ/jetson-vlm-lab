@@ -414,6 +414,13 @@ will only pass rows that already passed `Startup precheck`. Set
 `JETSON_LIGHTWEIGHT_FAIL_ON_RANKING_PRECHECK=1` or
 `JETSON_TENCENT_TEXT_FAIL_ON_RANKING_PRECHECK=1` when a suite should return
 non-zero if any row fails that ranking gate; the default remains `0`.
+When downstream ranking/export automation needs a machine-readable decision
+artifact instead of only Markdown, also pass `--eligibility-output
+outputs/optimization_sweeps/<run-prefix>/comparison.eligibility.json`.
+That JSON sidecar carries the same `Startup precheck`, `Ranking precheck`, and
+`Promotion precheck` states per row, plus top-level eligible row lists for each
+gate. The remote suite wrappers now emit that
+`comparison.eligibility.json` sidecar by default next to `comparison.md`.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

@@ -25,6 +25,7 @@ candidate_variants_text="${JETSON_LIGHTWEIGHT_CANDIDATE_VARIANTS:-smolvlm2-256m-
 extra_variants_text="${JETSON_LIGHTWEIGHT_EXTRA_VARIANTS:-}"
 manifest_path="${JETSON_LIGHTWEIGHT_MANIFEST:-outputs/optimization_sweeps/${run_prefix}/${run_prefix}.manifest.json}"
 comparison_output="${JETSON_LIGHTWEIGHT_COMPARISON_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.md}"
+comparison_eligibility_output="${JETSON_LIGHTWEIGHT_ELIGIBILITY_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.eligibility.json}"
 
 if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" != "1" ]]; then
   echo "JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK must be 0 or 1." >&2
@@ -106,6 +107,7 @@ compare_args+=(
   --promotion-require-startup-precheck
   --promotion-require-quality-review
   --output "${comparison_output}"
+  --eligibility-output "${comparison_eligibility_output}"
 )
 
 "${remote_exec}" "${compare_args[@]}"

@@ -82,6 +82,10 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/comparison.md\n",
             log_text,
         )
+        self.assertIn(
+            "REMOTE_ARG=--eligibility-output\nREMOTE_ARG=outputs/optimization_sweeps/defaults-unit/comparison.eligibility.json\n",
+            log_text,
+        )
 
     def test_remote_lightweight_model_suite_runs_baselines_and_candidates_then_compare(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -168,6 +172,10 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertNotIn("REMOTE_ARG=--fail-on-startup-precheck\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/comparison.md\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--eligibility-output\nREMOTE_ARG=outputs/optimization_sweeps/light-unit/comparison.eligibility.json\n",
             log_text,
         )
 
@@ -411,6 +419,10 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertNotIn("REMOTE_ARG=--fail-on-startup-precheck\n", log_text)
         self.assertIn(
             "REMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/comparison.md\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--eligibility-output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/comparison.eligibility.json\n",
             log_text,
         )
 

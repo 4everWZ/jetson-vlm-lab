@@ -1252,10 +1252,151 @@ def _format_sweep_comparison_report(
     return "\n".join(lines)
 
 
+def _precheck_artifact(passed: bool | None, reason: str) -> dict[str, Any]:
+    return {
+        "passed": passed,
+        "reason": reason,
+    }
+
+
+def _row_identity(row: SweepComparisonRow) -> dict[str, str]:
+    return {
+        "run_id": row.run_id,
+        "variant_id": row.variant_id,
+    }
+
+
+def _comparison_row_artifact(row: SweepComparisonRow) -> dict[str, Any]:
+    return {
+        "source": row.source,
+        "run_prefix": row.run_prefix,
+        "run_id": row.run_id,
+        "variant_id": row.variant_id,
+        "selection": {
+            "id": row.selection_id,
+            "reason": row.selection_reason,
+        },
+        "model": row.model,
+        "comparison_group": row.comparison_group,
+        "runtime": {
+            "server_image": row.server_image,
+            "server_image_id": row.server_image_id,
+            "llama_cpp_ref": row.llama_cpp_ref,
+        },
+        "artifact_phase": {
+            "status": row.artifact_phase_status,
+            "duration_s": row.artifact_phase_duration_s,
+        },
+        "prepare_context": {
+            "summary": row.prepare_context_summary,
+            "max_clocks_enabled": row.prepare_max_clocks_enabled,
+            "drop_caches_before_variant": row.prepare_drop_caches_before_variant,
+        },
+        "preflight": {
+            "before_prepare_lfb": row.preflight_before_prepare_lfb,
+            "lfb": row.preflight_lfb,
+            "required_lfb_blocks": row.preflight_required_lfb_blocks,
+            "prepare_lfb_delta": row.preflight_prepare_lfb_delta,
+            "prepare_mem_available_mb_delta": row.preflight_prepare_mem_available_mb_delta,
+            "prepare_buddyinfo_max_order_delta": row.preflight_prepare_buddyinfo_max_order_delta,
+            "min_lfb_free_blocks": row.min_lfb_free_blocks,
+        },
+        "benchmark": {
+            "trials": row.trials,
+            "max_tokens": row.benchmark_max_tokens,
+            "temperature": row.benchmark_temperature,
+            "supports_images": row.supports_images,
+            "guard_passed": row.guard_passed,
+            "guard_failures": list(row.guard_failures),
+            "successful": row.successful,
+            "records": row.records,
+            "fake_stream_successful": row.fake_stream_successful,
+            "fake_stream_records": row.fake_stream_records,
+        },
+        "quality_review": {
+            "passed": row.quality_review_passed,
+            "records": row.quality_review_records,
+            "passed_records": row.quality_review_passed_records,
+            "failed_case_ids": list(row.quality_review_failed_case_ids),
+        },
+        "metrics": {
+            "server_startup_seconds": row.server_startup_seconds,
+            "text_avg_tokens_per_s": row.text_avg_tokens_per_s,
+            "image_avg_tokens_per_s": row.image_avg_tokens_per_s,
+            "text_avg_latency_s": row.text_avg_latency_s,
+            "image_avg_latency_s": row.image_avg_latency_s,
+            "fake_stream_avg_latency_s": row.fake_stream_avg_latency_s,
+            "max_temp_c": row.max_temp_c,
+            "avg_power_w": row.avg_power_w,
+            "avg_gr3d_util_pct": row.avg_gr3d_util_pct,
+            "avg_emc_util_pct": row.avg_emc_util_pct,
+            "bottleneck_labels": list(row.bottleneck_labels),
+        },
+        "deltas_pct": {
+            "text_tokens_per_s": row.delta_text_tokens_per_s_pct,
+            "image_tokens_per_s": row.delta_image_tokens_per_s_pct,
+            "startup": row.delta_startup_pct,
+            "fake_stream_latency": row.delta_fake_stream_latency_pct,
+        },
+        "eligibility": {
+            "startup_precheck": _precheck_artifact(row.startup_precheck_passed, row.startup_precheck_reason),
+            "ranking_precheck": _precheck_artifact(row.ranking_precheck_passed, row.ranking_precheck_reason),
+            "promotion_precheck": _precheck_artifact(row.promotion_precheck_passed, row.promotion_precheck_reason),
+        },
+    }
+
+
+def _eligible_rows(rows: Iterable[SweepComparisonRow], attr_name: str) -> list[dict[str, str]]:
+    eligible: list[dict[str, str]] = []
+    for row in rows:
+        if getattr(row, attr_name) is True:
+            eligible.append(_row_identity(row))
+    return eligible
+
+
+def _write_sweep_comparison_eligibility_artifact(
+    *,
+    rows: list[SweepComparisonRow],
+    manifest_paths: Iterable[str | Path],
+    output_path: str | Path,
+    eligibility_output_path: str | Path,
+    baseline_variant_ids: Iterable[str],
+    startup_require_cached_artifacts: bool,
+    ranking_min_lfb_blocks: int | None,
+    ranking_require_startup_precheck: bool,
+    promotion_precheck_stage: str | None,
+    promotion_require_quality_review: bool,
+    promotion_require_startup_precheck: bool,
+) -> None:
+    output = Path(eligibility_output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    artifact = {
+        "runs": len(rows),
+        "manifest_paths": [str(Path(path)) for path in manifest_paths],
+        "markdown_output": str(Path(output_path)),
+        "eligibility_output": str(output),
+        "baseline_variant_ids": list(baseline_variant_ids),
+        "startup_require_cached_artifacts": startup_require_cached_artifacts,
+        "ranking_min_lfb_blocks": ranking_min_lfb_blocks,
+        "ranking_require_startup_precheck": ranking_require_startup_precheck,
+        "promotion_precheck_stage": promotion_precheck_stage,
+        "promotion_require_quality_review": promotion_require_quality_review,
+        "promotion_require_startup_precheck": promotion_require_startup_precheck,
+        "eligible": {
+            "startup": _eligible_rows(rows, "startup_precheck_passed"),
+            "ranking": _eligible_rows(rows, "ranking_precheck_passed"),
+            "promotion": _eligible_rows(rows, "promotion_precheck_passed"),
+        },
+        "rows": [_comparison_row_artifact(row) for row in rows],
+    }
+    output.write_text(json.dumps(artifact, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def build_sweep_comparison_report(
     *,
     manifest_paths: Iterable[str | Path],
     output_path: str | Path,
+    eligibility_output_path: str | Path | None = None,
     baseline_variant_ids: Iterable[str] = (),
     min_output_chars: int = 32,
     max_repeat_ratio: float = 0.65,
@@ -1266,8 +1407,10 @@ def build_sweep_comparison_report(
     promotion_require_quality_review: bool = False,
     promotion_require_startup_precheck: bool = False,
 ) -> list[SweepComparisonRow]:
+    manifest_path_list = [Path(path) for path in manifest_paths]
+    baseline_variant_id_list = list(baseline_variant_ids)
     rows: list[SweepComparisonRow] = []
-    for manifest_path in manifest_paths:
+    for manifest_path in manifest_path_list:
         rows.extend(
             summarize_sweep_manifest(
                 manifest_path,
@@ -1275,7 +1418,7 @@ def build_sweep_comparison_report(
                 max_repeat_ratio=max_repeat_ratio,
             )
         )
-    _add_comparison_deltas(rows, baseline_variant_ids)
+    _add_comparison_deltas(rows, baseline_variant_id_list)
     _add_startup_prechecks(rows, require_cached_artifacts=startup_require_cached_artifacts)
     _add_ranking_prechecks(
         rows,
@@ -1303,6 +1446,20 @@ def build_sweep_comparison_report(
         ),
         encoding="utf-8",
     )
+    if eligibility_output_path is not None:
+        _write_sweep_comparison_eligibility_artifact(
+            rows=rows,
+            manifest_paths=manifest_path_list,
+            output_path=output_path,
+            eligibility_output_path=eligibility_output_path,
+            baseline_variant_ids=baseline_variant_id_list,
+            startup_require_cached_artifacts=startup_require_cached_artifacts,
+            ranking_min_lfb_blocks=ranking_min_lfb_blocks,
+            ranking_require_startup_precheck=ranking_require_startup_precheck,
+            promotion_precheck_stage=promotion_precheck_stage,
+            promotion_require_quality_review=promotion_require_quality_review,
+            promotion_require_startup_precheck=promotion_require_startup_precheck,
+        )
     return rows
 
 
@@ -1347,6 +1504,10 @@ def main(argv: list[str] | None = None) -> int:
     compare_parser.add_argument("--manifest", action="append", required=True, help="Sweep manifest path; repeatable")
     compare_parser.add_argument("--baseline-variant", action="append", default=[], help="Variant id to use as per-model baseline; repeatable")
     compare_parser.add_argument("--output", required=True, help="Markdown report output path")
+    compare_parser.add_argument(
+        "--eligibility-output",
+        help="Optional JSON output path for machine-readable startup/ranking/promotion eligibility state",
+    )
     compare_parser.add_argument("--min-output-chars", type=int, default=32)
     compare_parser.add_argument("--max-repeat-ratio", type=float, default=0.65)
     compare_parser.add_argument("--fail-on-guard", action="store_true")
@@ -1405,6 +1566,7 @@ def main(argv: list[str] | None = None) -> int:
         rows = build_sweep_comparison_report(
             manifest_paths=args.manifest,
             output_path=args.output,
+            eligibility_output_path=args.eligibility_output,
             baseline_variant_ids=args.baseline_variant,
             min_output_chars=args.min_output_chars,
             max_repeat_ratio=args.max_repeat_ratio,
@@ -1415,7 +1577,10 @@ def main(argv: list[str] | None = None) -> int:
             promotion_require_quality_review=args.promotion_require_quality_review,
             promotion_require_startup_precheck=args.promotion_require_startup_precheck,
         )
-        print(json.dumps({"runs": len(rows), "output": args.output}, ensure_ascii=False))
+        compare_result = {"runs": len(rows), "output": args.output}
+        if args.eligibility_output:
+            compare_result["eligibility_output"] = args.eligibility_output
+        print(json.dumps(compare_result, ensure_ascii=False))
         if args.fail_on_guard and any(not row.guard_passed for row in rows):
             return 1
         if args.fail_on_startup_precheck and any(row.startup_precheck_passed is False for row in rows):

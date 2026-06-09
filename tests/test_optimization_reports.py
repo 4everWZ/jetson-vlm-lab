@@ -3365,6 +3365,340 @@ class OptimizationReportContractsTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1, result.stderr)
 
+    def test_optimization_comparison_report_can_write_eligibility_artifact(self):
+        from edge_vlm.optimization import build_sweep_comparison_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "eligibility-artifact"
+            benchmark_dir = output_root / "benchmarks"
+            benchmark_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+            eligibility_output = tmp_path / "comparison.eligibility.json"
+
+            def write_run(run_prefix, variant_id, *, artifact_status, artifact_s, startup_s):
+                run_id = f"{run_prefix}-{variant_id}"
+                benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+                benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+                profile_summary_json = benchmark_dir / f"{run_id}.profile.json"
+                quality_review_json = benchmark_dir / f"{run_id}.quality.json"
+                benchmark_jsonl.write_text(
+                    json.dumps(
+                        {
+                            "model": "tencent-youtu-llm-2b-q8",
+                            "run_id": run_id,
+                            "prompt_case_id": "text_case",
+                            "input_type": "text",
+                            "success": True,
+                            "latency_s": 64.0 / 24.621,
+                            "tokens": 64,
+                            "tokens_per_sec": 24.621,
+                            "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                            "quality_terms_any": ["memory", "bandwidth"],
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                benchmark_manifest.write_text(
+                    json.dumps(
+                        {
+                            "run_id": run_id,
+                            "benchmark": {"trial_count": 5, "max_tokens": 64, "temperature": 0.0},
+                            "cases_written": 1,
+                            "successful": 1,
+                            "failed": 0,
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                profile_summary_json.write_text(
+                    json.dumps(
+                        {
+                            "phase_timings": {
+                                "artifact_check_or_download": {
+                                    "available": True,
+                                    "duration_s": artifact_s,
+                                    "source": "launcher",
+                                    "details": {"status": artifact_status},
+                                }
+                            }
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                quality_review_json.write_text(
+                    json.dumps(
+                        {
+                            "passed": True,
+                            "records": 1,
+                            "passed_records": 1,
+                            "failures": [],
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return {
+                    "plan": {
+                        "variant": {"id": variant_id},
+                        "paths": {
+                            "benchmark_jsonl": str(benchmark_jsonl),
+                            "manifest_json": str(benchmark_manifest),
+                            "profile_summary_json": str(profile_summary_json),
+                            "quality_review_json": str(quality_review_json),
+                        },
+                    },
+                    "result": {
+                        "run_id": run_id,
+                        "variant_id": variant_id,
+                        "preflight_required_lfb_blocks": 150,
+                        "preflight": {"tegrastats": {"lfb": {"free_blocks": 198, "block_mb": 4}}},
+                        "preflight_passed": True,
+                        "server_startup_seconds": startup_s,
+                        "benchmark_returncode": 0,
+                    },
+                }
+
+            cached = write_run(
+                "eligibility-cached",
+                "tencent-youtu-llm-2b-q8-text-smoke",
+                artifact_status="cached",
+                artifact_s=0.002,
+                startup_s=5.015,
+            )
+            first_download = write_run(
+                "eligibility-first",
+                "tencent-youtu-llm-2b-q8-text-smoke-first",
+                artifact_status="downloaded_or_checked",
+                artifact_s=351.027,
+                startup_s=354.568,
+            )
+            manifest = output_root / "eligibility-artifact.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {
+                            "run_prefix": "eligibility-artifact",
+                            "prepare_context": {
+                                "max_clocks_enabled": True,
+                                "drop_caches_before_variant": True,
+                            },
+                            "variants": [cached["plan"], first_download["plan"]],
+                        },
+                        "result": {"results": [cached["result"], first_download["result"]]},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = build_sweep_comparison_report(
+                manifest_paths=[manifest],
+                output_path=report,
+                eligibility_output_path=eligibility_output,
+                baseline_variant_ids=["tencent-youtu-llm-2b-q8-text-smoke"],
+                startup_require_cached_artifacts=True,
+                ranking_min_lfb_blocks=150,
+                ranking_require_startup_precheck=True,
+                promotion_precheck_stage="formal-repeat",
+                promotion_require_quality_review=True,
+                promotion_require_startup_precheck=True,
+            )
+            artifact = json.loads(eligibility_output.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(artifact["runs"], 2)
+        self.assertEqual(artifact["markdown_output"], str(report))
+        self.assertEqual(artifact["eligibility_output"], str(eligibility_output))
+        self.assertTrue(artifact["startup_require_cached_artifacts"])
+        self.assertEqual(artifact["ranking_min_lfb_blocks"], 150)
+        self.assertEqual(artifact["promotion_precheck_stage"], "formal-repeat")
+        self.assertEqual(
+            artifact["eligible"]["startup"],
+            [
+                {
+                    "run_id": "eligibility-cached-tencent-youtu-llm-2b-q8-text-smoke",
+                    "variant_id": "tencent-youtu-llm-2b-q8-text-smoke",
+                }
+            ],
+        )
+        self.assertEqual(artifact["eligible"]["ranking"], artifact["eligible"]["startup"])
+        self.assertEqual(artifact["eligible"]["promotion"], artifact["eligible"]["startup"])
+        self.assertEqual(artifact["rows"][0]["artifact_phase"]["status"], "cached")
+        self.assertEqual(artifact["rows"][0]["eligibility"]["startup_precheck"], {"passed": True, "reason": ""})
+        self.assertEqual(artifact["rows"][0]["eligibility"]["ranking_precheck"], {"passed": True, "reason": ""})
+        self.assertEqual(artifact["rows"][0]["eligibility"]["promotion_precheck"], {"passed": True, "reason": ""})
+        self.assertEqual(artifact["rows"][1]["artifact_phase"]["status"], "downloaded_or_checked")
+        self.assertEqual(
+            artifact["rows"][1]["eligibility"]["startup_precheck"],
+            {"passed": False, "reason": "artifact_phase downloaded_or_checked != cached"},
+        )
+        self.assertEqual(
+            artifact["rows"][1]["eligibility"]["ranking_precheck"],
+            {"passed": False, "reason": "startup_precheck_failed"},
+        )
+        self.assertEqual(
+            artifact["rows"][1]["eligibility"]["promotion_precheck"],
+            {"passed": False, "reason": "startup_precheck_failed"},
+        )
+
+    def test_compare_cli_can_write_eligibility_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "eligibility-cli"
+            benchmark_dir = output_root / "benchmarks"
+            benchmark_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+            eligibility_output = tmp_path / "comparison.eligibility.json"
+            run_id = "eligibility-cli-tencent-youtu-llm-2b-q8-text-smoke"
+            benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+            benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+            profile_summary_json = benchmark_dir / f"{run_id}.profile.json"
+            quality_review_json = benchmark_dir / f"{run_id}.quality.json"
+            benchmark_jsonl.write_text(
+                json.dumps(
+                    {
+                        "model": "tencent-youtu-llm-2b-q8",
+                        "run_id": run_id,
+                        "prompt_case_id": "text_case",
+                        "input_type": "text",
+                        "success": True,
+                        "latency_s": 64.0 / 24.621,
+                        "tokens": 64,
+                        "tokens_per_sec": 24.621,
+                        "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                        "quality_terms_any": ["memory", "bandwidth"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            benchmark_manifest.write_text(
+                json.dumps(
+                    {
+                        "run_id": run_id,
+                        "benchmark": {"trial_count": 5, "max_tokens": 64, "temperature": 0.0},
+                        "cases_written": 1,
+                        "successful": 1,
+                        "failed": 0,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            profile_summary_json.write_text(
+                json.dumps(
+                    {
+                        "phase_timings": {
+                            "artifact_check_or_download": {
+                                "available": True,
+                                "duration_s": 0.002,
+                                "source": "launcher",
+                                "details": {"status": "cached"},
+                            }
+                        }
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            quality_review_json.write_text(
+                json.dumps(
+                    {
+                        "passed": True,
+                        "records": 1,
+                        "passed_records": 1,
+                        "failures": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            manifest = output_root / "eligibility-cli.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {
+                            "run_prefix": "eligibility-cli",
+                            "prepare_context": {
+                                "max_clocks_enabled": True,
+                                "drop_caches_before_variant": True,
+                            },
+                            "variants": [
+                                {
+                                    "variant": {"id": "tencent-youtu-llm-2b-q8-text-smoke"},
+                                    "paths": {
+                                        "benchmark_jsonl": str(benchmark_jsonl),
+                                        "manifest_json": str(benchmark_manifest),
+                                        "profile_summary_json": str(profile_summary_json),
+                                        "quality_review_json": str(quality_review_json),
+                                    },
+                                }
+                            ],
+                        },
+                        "result": {
+                            "results": [
+                                {
+                                    "run_id": run_id,
+                                    "variant_id": "tencent-youtu-llm-2b-q8-text-smoke",
+                                    "preflight_required_lfb_blocks": 150,
+                                    "preflight": {
+                                        "tegrastats": {
+                                            "lfb": {"free_blocks": 198, "block_mb": 4},
+                                        }
+                                    },
+                                    "preflight_passed": True,
+                                    "server_startup_seconds": 5.015,
+                                    "benchmark_returncode": 0,
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    "-m",
+                    "edge_vlm.optimization",
+                    "compare",
+                    "--manifest",
+                    str(manifest),
+                    "--output",
+                    str(report),
+                    "--eligibility-output",
+                    str(eligibility_output),
+                    "--startup-require-cached-artifacts",
+                    "--ranking-min-lfb-blocks",
+                    "150",
+                    "--ranking-require-startup-precheck",
+                    "--promotion-precheck-stage",
+                    "formal-repeat",
+                    "--promotion-require-startup-precheck",
+                    "--promotion-require-quality-review",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={**os.environ, "PYTHONPATH": "src"},
+            )
+            stdout = json.loads(result.stdout)
+            artifact = json.loads(eligibility_output.read_text(encoding="utf-8"))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(stdout["output"], str(report))
+        self.assertEqual(stdout["eligibility_output"], str(eligibility_output))
+        self.assertEqual(artifact["eligible"]["startup"], [{"run_id": run_id, "variant_id": "tencent-youtu-llm-2b-q8-text-smoke"}])
+        self.assertEqual(artifact["eligible"]["ranking"], artifact["eligible"]["startup"])
+        self.assertEqual(artifact["eligible"]["promotion"], artifact["eligible"]["startup"])
+        self.assertEqual(artifact["rows"][0]["eligibility"]["promotion_precheck"], {"passed": True, "reason": ""})
+
 
 if __name__ == "__main__":
     unittest.main()

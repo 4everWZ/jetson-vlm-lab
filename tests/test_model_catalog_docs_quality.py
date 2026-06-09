@@ -705,6 +705,19 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("JETSON_LIGHTWEIGHT_FAIL_ON_RANKING_PRECHECK", text)
             self.assertIn("JETSON_TENCENT_TEXT_FAIL_ON_RANKING_PRECHECK", text)
 
+    def test_compare_docs_explain_machine_readable_eligibility_output(self):
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(encoding="utf-8")
+        readme = Path("README.md").read_text(encoding="utf-8")
+        readme_zh = Path("README.zh-CN.md").read_text(encoding="utf-8")
+
+        for text in (protocol_doc, strategy_doc, readme, readme_zh):
+            self.assertIn("eligibility-output", text)
+            self.assertIn("comparison.eligibility.json", text)
+        for text in (protocol_doc, strategy_doc):
+            self.assertIn("Ranking precheck", text)
+            self.assertIn("Promotion precheck", text)
+
     def test_compare_docs_explain_promotion_precheck_stage(self):
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
         loop_doc = Path("docs/specs/jetson_optimization_loop.md").read_text(encoding="utf-8")

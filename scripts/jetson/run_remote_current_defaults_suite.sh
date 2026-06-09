@@ -22,6 +22,7 @@ minicpm_variant="${JETSON_CURRENT_DEFAULTS_MINICPM_VARIANT:-minicpm-q4-baseline-
 gemma_variant="${JETSON_CURRENT_DEFAULTS_GEMMA_VARIANT:-gemma-q4-baseline-gpu12-b512-u512-kvq8}"
 manifest_path="${JETSON_CURRENT_DEFAULTS_MANIFEST:-outputs/optimization_sweeps/${run_prefix}/${run_prefix}.manifest.json}"
 comparison_output="${JETSON_CURRENT_DEFAULTS_COMPARISON_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.md}"
+comparison_eligibility_output="${JETSON_CURRENT_DEFAULTS_ELIGIBILITY_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.eligibility.json}"
 
 if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" != "1" ]]; then
   echo "JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK must be 0 or 1." >&2
@@ -72,6 +73,7 @@ compare_args=(
   --promotion-require-startup-precheck
   --promotion-require-quality-review
   --output "${comparison_output}"
+  --eligibility-output "${comparison_eligibility_output}"
 )
 
 if [[ "${fail_on_startup_precheck}" == "1" ]]; then
