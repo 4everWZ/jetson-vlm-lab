@@ -376,6 +376,11 @@ effective preflight gate is visible next to the observed `Preflight lfb`.
 When you also pass `--ranking-min-lfb-blocks <strict-gate>`, the report adds a
 `Ranking precheck` column so relaxed fallback rows remain visible without being
 mistaken for promotable strict-gate evidence.
+When startup time itself is part of the decision, also pass
+`--startup-require-cached-artifacts`. That adds a `Startup precheck` column and
+only passes rows whose profile phase timings explicitly recorded
+`artifact_check_or_download = cached`, so first-download rows stay visible
+without being mistaken for cached-startup baselines.
 The remote suite wrappers now also run `edge_vlm.sweep_quality_review` with
 `configs/benchmark/quality_review_policy.json` after the sweep finishes. That
 writes per-run `quality_review_json` and `quality_review_markdown` sidecars

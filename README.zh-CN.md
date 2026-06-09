@@ -373,6 +373,12 @@ comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight g
 `--ranking-min-lfb-blocks <strict-gate>` 时，report 还会增加
 `Ranking precheck` 列，这样 relaxed fallback row 会保留在报告里，但不会被误读成
 可直接 promotion 的 strict-gate 证据。
+如果 startup 时间本身要参与判断，再加上
+`--startup-require-cached-artifacts`。这样 compare 会新增
+`Startup precheck` 列，并且只把 profile phase timings 里明确记录
+`artifact_check_or_download = cached` 的 row 当成可比较的 cached-startup
+证据；首次下载的 row 仍然会保留在报告里，但不会再被误读成 cached startup
+baseline。
 这些 remote suite wrapper 现在还会在 sweep 结束后自动运行
 `edge_vlm.sweep_quality_review`，并使用
 `configs/benchmark/quality_review_policy.json`。它会把每个 run 的

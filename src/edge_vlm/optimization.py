@@ -90,6 +90,8 @@ class SweepComparisonRow:
     delta_image_tokens_per_s_pct: float | None = None
     delta_startup_pct: float | None = None
     delta_fake_stream_latency_pct: float | None = None
+    startup_precheck_passed: bool | None = None
+    startup_precheck_reason: str = ""
     ranking_precheck_passed: bool | None = None
     ranking_precheck_reason: str = ""
     promotion_precheck_passed: bool | None = None
@@ -607,6 +609,33 @@ def _ranking_precheck(
     return True, ""
 
 
+def _startup_precheck(
+    row: SweepComparisonRow,
+    *,
+    require_cached_artifacts: bool,
+) -> tuple[bool | None, str]:
+    if not require_cached_artifacts:
+        return None, ""
+    if row.server_startup_seconds is None:
+        return False, "missing_startup_s"
+    artifact_phase_status = row.artifact_phase_status.strip()
+    if not artifact_phase_status:
+        return False, "missing_artifact_phase"
+    if artifact_phase_status != "cached":
+        return False, f"artifact_phase {artifact_phase_status} != cached"
+    return True, ""
+
+
+def _format_startup_precheck(row: SweepComparisonRow) -> str:
+    if row.startup_precheck_passed is None:
+        return ""
+    if row.startup_precheck_passed:
+        return "yes"
+    if row.startup_precheck_reason:
+        return f"no ({row.startup_precheck_reason})"
+    return "no"
+
+
 def _format_ranking_precheck(row: SweepComparisonRow) -> str:
     if row.ranking_precheck_passed is None:
         return ""
@@ -921,6 +950,14 @@ def _add_ranking_prechecks(rows: list[SweepComparisonRow], ranking_min_lfb_block
         )
 
 
+def _add_startup_prechecks(rows: list[SweepComparisonRow], *, require_cached_artifacts: bool) -> None:
+    for row in rows:
+        row.startup_precheck_passed, row.startup_precheck_reason = _startup_precheck(
+            row,
+            require_cached_artifacts=require_cached_artifacts,
+        )
+
+
 def _promotion_precheck(
     row: SweepComparisonRow,
     *,
@@ -1026,10 +1063,18 @@ def _add_promotion_prechecks(
 def _format_sweep_comparison_report(
     rows: list[SweepComparisonRow],
     *,
+    startup_require_cached_artifacts: bool,
     ranking_min_lfb_blocks: int | None,
     promotion_precheck_stage: str | None,
     promotion_require_quality_review: bool,
 ) -> str:
+    startup_column = " | Startup precheck" if startup_require_cached_artifacts else ""
+    startup_separator = " |---" if startup_require_cached_artifacts else ""
+    startup_note = (
+        " `Startup precheck` uses `--startup-require-cached-artifacts` and only passes rows whose profile phase timings explicitly record `artifact_check_or_download = cached`; first-download rows and older manifests without that phase remain in the report but fail startup precheck."
+        if startup_require_cached_artifacts
+        else ""
+    )
     ranking_column = " | Ranking precheck" if ranking_min_lfb_blocks is not None else ""
     ranking_separator = " |---" if ranking_min_lfb_blocks is not None else ""
     ranking_note = (
@@ -1079,12 +1124,14 @@ def _format_sweep_comparison_report(
         "# Jetson Sweep Comparison Report",
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower."
+        + startup_note
         + ranking_note,
         promotion_note + quality_review_note + artifact_phase_note,
         "",
         "| Model | Variant | Selection | Run prefix | Runtime"
         + artifact_phase_column
         + " | Prepare ctx | Preflight lfb | Required lfb"
+        + startup_column
         + ranking_column
         + promotion_column
         + quality_review_column
@@ -1092,6 +1139,7 @@ def _format_sweep_comparison_report(
         "|---|---|---|---|---"
         + artifact_phase_separator
         + "|---|---:|---:"
+        + startup_separator
         + ranking_separator
         + promotion_separator
         + quality_review_separator
@@ -1115,8 +1163,12 @@ def _format_sweep_comparison_report(
         if artifact_phase_enabled:
             artifact_phase_status = row.artifact_phase_status.replace("|", "\\|")
             artifact_phase = f" | {artifact_phase_status} | {_fmt(row.artifact_phase_duration_s)}"
+        startup_precheck = ""
+        if startup_require_cached_artifacts:
+            startup_precheck_text = _format_startup_precheck(row).replace("|", "\\|")
+            startup_precheck = f" | {startup_precheck_text}"
         lines.append(
-            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime}{artifact_phase} | {prepare_context} | {lfb} | {required_lfb}{ranking_precheck}{promotion_precheck}{quality_review} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime}{artifact_phase} | {prepare_context} | {lfb} | {required_lfb}{startup_precheck}{ranking_precheck}{promotion_precheck}{quality_review} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 selection=_format_selection(row).replace("|", "\\|"),
@@ -1126,6 +1178,7 @@ def _format_sweep_comparison_report(
                 prepare_context=row.prepare_context_summary.replace("|", "\\|"),
                 lfb=row.preflight_lfb,
                 required_lfb="" if row.preflight_required_lfb_blocks is None else row.preflight_required_lfb_blocks,
+                startup_precheck=startup_precheck,
                 ranking_precheck=ranking_precheck,
                 promotion_precheck=promotion_precheck,
                 quality_review=quality_review,
@@ -1168,6 +1221,7 @@ def build_sweep_comparison_report(
     baseline_variant_ids: Iterable[str] = (),
     min_output_chars: int = 32,
     max_repeat_ratio: float = 0.65,
+    startup_require_cached_artifacts: bool = False,
     ranking_min_lfb_blocks: int | None = None,
     promotion_precheck_stage: str | None = None,
     promotion_require_quality_review: bool = False,
@@ -1182,6 +1236,7 @@ def build_sweep_comparison_report(
             )
         )
     _add_comparison_deltas(rows, baseline_variant_ids)
+    _add_startup_prechecks(rows, require_cached_artifacts=startup_require_cached_artifacts)
     _add_ranking_prechecks(rows, ranking_min_lfb_blocks)
     _add_promotion_prechecks(
         rows,
@@ -1194,6 +1249,7 @@ def build_sweep_comparison_report(
     output.write_text(
         _format_sweep_comparison_report(
             rows,
+            startup_require_cached_artifacts=startup_require_cached_artifacts,
             ranking_min_lfb_blocks=ranking_min_lfb_blocks,
             promotion_precheck_stage=promotion_precheck_stage,
             promotion_require_quality_review=promotion_require_quality_review,
@@ -1248,6 +1304,12 @@ def main(argv: list[str] | None = None) -> int:
     compare_parser.add_argument("--max-repeat-ratio", type=float, default=0.65)
     compare_parser.add_argument("--fail-on-guard", action="store_true")
     compare_parser.add_argument(
+        "--startup-require-cached-artifacts",
+        action="store_true",
+        help="Only treat rows as startup-comparable evidence when profile phase timings record artifact_check_or_download=cached",
+    )
+    compare_parser.add_argument("--fail-on-startup-precheck", action="store_true")
+    compare_parser.add_argument(
         "--ranking-min-lfb-blocks",
         type=int,
         help="Strict ranking gate for preflight LFB requirements; rows below this remain in the report but fail ranking precheck",
@@ -1267,6 +1329,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "compare":
+        if args.fail_on_startup_precheck and not args.startup_require_cached_artifacts:
+            parser.error("--fail-on-startup-precheck requires --startup-require-cached-artifacts")
         if args.fail_on_ranking_precheck and args.ranking_min_lfb_blocks is None:
             parser.error("--fail-on-ranking-precheck requires --ranking-min-lfb-blocks")
         if args.fail_on_promotion_precheck and args.promotion_precheck_stage is None:
@@ -1279,12 +1343,15 @@ def main(argv: list[str] | None = None) -> int:
             baseline_variant_ids=args.baseline_variant,
             min_output_chars=args.min_output_chars,
             max_repeat_ratio=args.max_repeat_ratio,
+            startup_require_cached_artifacts=args.startup_require_cached_artifacts,
             ranking_min_lfb_blocks=args.ranking_min_lfb_blocks,
             promotion_precheck_stage=args.promotion_precheck_stage,
             promotion_require_quality_review=args.promotion_require_quality_review,
         )
         print(json.dumps({"runs": len(rows), "output": args.output}, ensure_ascii=False))
         if args.fail_on_guard and any(not row.guard_passed for row in rows):
+            return 1
+        if args.fail_on_startup_precheck and any(row.startup_precheck_passed is False for row in rows):
             return 1
         if args.fail_on_ranking_precheck and any(row.ranking_precheck_passed is False for row in rows):
             return 1

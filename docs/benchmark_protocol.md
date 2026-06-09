@@ -439,6 +439,12 @@ When profile phase timings include `artifact_check_or_download`, compare also
 adds `Artifact phase` and `Artifact s` columns so first-download rows can be
 separated from cached-start rows without opening lifecycle or profile-summary
 sidecars by hand.
+When startup time itself is under review, add
+`--startup-require-cached-artifacts`. Compare then adds a `Startup precheck`
+column and only marks rows as startup-comparable when
+`artifact_check_or_download` explicitly recorded `cached`; first-download rows
+and older manifests without that phase remain visible but fail the startup
+precheck.
 For ranking decisions, keep only the defensible strict rows: when compare also receives
 `--ranking-min-lfb-blocks`, it adds a `Ranking precheck` column so rows that
 ran under a more relaxed gate stay in the report but are mechanically marked as

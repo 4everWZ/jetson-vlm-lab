@@ -82,7 +82,12 @@ distinguish strict prepared rows from unprepared or partially prepared runs
 without hand-opening the manifest JSON. When profile phase timings include
 `artifact_check_or_download`, compare also emits `Artifact phase` and
 `Artifact s` so first-download rows can be separated from cached-start rows at
-the report layer instead of by hand-opening lifecycle JSONL. Compare can now also add a
+the report layer instead of by hand-opening lifecycle JSONL. When startup time
+itself is under review, compare also accepts
+`--startup-require-cached-artifacts` and emits a `Startup precheck` column that
+only passes rows whose profile phase timings explicitly recorded
+`artifact_check_or_download = cached`; first-download rows and older manifests
+without that phase remain visible but fail the startup precheck. Compare can now also add a
 `Promotion precheck` column with `--promotion-precheck-stage formal-repeat` or
 `--promotion-precheck-stage promotion-reference`. That precheck is
 intentionally mechanical only: it checks locked clocks, cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full benchmark success, fake-stream success for image-capable rows, and the stage-specific trial floor. Text-only rows whose configs declare `capabilities.image=false` do not need fake-stream records for this gate. The raw excerpt review remains manual, and route-sensitive promotion still requires `edge_vlm.quality_review` plus human review before any role change.
