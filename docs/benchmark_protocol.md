@@ -445,9 +445,11 @@ For promotion-oriented review, compare also accepts
 `--promotion-precheck-stage promotion-reference`. This adds a
 `Promotion precheck` column that checks the mechanical gate only: locked clocks,
 cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`,
-full benchmark success, fake-stream success, and the stage-specific trial
-floor. Add `--promotion-require-quality-review` when the promotion gate should
-also require a passing structured `Quality review` sidecar. Use
+full benchmark success, fake-stream success for image-capable rows, and the
+stage-specific trial floor. Text-only rows whose configs declare
+`capabilities.image=false` do not need fake-stream records for this gate. Add
+`--promotion-require-quality-review` when the promotion gate should also require
+a passing structured `Quality review` sidecar. Use
 `formal-repeat` for the 5-trial lightweight ladder and
 `promotion-reference` for 10-trial baseline/reference refreshes. The raw excerpt review remains manual and is not replaced by this column.
 
@@ -682,7 +684,13 @@ scripts/jetson/run_remote_tencent_text_suite.sh
 
 The wrapper defaults to all eleven configured Tencent text GGUF rows, runs with
 locked clocks, drops caches before each variant, sets
-`--fake-stream-max-frames 0`, and writes a comparison report. Low-bit rows are
+`--fake-stream-max-frames 0`, runs `edge_vlm.sweep_quality_review`, and writes
+a comparison report with `--promotion-precheck-stage formal-repeat` plus
+`--promotion-require-quality-review`. Because these rows are text-only,
+`Promotion precheck` skips the fake-stream requirement. Set
+`JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
+return non-zero if any row fails that promotion gate; the default remains `0`
+so diagnostic text ladders can still emit comparison evidence. Low-bit rows are
 runtime-compatibility canaries inside that dedicated text suite; the first
 Hy-MT1.5 1.25bit Jetson smoke failed before server ready on the pinned llama.cpp
 image with `invalid ggml type 42`. The HY-MT1.5 Q4/Q6/Q8 and Youtu-LLM Q8 rows

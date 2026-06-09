@@ -14,11 +14,17 @@ min_lfb_blocks="${JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS:-150}"
 wait_timeout_s="${JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S:-600}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
 quality_review_policy="${JETSON_REMOTE_QUALITY_REVIEW_POLICY:-configs/benchmark/quality_review_policy.json}"
+fail_on_promotion_precheck="${JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK:-0}"
 
 candidate_variants_text="${JETSON_TENCENT_TEXT_VARIANTS:-tencent-hy-mt1p5-1p8b-1p25bit-text-smoke tencent-hy-mt1p5-1p8b-2bit-text-smoke tencent-hy-mt1p5-1p8b-q4-text-smoke tencent-hy-mt1p5-1p8b-q6-text-smoke tencent-hy-mt1p5-1p8b-q8-text-smoke tencent-hy-mt2-1p8b-1p25bit-text-smoke tencent-hy-mt2-1p8b-2bit-text-smoke tencent-hy-mt2-1p8b-q4-text-smoke tencent-hy-mt2-1p8b-q6-text-smoke tencent-hy-mt2-1p8b-q8-text-smoke tencent-youtu-llm-2b-q8-text-smoke}"
 extra_variants_text="${JETSON_TENCENT_TEXT_EXTRA_VARIANTS:-}"
 manifest_path="${JETSON_TENCENT_TEXT_MANIFEST:-outputs/optimization_sweeps/${run_prefix}/${run_prefix}.manifest.json}"
 comparison_output="${JETSON_TENCENT_TEXT_COMPARISON_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/comparison.md}"
+
+if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" != "1" ]]; then
+  echo "JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK must be 0 or 1." >&2
+  exit 2
+fi
 
 read -r -a candidate_variants <<< "${candidate_variants_text}"
 read -r -a extra_variants <<< "${extra_variants_text}"
@@ -52,12 +58,21 @@ JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
   --policy "${quality_review_policy}" \
   --allow-failures
 
-"${remote_exec}" \
-  "PYTHONPATH=${remote_pythonpath}" \
-  python3 \
-  -m \
-  edge_vlm.optimization \
-  compare \
-  --manifest "${manifest_path}" \
-  --ranking-min-lfb-blocks "${min_lfb_blocks}" \
+compare_args=(
+  "PYTHONPATH=${remote_pythonpath}"
+  python3
+  -m
+  edge_vlm.optimization
+  compare
+  --manifest "${manifest_path}"
+  --ranking-min-lfb-blocks "${min_lfb_blocks}"
+  --promotion-precheck-stage formal-repeat
+  --promotion-require-quality-review
   --output "${comparison_output}"
+)
+
+if [[ "${fail_on_promotion_precheck}" == "1" ]]; then
+  compare_args+=(--fail-on-promotion-precheck)
+fi
+
+"${remote_exec}" "${compare_args[@]}"

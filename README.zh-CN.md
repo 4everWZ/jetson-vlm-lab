@@ -384,8 +384,11 @@ comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight g
 机械条件，还会要求结构化 `Quality review` sidecar 通过。
 如果还希望 remote promotion wrapper 在这层 gate 失败时直接退出非零，就显式开
 `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` 或
-`JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1`。默认保持关闭，这样诊断性
-run 仍然可以先产出 comparison report，而不会立刻变成硬失败。
+`JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` 或
+`JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1`。默认保持关闭，这样诊断性
+run 仍然可以先产出 comparison report，而不会立刻变成硬失败。对于 text-only
+row，`Promotion precheck` 会因为配置里声明了 `capabilities.image=false`
+而跳过 fake-stream 要求。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

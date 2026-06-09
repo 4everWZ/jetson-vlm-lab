@@ -660,6 +660,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         for text in (protocol_doc, readme, readme_zh):
             self.assertIn("JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK", text)
             self.assertIn("JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK", text)
+            self.assertIn("JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK", text)
 
     def test_sweep_quality_review_sidecars_and_compare_docs_are_wired(self):
         readme = Path("README.md").read_text(encoding="utf-8")

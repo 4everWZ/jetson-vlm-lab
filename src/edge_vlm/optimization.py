@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from .config import config_supports_images, load_model_config
 from .jetson_profile import summarize_tegrastats_log as summarize_jetson_profile_log
 
 
@@ -60,6 +61,7 @@ class SweepComparisonRow:
     trials: int | None
     benchmark_max_tokens: int | None
     benchmark_temperature: float | None
+    supports_images: bool
     quality_review_passed: bool | None
     quality_review_records: int | None
     quality_review_passed_records: int | None
@@ -644,6 +646,21 @@ def _quality_review_summary(report_path: Path | None) -> dict[str, Any]:
     return summary
 
 
+def _variant_supports_images(variant_plan: dict[str, Any], *, fake_stream_path: Path | None) -> bool:
+    explicit = variant_plan.get("supports_images")
+    if isinstance(explicit, bool):
+        return explicit
+    variant = variant_plan.get("variant")
+    if isinstance(variant, dict):
+        config_path = variant.get("config")
+        if isinstance(config_path, str) and config_path.strip():
+            try:
+                return config_supports_images(load_model_config(config_path))
+            except (FileNotFoundError, ValueError):
+                pass
+    return fake_stream_path is not None
+
+
 def summarize_sweep_manifest(
     manifest_path: str | Path,
     *,
@@ -765,6 +782,10 @@ def summarize_sweep_manifest(
                 trials=benchmark_metadata.get("trial_count"),
                 benchmark_max_tokens=benchmark_metadata.get("max_tokens"),
                 benchmark_temperature=benchmark_metadata.get("temperature"),
+                supports_images=_variant_supports_images(
+                    variant_plan,
+                    fake_stream_path=fake_stream_path,
+                ),
                 quality_review_passed=quality_review["passed"],
                 quality_review_records=quality_review["records"],
                 quality_review_passed_records=quality_review["passed_records"],
@@ -884,12 +905,13 @@ def _promotion_precheck(
         failures.append("guard_failed")
     if row.records > 0 and row.successful < row.records:
         failures.append(f"benchmark_success {row.successful}/{row.records} < {row.records}/{row.records}")
-    if row.fake_stream_records < 1:
-        failures.append("missing_fake_stream_records")
-    elif row.fake_stream_successful < row.fake_stream_records:
-        failures.append(
-            f"fake_stream_success {row.fake_stream_successful}/{row.fake_stream_records} < {row.fake_stream_records}/{row.fake_stream_records}"
-        )
+    if row.supports_images:
+        if row.fake_stream_records < 1:
+            failures.append("missing_fake_stream_records")
+        elif row.fake_stream_successful < row.fake_stream_records:
+            failures.append(
+                f"fake_stream_success {row.fake_stream_successful}/{row.fake_stream_records} < {row.fake_stream_records}/{row.fake_stream_records}"
+            )
     if promotion_require_quality_review:
         if row.quality_review_passed is None:
             failures.append("missing_quality_review")
@@ -965,7 +987,7 @@ def _format_sweep_comparison_report(
     promotion_column = " | Promotion precheck" if promotion_precheck_stage is not None else ""
     promotion_separator = " |---" if promotion_precheck_stage is not None else ""
     promotion_note = (
-        " `Promotion precheck` uses `--promotion-precheck-stage {stage}` to enforce the mechanical promotion gate: locked clocks, cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full benchmark success, fake-stream success, and the stage trial floor.{quality_gate} Raw excerpt review remains manual.".format(
+        " `Promotion precheck` uses `--promotion-precheck-stage {stage}` to enforce the mechanical promotion gate: locked clocks, cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full benchmark success, fake-stream success for image-capable rows, and the stage trial floor.{quality_gate} Raw excerpt review remains manual.".format(
             stage=promotion_precheck_stage,
             quality_gate=(
                 " When `--promotion-require-quality-review` is also set, the row must have a passing structured quality review sidecar."

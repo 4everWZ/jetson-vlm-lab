@@ -387,9 +387,11 @@ structured `Quality review` sidecar to pass instead of only checking the
 mechanical run conditions.
 If you want the remote promotion-oriented wrappers to stop the suite on that
 gate, enable `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` or
-`JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1`. They stay off by default so
-diagnostic runs can still emit a comparison report without being treated as a
-hard failure.
+`JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK=1` or
+`JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1`. They stay off by default
+so diagnostic runs can still emit a comparison report without being treated as
+a hard failure. For text-only rows, `Promotion precheck` skips the fake-stream
+requirement because their configs declare `capabilities.image=false`.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under
