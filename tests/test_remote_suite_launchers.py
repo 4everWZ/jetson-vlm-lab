@@ -461,6 +461,14 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
             "REMOTE_ARG=--gate\nREMOTE_ARG=promotion\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/promotion.selection.json\n",
             log_text,
         )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=ranking\nREMOTE_ARG=--require-leq2b-candidate\nREMOTE_ARG=--candidate-lane\nREMOTE_ARG=text\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/ranking.leq2b-text.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "REMOTE_ARG=--gate\nREMOTE_ARG=promotion\nREMOTE_ARG=--require-leq2b-candidate\nREMOTE_ARG=--candidate-lane\nREMOTE_ARG=text\nREMOTE_ARG=--output\nREMOTE_ARG=outputs/optimization_sweeps/tencent-text-unit/promotion.leq2b-text.selection.json\n",
+            log_text,
+        )
 
     def test_remote_current_defaults_suite_still_exports_selection_artifacts_when_compare_fails(self):
         with tempfile.TemporaryDirectory() as tmp:

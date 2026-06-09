@@ -501,6 +501,10 @@ PYTHONPATH=src python -m edge_vlm.optimization select-eligible \
   --output outputs/optimization_sweeps/<run-prefix>/ranking.leq2b-vlm.selection.json
 ```
 
+Switch `--candidate-lane` to `text` and write
+`ranking.leq2b-text.selection.json` or `promotion.leq2b-text.selection.json`
+when the consumer wants only the `<=2B` text/router candidate rows.
+
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:
 
@@ -785,7 +789,10 @@ with compare's `--eligibility-output`, so the text/router ranking flow can
 reuse the same machine-readable gate state.
 It also runs `edge_vlm.optimization select-eligible` for `ranking` and
 `promotion`, writing `ranking.selection.json` and `promotion.selection.json`
-next to the compare outputs.
+next to the compare outputs. It also emits scoped `<=2B` text artifacts,
+`ranking.leq2b-text.selection.json` and
+`promotion.leq2b-text.selection.json`, by calling `select-eligible` with
+`--require-leq2b-candidate --candidate-lane text`.
 `JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero if any row fails that promotion gate; the default remains `0`
 so diagnostic text ladders can still emit comparison evidence. Set

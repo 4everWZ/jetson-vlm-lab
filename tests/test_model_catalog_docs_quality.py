@@ -322,18 +322,21 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "model_ref": "tencent/HY-MT1.5-1.8B-GGUF:Q4_K_M",
                 "model_file": "HY-MT1.5-1.8B-Q4_K_M.gguf",
                 "quantization": "Q4_K_M",
+                "candidate_scope": {"leq2b_candidate": True, "lane": "text"},
             },
             "tencent-hy-mt1p5-1p8b-q6": {
                 "config": "configs/models/tencent_hy_mt1p5_1p8b_q6.yaml",
                 "model_ref": "tencent/HY-MT1.5-1.8B-GGUF:Q6_K",
                 "model_file": "HY-MT1.5-1.8B-Q6_K.gguf",
                 "quantization": "Q6_K",
+                "candidate_scope": {"leq2b_candidate": True, "lane": "text"},
             },
             "tencent-hy-mt1p5-1p8b-q8": {
                 "config": "configs/models/tencent_hy_mt1p5_1p8b_q8.yaml",
                 "model_ref": "tencent/HY-MT1.5-1.8B-GGUF:Q8_0",
                 "model_file": "HY-MT1.5-1.8B-Q8_0.gguf",
                 "quantization": "Q8_0",
+                "candidate_scope": {"leq2b_candidate": True, "lane": "text"},
             },
             "tencent-hy-mt2-1p8b-1p25bit": {
                 "config": "configs/models/tencent_hy_mt2_1p8b_1p25bit.yaml",
@@ -352,18 +355,21 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
                 "model_ref": "tencent/Hy-MT2-1.8B-GGUF:Q4_K_M",
                 "model_file": "Hy-MT2-1.8B-Q4_K_M.gguf",
                 "quantization": "Q4_K_M",
+                "candidate_scope": {"leq2b_candidate": True, "lane": "text"},
             },
             "tencent-hy-mt2-1p8b-q6": {
                 "config": "configs/models/tencent_hy_mt2_1p8b_q6.yaml",
                 "model_ref": "tencent/Hy-MT2-1.8B-GGUF:Q6_K",
                 "model_file": "Hy-MT2-1.8B-Q6_K.gguf",
                 "quantization": "Q6_K",
+                "candidate_scope": {"leq2b_candidate": True, "lane": "text"},
             },
             "tencent-hy-mt2-1p8b-q8": {
                 "config": "configs/models/tencent_hy_mt2_1p8b_q8.yaml",
                 "model_ref": "tencent/Hy-MT2-1.8B-GGUF:Q8_0",
                 "model_file": "Hy-MT2-1.8B-Q8_0.gguf",
                 "quantization": "Q8_0",
+                "candidate_scope": {"leq2b_candidate": True, "lane": "text"},
             },
             "tencent-youtu-llm-2b-q8": {
                 "config": "configs/models/tencent_youtu_llm_2b_q8.yaml",
@@ -742,6 +748,8 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("candidate-lane", text)
             self.assertIn("ranking.leq2b-vlm.selection.json", text)
             self.assertIn("promotion.leq2b-vlm.selection.json", text)
+            self.assertIn("ranking.leq2b-text.selection.json", text)
+            self.assertIn("promotion.leq2b-text.selection.json", text)
 
     def test_compare_docs_explain_promotion_precheck_stage(self):
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")

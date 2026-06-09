@@ -24,5 +24,9 @@ capabilities:
   image: false
   audio: false
 
+candidate_scope:
+  leq2b_candidate: true
+  lane: text
+
 notes:
   status: Text-only official Tencent HY-MT1.5 1.8B Q8_0 GGUF candidate. Use the text/router benchmark lane only; do not compare it against image or fake-stream VLM rows.

@@ -431,7 +431,9 @@ JSON sidecar 会把每一行的 `Startup precheck`、`Ranking precheck`、
 `--require-leq2b-candidate` 和 `--candidate-lane <vlm|text>`。现在
 lightweight suite 会基于这两个过滤条件额外产出
 `ranking.leq2b-vlm.selection.json` 和
-`promotion.leq2b-vlm.selection.json`，同时保留未过滤的
+`promotion.leq2b-vlm.selection.json`；Tencent text suite 也会额外产出
+`ranking.leq2b-text.selection.json` 和
+`promotion.leq2b-text.selection.json`，同时保留未过滤的
 `ranking.selection.json` / `promotion.selection.json`。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
