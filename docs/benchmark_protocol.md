@@ -518,6 +518,17 @@ tok/s, 26.957 image tok/s, and 1.827 s fake-stream latency. The strict
 still skipped in preflight at `lfb 46x4MB` even after cache-drop plus
 `compact_memory`, so keep this row at smoke/triage scope until it can satisfy
 the conservative gate and pass quality review.
+The scoped Q8 fallback row `qwen3-vl-2b-instruct-q8-smoke` is now executable
+through the same launcher path. Strict-gate smoke
+`qwen3-instruct-q8-smoke-20260609T082222Z` also skipped in preflight at
+`lfb 106x4MB`, so do not silently swap it into the default lightweight suite.
+Relaxed-gate smoke `qwen3-instruct-q8-smoke-lfb100-20260609T082321Z` did pass
+6/6 formal records and 1/1 fake-stream record with guard pass at
+`--min-lfb-blocks 100`, reaching 31.076 text tok/s, 25.997 image tok/s, and
+2.142 s fake-stream latency, but it included a 323.05 s first-download artifact
+phase. Use `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=qwen3-vl-2b-instruct-q8-smoke`
+only for scoped fallback triage until either Q4 or Q8 can satisfy the
+conservative 150-LFB gate.
 
 If a host-side HF GGUF download is interrupted after the bytes have completed
 but before the launcher renames the `.partial` file, the generic HF GGUF

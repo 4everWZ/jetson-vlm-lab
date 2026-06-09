@@ -516,6 +516,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         variant_catalog = Path("configs/benchmark/jetson_optimization_variants.jsonl").read_text(
             encoding="utf-8"
         )
+        q8_config_doc = Path("configs/models/qwen3_vl_2b_instruct_q8.yaml").read_text(encoding="utf-8")
 
         for text in (protocol_doc, strategy_doc):
             self.assertIn("qwen3-instruct-q4-smoke-lfb32-20260609T075208Z", text)
@@ -528,7 +529,29 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         for text in (config_doc, variant_catalog):
             self.assertIn("Jetson smoke", text)
             self.assertIn("min-lfb-blocks 32", text)
-            self.assertIn("quality review", text)
+        for text in (protocol_doc, variant_catalog):
+            self.assertIn("qwen3-vl-2b-instruct-q8-smoke", text)
+        for text in (protocol_doc, strategy_doc, q8_config_doc):
+            self.assertIn("qwen3-instruct-q8-smoke-lfb100-20260609T082321Z", text)
+            self.assertIn("31.076", text)
+            self.assertIn("25.997", text)
+            self.assertIn("2.142", text)
+            self.assertIn("323.05", text)
+            self.assertIn("106x4MB", text)
+        for text in (protocol_doc, strategy_doc, variant_catalog):
+            self.assertIn("150-LFB", text)
+        self.assertIn("relaxed 100-LFB smoke passed with guard", variant_catalog)
+        self.assertIn("default lightweight ranking row", variant_catalog)
+
+    def test_readmes_summarize_q4_first_q8_fallback_state(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        readme_zh = Path("README.zh-CN.md").read_text(encoding="utf-8")
+
+        for text in (readme, readme_zh):
+            self.assertIn("Q4", text)
+            self.assertIn("Q8", text)
+            self.assertIn("Qwen3-VL 2B Instruct", text)
+            self.assertIn("qwen3-instruct-q8-smoke-lfb100-20260609T082321Z", text)
 
     def test_preflight_docs_include_buddyinfo_fragmentation_context(self):
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")

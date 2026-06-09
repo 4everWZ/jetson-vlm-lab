@@ -6,7 +6,7 @@ The default path is deliberately practical: download pre-built GGUF artifacts, s
 
 ## Goal
 
-- Iterate on LLM/VLM candidates at or below the 2B class. Prefer pre-built Q4 GGUF artifacts; fall back to Q8 when no usable Q4 artifact exists.
+- Iterate on LLM/VLM candidates at or below the 2B class. Prefer pre-built Q4 GGUF artifacts; fall back to Q8 when the Q4 artifact is missing or the strict Jetson gate keeps the Q4 lane unusable.
 - Use the self-built official llama.cpp image as the default Jetson multimodal runtime. The dusty-nv `llama_cpp` image is not the default VLM path because it has not provided the validated multimodal `llama-server` route this repo needs.
 - Prioritize lower-level infrastructure work: launchers, artifact download/resume, profile capture, runtime image reproducibility, and multimodal load paths. Parameter changes should be scoped to a profile-backed bottleneck.
 - Keep separate tasks on separate branches or worktrees, then merge successful verified work into `main`.
@@ -32,6 +32,7 @@ The default path is deliberately practical: download pre-built GGUF artifacts, s
 | Gemma 4 E2B-it Q4 | Uses pre-built `Q4_K_M` GGUF from `mradermacher/gemma-4-E2B-it-GGUF`. WSL CUDA and Jetson text, sample-image benchmark, and one-frame fake-stream checks passed. |
 | Gemma Q8 WSL CUDA smoke | Text and sample-image benchmark passed with `CTX_SIZE=512`, `N_GPU_LAYERS=32`, `LLAMA_BATCH_SIZE=512`, `LLAMA_UBATCH_SIZE=512`, one server slot, and `VLM_SERVER_PORT=18081`. The wrapper-default real run wrote `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` and `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`. |
 | MiniCPM-V 4.6 | Official pre-built `Q4_K_M` model and F16 mmproj files from `openbmb/MiniCPM-V-4.6-gguf` are downloaded under ignored `models/` storage. WSL CUDA and Jetson text, sample-image benchmark, and one-frame fake-stream checks passed. |
+| Qwen3-VL 2B Instruct fallback lane | Q4 remains diagnostic-only on Jetson: relaxed `lfb` smoke passed, but strict `--min-lfb-blocks 150` preflight still skipped. The new Q8 fallback lane also skipped at strict `150`, but relaxed `--min-lfb-blocks 100` smoke `qwen3-instruct-q8-smoke-lfb100-20260609T082321Z` passed 6/6 formal records and 1/1 fake-stream record with guard pass. |
 | Jetson runtime | MiniCPM-V 4.6 Q4 and Gemma 4 E2B-it Q4 have observed Jetson smoke outputs through the Docker launchers with the self-built official llama.cpp image `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`. The dusty-nv `llama_cpp` image is not the default because it has not provided the multimodal server path this repo needs. |
 
 Do not treat dry runs or server startup as performance results. Performance claims need real benchmark JSONL from a running model/server. The current observed runtime support covers Gemma Q8, Gemma Q4, and MiniCPM-V 4.6 Q4 on WSL CUDA, plus Jetson smoke coverage for MiniCPM-V 4.6 Q4 and Gemma Q4. It does not validate Jetson Q8, camera input, long-run behavior, power/thermal behavior, or broad performance.

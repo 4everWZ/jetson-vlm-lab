@@ -6,7 +6,7 @@
 
 ## Goal
 
-- 持续迭代 2B 以内的 LLM/VLM 候选，优先使用现成 Q4 GGUF；没有可用 Q4 时退到 Q8。
+- 持续迭代 2B 以内的 LLM/VLM 候选，优先使用现成 Q4 GGUF；当 Q4 artifact 缺失，或 strict Jetson gate 让 Q4 路线不可用时，再退到 Q8。
 - Jetson 多模态默认 runtime 是自编译的官方 llama.cpp 镜像；dusty-nv `llama_cpp` 不是默认 VLM 路线，因为它没有提供本仓库已验证需要的多模态 `llama-server` 路径。
 - 下一步优先做更底层的 infra：launcher、artifact 下载/恢复、profile capture、runtime image 复现和 multimodal load path；参数调整只能针对 profiling 指出的瓶颈做小范围验证。
 - 不同任务使用独立 branch 或 worktree，验证成功后再合入 `main`。
@@ -32,6 +32,7 @@
 | Gemma 4 E2B-it Q4 | 使用 `mradermacher/gemma-4-E2B-it-GGUF` 的现成 `Q4_K_M` GGUF。WSL CUDA 和 Jetson 文本、样例图 benchmark、一帧 fake-stream 已通过。 |
 | Gemma Q8 WSL CUDA smoke | 文本和样例图 benchmark 已通过，参数为 `CTX_SIZE=512`、`N_GPU_LAYERS=32`、`LLAMA_BATCH_SIZE=512`、`LLAMA_UBATCH_SIZE=512`、单 server slot、`VLM_SERVER_PORT=18081`。wrapper 默认参数真实运行写入了 `outputs/benchmarks/gemma4-e2b-q8-wsl-cuda-image-wrapper-default.jsonl` 和 `outputs/fake_stream/gemma4-e2b-q8-wsl-cuda-wrapper-default.jsonl`。 |
 | MiniCPM-V 4.6 | 已下载 `openbmb/MiniCPM-V-4.6-gguf` 的官方现成 `Q4_K_M` model 和 F16 mmproj 文件，存放在被 Git 忽略的 `models/` 目录。WSL CUDA 和 Jetson 文本、样例图 benchmark、一帧 fake-stream 已通过。 |
+| Qwen3-VL 2B Instruct fallback 路线 | Jetson 上的 Q4 仍然只是诊断态：放宽 `lfb` 的 smoke 能过，但 strict `--min-lfb-blocks 150` preflight 仍然会 skip。新的 Q8 fallback 路线在 strict `150` 下也会 skip，但放宽到 `--min-lfb-blocks 100` 后，`qwen3-instruct-q8-smoke-lfb100-20260609T082321Z` 已经 6/6 formal、1/1 fake-stream、guard 通过。 |
 | Jetson runtime | MiniCPM-V 4.6 Q4 和 Gemma 4 E2B-it Q4 已通过 Jetson Docker launcher 产出 smoke 日志，使用自编译的官方 llama.cpp 镜像 `ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87`。dusty-nv `llama_cpp` 不是默认路径，因为它没有提供本仓库需要的多模态 server 路线。 |
 
 dry run 和 server startup 不能当作性能结果。性能结论必须来自真实模型/server 跑出的 benchmark JSONL。当前已观察到的 runtime 支持覆盖 WSL CUDA 上的 Gemma Q8、Gemma Q4、MiniCPM-V 4.6 Q4，以及 Jetson 上的 MiniCPM-V 4.6 Q4 和 Gemma Q4 smoke；不验证 Jetson Q8、camera input、长时间运行、电源/温度行为或泛化性能。

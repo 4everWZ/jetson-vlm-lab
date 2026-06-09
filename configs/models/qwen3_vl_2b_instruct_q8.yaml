@@ -32,4 +32,12 @@ notes:
     because the pinned Jetson llama.cpp container lacks HTTPS support for
     direct -hf downloads. This is the Q8 fallback lane for the <=2B Instruct
     VLM when the Q4_K_M row is unavailable or unusable under the conservative
-    Jetson gate.
+    Jetson gate. Strict-gate smoke
+    qwen3-instruct-q8-smoke-20260609T082222Z still skipped at preflight with
+    `lfb 106x4MB` under `--min-lfb-blocks 150`, but the relaxed-gate smoke
+    qwen3-instruct-q8-smoke-lfb100-20260609T082321Z passed 6/6 formal records
+    and 1/1 fake-stream record with guard pass at `--min-lfb-blocks 100`,
+    reaching 31.076 text tok/s, 25.997 image tok/s, and 2.142 s fake-stream
+    latency. That run included a first-download artifact phase of 323.05 s, so
+    treat it as diagnostic fallback evidence rather than default ranking
+    evidence.
