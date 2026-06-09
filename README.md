@@ -338,7 +338,10 @@ the observed multimodal smoke runs:
 multimodal `llama-server` path this repo needs. Override with
 `LLAMA_CPP_DOCKER_IMAGE=...` for a specific image, or set
 `LLAMA_CPP_USE_AUTOTAG=1` only when you intentionally want `autotag llama_cpp`
-selection.
+selection. The Jetson sweep plan now probes `llama-server --help` inside the
+selected image and records whether the runtime exposes `--mmproj`; image-capable
+variants are skipped with `runtime_missing_mmproj_support` when that probe says
+the runtime cannot serve this repo's multimodal path.
 
 Remote Jetson connection settings live in the ignored `.env.jetson` file. The
 remote helpers source it automatically; do not copy SSH hosts, passwords,

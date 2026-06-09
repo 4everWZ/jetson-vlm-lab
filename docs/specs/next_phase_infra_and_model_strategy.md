@@ -364,6 +364,10 @@ Build rules:
 - Use the self-built official llama.cpp image as the default multimodal Jetson
   runtime. dusty-nv `llama_cpp` image selection is opt-in and needs separate
   multimodal evidence before it can support VLM claims.
+- Capture a runtime probe in Jetson sweep plans so image-capable rows record
+  whether `llama-server --help` exposes `--mmproj`; skip rows with
+  `runtime_missing_mmproj_support` rather than spending download/startup time on
+  an image that cannot satisfy this repo's multimodal path.
 - Record OCI labels for source revision, llama.cpp ref, build date, and base
   image.
 - Record the copied file list and `llama-server --version` or help excerpt in

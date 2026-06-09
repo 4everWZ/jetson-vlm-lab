@@ -582,6 +582,16 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         self.assertIn("/proc/buddyinfo", strategy_doc)
         self.assertIn("fragmentation", strategy_doc)
 
+    def test_jetson_runtime_docs_explain_mmproj_probe_and_skip_reason(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        readme_zh = Path("README.zh-CN.md").read_text(encoding="utf-8")
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        migration_doc = Path("docs/migration_wsl_to_jetson.md").read_text(encoding="utf-8")
+
+        for text in (readme, readme_zh, protocol_doc, migration_doc):
+            self.assertIn("--mmproj", text)
+            self.assertIn("runtime_missing_mmproj_support", text)
+
     def test_shared_prompt_case_assets_exist_for_out_of_box_dry_runs(self):
         image_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
         cases = [

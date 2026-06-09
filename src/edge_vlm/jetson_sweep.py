@@ -314,6 +314,139 @@ def _docker_image_metadata(image: str | None) -> dict[str, Any]:
     }
 
 
+def _llama_server_probe_default() -> dict[str, Any]:
+    return {
+        "llama_server_probe_ok": False,
+        "llama_server_probe_error": None,
+        "llama_server_found": None,
+        "llama_server_path": None,
+        "llama_server_help_ok": None,
+        "llama_server_supports_mmproj": None,
+        "llama_server_multimodal_markers": [],
+    }
+
+
+def _parse_probe_bool(value: str | None) -> bool | None:
+    if value == "1":
+        return True
+    if value == "0":
+        return False
+    return None
+
+
+def _docker_image_runtime_probe(image: str | None, llama_server_cmd: str | None = None) -> dict[str, Any]:
+    probe = _llama_server_probe_default()
+    if not image:
+        probe["llama_server_probe_error"] = "LLAMA_CPP_DOCKER_IMAGE not set in sweep environment"
+        return probe
+    probe_script = """
+set -Eeuo pipefail
+server_path=""
+server_cmd=()
+if [[ -n "${EDGE_VLM_LLAMA_SERVER_CMD:-}" ]]; then
+  read -r -a server_cmd <<< "${EDGE_VLM_LLAMA_SERVER_CMD}"
+  if [[ ${#server_cmd[@]} -gt 0 ]]; then
+    server_path="${server_cmd[0]}"
+  fi
+else
+  if command -v llama-server >/dev/null 2>&1; then
+    server_path="$(command -v llama-server)"
+  elif [[ -x /usr/local/bin/llama-server ]]; then
+    server_path="/usr/local/bin/llama-server"
+  elif [[ -x /opt/llama.cpp/build/bin/llama-server ]]; then
+    server_path="/opt/llama.cpp/build/bin/llama-server"
+  elif command -v server >/dev/null 2>&1; then
+    server_path="$(command -v server)"
+  fi
+  if [[ -n "${server_path}" ]]; then
+    server_cmd=("${server_path}")
+  fi
+fi
+
+if [[ -z "${server_path}" ]]; then
+  printf 'llama_server_found=0\\n'
+  printf 'llama_server_path=\\n'
+  printf 'llama_server_help_ok=\\n'
+  printf 'llama_server_supports_mmproj=\\n'
+  printf 'llama_server_multimodal_markers=\\n'
+  exit 0
+fi
+
+printf 'llama_server_found=1\\n'
+printf 'llama_server_path=%s\\n' "${server_path}"
+help_output=""
+if help_output="$("${server_cmd[@]}" --help 2>&1)"; then
+  printf 'llama_server_help_ok=1\\n'
+else
+  printf 'llama_server_help_ok=0\\n'
+  printf 'llama_server_supports_mmproj=\\n'
+  printf 'llama_server_multimodal_markers=\\n'
+  exit 0
+fi
+
+markers=()
+if grep -Fq -- "--mmproj" <<< "${help_output}"; then
+  markers+=("--mmproj")
+fi
+if grep -Fq -- "mmproj" <<< "${help_output}"; then
+  markers+=("mmproj")
+fi
+if [[ ${#markers[@]} -gt 0 ]]; then
+  printf 'llama_server_supports_mmproj=1\\n'
+else
+  printf 'llama_server_supports_mmproj=0\\n'
+fi
+printf 'llama_server_multimodal_markers=%s\\n' "$(IFS=,; printf '%s' "${markers[*]}")"
+"""
+    env = None
+    if llama_server_cmd:
+        env = {
+            **os.environ,
+            "EDGE_VLM_LLAMA_SERVER_CMD": str(llama_server_cmd),
+        }
+    try:
+        result = subprocess.run(
+            ["docker", "run", "--rm", "--entrypoint", "/bin/bash", image, "-lc", probe_script],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+    except FileNotFoundError:
+        probe["llama_server_probe_error"] = "docker command not found"
+        return probe
+    if result.returncode != 0:
+        probe["llama_server_probe_error"] = _text_tail(result.stderr or result.stdout, max_chars=1000)
+        return probe
+    parsed: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        parsed[key.strip()] = value.strip()
+    probe.update(
+        {
+            "llama_server_probe_ok": True,
+            "llama_server_found": _parse_probe_bool(parsed.get("llama_server_found")),
+            "llama_server_path": parsed.get("llama_server_path") or None,
+            "llama_server_help_ok": _parse_probe_bool(parsed.get("llama_server_help_ok")),
+            "llama_server_supports_mmproj": _parse_probe_bool(parsed.get("llama_server_supports_mmproj")),
+            "llama_server_multimodal_markers": [
+                marker
+                for marker in (parsed.get("llama_server_multimodal_markers") or "").split(",")
+                if marker
+            ],
+        }
+    )
+    return probe
+
+
+def _runtime_metadata(image: str | None, llama_server_cmd: str | None = None) -> dict[str, Any]:
+    metadata = _docker_image_metadata(image)
+    metadata.update(_docker_image_runtime_probe(image, llama_server_cmd))
+    return metadata
+
+
 def _read_json_object(path: str | Path) -> dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as handle:
         data = json.load(handle)
@@ -343,6 +476,19 @@ def _matches_filters(variant: dict[str, Any], model_filters: set[str], variant_f
 
 def _config_supports_fake_stream(config_path: str | Path) -> bool:
     return config_supports_images(load_model_config(config_path))
+
+
+def _runtime_support_block_reason(variant_plan: dict[str, Any]) -> str | None:
+    if not bool(variant_plan.get("supports_images")):
+        return None
+    runtime = variant_plan.get("server_runtime")
+    if not isinstance(runtime, dict):
+        return None
+    if runtime.get("llama_server_found") is False:
+        return "runtime_missing_llama_server"
+    if runtime.get("llama_server_help_ok") is True and runtime.get("llama_server_supports_mmproj") is False:
+        return "runtime_missing_mmproj_support"
+    return None
 
 
 def _warmup_phase_from_args(args: Iterable[Any]) -> dict[str, Any]:
@@ -401,7 +547,7 @@ def build_sweep_plan(
     selected_models = set(model_filters)
     selected_variants = set(variant_filters)
     planned: list[dict[str, Any]] = []
-    runtime_by_image: dict[str | None, dict[str, Any]] = {}
+    runtime_by_image: dict[tuple[str | None, str | None], dict[str, Any]] = {}
     for variant in _load_variants(variants_path):
         if not _matches_filters(variant, selected_models, selected_variants):
             continue
@@ -433,8 +579,10 @@ def build_sweep_plan(
             "EDGE_VLM_LAUNCH_PHASE_LOG": str(lifecycle_jsonl),
         }
         image = server_env.get("LLAMA_CPP_DOCKER_IMAGE")
-        if image not in runtime_by_image:
-            runtime_by_image[image] = _docker_image_metadata(image)
+        llama_server_cmd = server_env.get("LLAMA_SERVER_CMD")
+        runtime_key = (image, llama_server_cmd)
+        if runtime_key not in runtime_by_image:
+            runtime_by_image[runtime_key] = _runtime_metadata(image, llama_server_cmd)
         benchmark_env = {
             **server_env,
             "EDGE_VLM_FORMAL_RUN_ID": run_id,
@@ -487,10 +635,11 @@ def build_sweep_plan(
         planned.append(
             {
                 "variant": variant,
+                "supports_images": supports_fake_stream,
                 "run_id": run_id,
                 "server_command": ["bash", str(variant["launcher"])] + [str(arg) for arg in variant.get("args", [])],
                 "server_env": server_env,
-                "server_runtime": runtime_by_image[image],
+                "server_runtime": runtime_by_image[runtime_key],
                 "benchmark_command": ["bash", "scripts/jetson/run_formal_benchmark.sh"],
                 "benchmark_env": benchmark_env,
                 "fake_stream_command": fake_stream_command if include_fake_stream and supports_fake_stream else None,
@@ -906,6 +1055,28 @@ def run_sweep(
                     "preflight": preflight,
                     "preflight_passed": False,
                     "preflight_reason": preflight_reason,
+                    **_not_started_server_timing(),
+                    **pre_variant_result,
+                }
+            )
+            continue
+        runtime_reason = _runtime_support_block_reason(variant_plan)
+        if runtime_reason is not None:
+            results.append(
+                {
+                    "run_id": variant_plan["run_id"],
+                    "variant_id": variant_plan["variant"]["id"],
+                    "server_ready": False,
+                    "server_returncode": None,
+                    "benchmark_returncode": None,
+                    "fake_stream_returncode": None,
+                    "preflight_before_prepare_path": preflight_before_prepare_path if command else None,
+                    "preflight_before_prepare": preflight_before_prepare,
+                    "preflight_delta": preflight_delta,
+                    "preflight_path": paths["preflight_json"],
+                    "preflight": preflight,
+                    "preflight_passed": True,
+                    "preflight_reason": runtime_reason,
                     **_not_started_server_timing(),
                     **pre_variant_result,
                 }

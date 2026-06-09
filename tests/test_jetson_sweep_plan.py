@@ -286,28 +286,40 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
             ]
 
             with patch(
-                "edge_vlm.jetson_sweep.subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    ["docker", "image", "inspect", "ghcr.io/4everwz/jetson-llama-cpp:test"],
-                    0,
-                    stdout=json.dumps(inspect_payload),
-                    stderr="",
-                ),
-            ) as docker_inspect:
-                plan = build_sweep_plan(
-                    variants_path=variants,
-                    run_prefix="unit",
-                    output_root=tmp_path / "outputs",
-                    server_log_dir=tmp_path / "logs",
-                    port=18080,
-                    trial_count=1,
-                    max_tokens=16,
-                    temperature=0,
-                    python_bin="python3",
-                    base_env={
-                        "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:test",
-                    },
-                )
+                "edge_vlm.jetson_sweep._docker_image_runtime_probe",
+                return_value={
+                    "llama_server_probe_ok": False,
+                    "llama_server_probe_error": "not part of this test",
+                    "llama_server_found": None,
+                    "llama_server_path": None,
+                    "llama_server_help_ok": None,
+                    "llama_server_supports_mmproj": None,
+                    "llama_server_multimodal_markers": [],
+                },
+            ):
+                with patch(
+                    "edge_vlm.jetson_sweep.subprocess.run",
+                    return_value=subprocess.CompletedProcess(
+                        ["docker", "image", "inspect", "ghcr.io/4everwz/jetson-llama-cpp:test"],
+                        0,
+                        stdout=json.dumps(inspect_payload),
+                        stderr="",
+                    ),
+                ) as docker_inspect:
+                    plan = build_sweep_plan(
+                        variants_path=variants,
+                        run_prefix="unit",
+                        output_root=tmp_path / "outputs",
+                        server_log_dir=tmp_path / "logs",
+                        port=18080,
+                        trial_count=1,
+                        max_tokens=16,
+                        temperature=0,
+                        python_bin="python3",
+                        base_env={
+                            "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                        },
+                    )
 
         docker_inspect.assert_called_once_with(
             ["docker", "image", "inspect", "ghcr.io/4everwz/jetson-llama-cpp:test"],
@@ -326,6 +338,94 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
         self.assertEqual(runtime["llama_cpp_ref"], "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774")
         self.assertEqual(runtime["source_revision"], "735d6e569bf8")
         self.assertEqual(runtime["base_image"], "dustynv/cuda-python:r36.4.0-cu128-24.04")
+
+    def test_jetson_sweep_plan_records_llama_server_runtime_probe(self):
+        from edge_vlm.jetson_sweep import build_sweep_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "qwen-unit",
+                        "model": "qwen3-vl-2b-instruct-q4",
+                        "config": "configs/models/qwen3_vl_2b_instruct_q4.yaml",
+                        "launcher": "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
+                        "env": {
+                            "MODEL_DIR": str(tmp_path / "models"),
+                            "MODEL_ALIAS": "qwen3-vl-2b-instruct-q4",
+                            "CTX_SIZE": 1024,
+                            "N_GPU_LAYERS": 99,
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            inspect_payload = [
+                {
+                    "Id": "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844",
+                    "Created": "2026-05-27T13:47:04.31937282+09:30",
+                    "RepoDigests": [],
+                    "Config": {
+                        "Labels": {
+                            "org.opencontainers.image.version": "d749821db3bd8c5c52360f55ca1a1b76ae46d8e7",
+                        }
+                    },
+                }
+            ]
+            probe_stdout = "\n".join(
+                [
+                    "llama_server_found=1",
+                    "llama_server_path=/usr/local/bin/llama-server",
+                    "llama_server_help_ok=1",
+                    "llama_server_supports_mmproj=1",
+                    "llama_server_multimodal_markers=--mmproj,mmproj",
+                ]
+            )
+
+            def fake_run(command, **kwargs):
+                if command[:3] == ["docker", "image", "inspect"]:
+                    return subprocess.CompletedProcess(
+                        command,
+                        0,
+                        stdout=json.dumps(inspect_payload),
+                        stderr="",
+                    )
+                if command[:3] == ["docker", "run", "--rm"]:
+                    return subprocess.CompletedProcess(
+                        command,
+                        0,
+                        stdout=probe_stdout,
+                        stderr="",
+                    )
+                raise AssertionError(f"unexpected command: {command}")
+
+            with patch("edge_vlm.jetson_sweep.subprocess.run", side_effect=fake_run):
+                plan = build_sweep_plan(
+                    variants_path=variants,
+                    run_prefix="unit",
+                    output_root=tmp_path / "outputs",
+                    server_log_dir=tmp_path / "logs",
+                    port=18080,
+                    trial_count=1,
+                    max_tokens=16,
+                    temperature=0,
+                    python_bin="python3",
+                    base_env={
+                        "LLAMA_CPP_DOCKER_IMAGE": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                    },
+                )
+
+        runtime = plan["variants"][0]["server_runtime"]
+        self.assertTrue(runtime["llama_server_probe_ok"])
+        self.assertTrue(runtime["llama_server_found"])
+        self.assertEqual(runtime["llama_server_path"], "/usr/local/bin/llama-server")
+        self.assertTrue(runtime["llama_server_help_ok"])
+        self.assertTrue(runtime["llama_server_supports_mmproj"])
+        self.assertEqual(runtime["llama_server_multimodal_markers"], ["--mmproj", "mmproj"])
+        self.assertTrue(plan["variants"][0]["supports_images"])
 
 
 if __name__ == "__main__":

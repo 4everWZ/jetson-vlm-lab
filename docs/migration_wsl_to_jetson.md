@@ -48,7 +48,10 @@ needs. Override the image with `LLAMA_CPP_DOCKER_IMAGE=...`, set
 `LLAMA_CPP_USE_AUTOTAG=1` only when you intentionally want `autotag llama_cpp`
 selection, and override the server binary path inside the container with
 `LLAMA_SERVER_CMD=...` if a particular image places `llama-server` somewhere
-unusual.
+unusual. The Jetson sweep plan also probes `llama-server --help` inside the
+selected image and records whether the runtime exposes `--mmproj`; image-capable
+variants are skipped with `runtime_missing_mmproj_support` when the runtime
+cannot satisfy this repo's multimodal path.
 
 Remote Jetson connection settings belong in the ignored `.env.jetson` file.
 `scripts/jetson/remote_exec.sh` sources it automatically. Do not put SSH hosts,
@@ -171,6 +174,9 @@ EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
 - `docker: unknown runtime nvidia`: NVIDIA container runtime is not configured. Fix Jetson Docker runtime before benchmarking.
 - `dustynv/llama_cpp` was selected unexpectedly: unset `LLAMA_CPP_USE_AUTOTAG`,
   or set `LLAMA_CPP_DOCKER_IMAGE` to the self-built official llama.cpp image.
+- Sweep skipped with `runtime_missing_mmproj_support`: the selected image did
+  not expose `--mmproj` in `llama-server --help`, so use the self-built
+  official llama.cpp image or another image with confirmed multimodal support.
 - `llama-server not found in container`: set `LLAMA_SERVER_CMD` to the server
   binary path inside that image, or switch to a tag that includes the installed
   llama.cpp server binary.

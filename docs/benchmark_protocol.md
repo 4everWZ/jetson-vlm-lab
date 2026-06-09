@@ -345,8 +345,16 @@ The generated sweep plan records inherited launcher environment, including the
 pinned llama.cpp image. It also records safe Docker image metadata under
 `plan.variants[].server_runtime` when `docker image inspect` is available:
 image tag, image id, repo digests, creation time, OCI source revision, base
-image, and `org.opencontainers.image.version` as the llama.cpp ref. The sweep
-does not copy container environment variables into the manifest.
+image, and `org.opencontainers.image.version` as the llama.cpp ref. It also
+probes `llama-server --help` inside the selected image, recording whether the
+server binary was found, which path resolved, and whether the help output
+exposes `--mmproj`. The sweep does not copy container environment variables
+into the manifest.
+For image-capable variants, this repo treats `--mmproj` as the mechanical proxy
+for the required llama.cpp multimodal path. When the runtime probe says the
+container lacks that support, the sweep skips the row before server startup with
+`preflight_reason=runtime_missing_mmproj_support` instead of paying model
+download and startup cost first.
 Set `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1` for promotion/comparison sweeps. The
 wrapper runs `sudo jetson_clocks` and captures `sudo jetson_clocks --show` under
 ignored `outputs/jetson_inspect/` before launching the sweep. It reads the sudo

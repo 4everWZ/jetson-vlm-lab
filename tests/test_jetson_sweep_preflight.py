@@ -15,6 +15,8 @@ def _build_single_variant_plan(tmp_path):
         "variants": [
             {
                 "variant": {"id": "unit-variant"},
+                "supports_images": True,
+                "server_runtime": {},
                 "run_id": "unit-run",
                 "server_command": ["bash", "server.sh"],
                 "server_env": {},
@@ -64,6 +66,44 @@ def _write_preflight_sample(path, *, free_blocks, mem_available=6911728, max_ord
 
 
 class JetsonSweepPreflightContractsTest(unittest.TestCase):
+    def test_jetson_sweep_skips_image_variant_when_runtime_lacks_mmproj_support(self):
+        from edge_vlm.jetson_sweep import run_sweep
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report = tmp_path / "report.md"
+            plan = _build_single_variant_plan(tmp_path)
+            plan["variants"][0]["server_runtime"] = {
+                "image": "dustynv/llama_cpp:test",
+                "llama_server_probe_ok": True,
+                "llama_server_found": True,
+                "llama_server_path": "/usr/local/bin/llama-server",
+                "llama_server_help_ok": True,
+                "llama_server_supports_mmproj": False,
+                "llama_server_multimodal_markers": [],
+            }
+
+            def fake_preflight(path):
+                return _write_preflight_sample(path, free_blocks=180)
+
+            with patch("edge_vlm.jetson_sweep.capture_preflight_sample", side_effect=fake_preflight):
+                with patch("edge_vlm.jetson_sweep.subprocess.Popen") as popen:
+                    result = run_sweep(
+                        plan,
+                        wait_timeout_s=1.0,
+                        report_output=report,
+                        min_lfb_blocks=150,
+                    )
+
+        self.assertEqual(result["report_output"], None)
+        self.assertFalse(report.exists())
+        self.assertFalse(popen.called)
+        skipped = result["results"][0]
+        self.assertTrue(skipped["preflight_passed"])
+        self.assertEqual(skipped["preflight_reason"], "runtime_missing_mmproj_support")
+        self.assertFalse(skipped["server_ready"])
+        self.assertIsNone(skipped["benchmark_returncode"])
+
     def test_jetson_sweep_skips_variant_when_lfb_is_below_minimum(self):
         from edge_vlm.jetson_sweep import run_sweep
 

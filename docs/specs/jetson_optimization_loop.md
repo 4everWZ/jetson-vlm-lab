@@ -109,9 +109,14 @@ of cache-drop or `compact_memory` can be measured explicitly.
 
 Each planned variant also records `server_runtime` when the launcher environment
 contains a pinned `LLAMA_CPP_DOCKER_IMAGE` and Docker can inspect it. This
-captures the image tag, image id, repo digests, base image, source revision, and
-llama.cpp ref from OCI labels. It intentionally excludes container environment
-variables.
+captures the image tag, image id, repo digests, base image, source revision,
+llama.cpp ref from OCI labels, plus a runtime probe that resolves the
+`llama-server` path and checks whether `llama-server --help` exposes `--mmproj`.
+It intentionally excludes container environment variables.
+For image-capable variants, `--mmproj` support is the mechanical proxy for this
+repo's llama.cpp multimodal load path. If the runtime probe reports that the
+selected image lacks it, the sweep skips the row early with
+`runtime_missing_mmproj_support` instead of attempting server startup.
 
 Text-only model variants should set `EDGE_VLM_CASES` to
 `configs/benchmark/text_prompt_cases.jsonl` in their variant environment. Do
