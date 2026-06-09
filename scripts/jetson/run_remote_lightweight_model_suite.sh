@@ -63,6 +63,9 @@ for baseline in "${baseline_variants[@]}"; do
   fi
 done
 
-compare_args+=(--output "${comparison_output}")
+compare_args+=(
+  --ranking-min-lfb-blocks "${min_lfb_blocks}"
+  --output "${comparison_output}"
+)
 
 "${remote_exec}" "${compare_args[@]}"

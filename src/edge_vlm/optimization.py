@@ -77,6 +77,8 @@ class SweepComparisonRow:
     delta_image_tokens_per_s_pct: float | None = None
     delta_startup_pct: float | None = None
     delta_fake_stream_latency_pct: float | None = None
+    ranking_precheck_passed: bool | None = None
+    ranking_precheck_reason: str = ""
 
 
 def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
@@ -458,6 +460,31 @@ def _preflight_required_lfb_blocks(entry: dict[str, Any]) -> int | None:
     return int(value) if isinstance(value, int) else None
 
 
+def _ranking_precheck(
+    row: SweepComparisonRow,
+    *,
+    ranking_min_lfb_blocks: int | None,
+) -> tuple[bool | None, str]:
+    if ranking_min_lfb_blocks is None:
+        return None, ""
+    required_lfb_blocks = row.preflight_required_lfb_blocks
+    if required_lfb_blocks is None:
+        return False, "missing_required_lfb"
+    if required_lfb_blocks < ranking_min_lfb_blocks:
+        return False, f"required_lfb {required_lfb_blocks} < ranking {ranking_min_lfb_blocks}"
+    return True, ""
+
+
+def _format_ranking_precheck(row: SweepComparisonRow) -> str:
+    if row.ranking_precheck_passed is None:
+        return ""
+    if row.ranking_precheck_passed:
+        return "yes"
+    if row.ranking_precheck_reason:
+        return f"no ({row.ranking_precheck_reason})"
+    return "no"
+
+
 def _infer_run_prefix(run_id: str, variant_id: str, fallback: str) -> str:
     suffix = f"-{variant_id}"
     if run_id.endswith(suffix):
@@ -660,19 +687,47 @@ def _add_comparison_deltas(rows: list[SweepComparisonRow], baseline_variant_ids:
         row.delta_fake_stream_latency_pct = _percent_delta(row.fake_stream_avg_latency_s, baseline.fake_stream_avg_latency_s)
 
 
-def _format_sweep_comparison_report(rows: list[SweepComparisonRow]) -> str:
+def _add_ranking_prechecks(rows: list[SweepComparisonRow], ranking_min_lfb_blocks: int | None) -> None:
+    for row in rows:
+        row.ranking_precheck_passed, row.ranking_precheck_reason = _ranking_precheck(
+            row,
+            ranking_min_lfb_blocks=ranking_min_lfb_blocks,
+        )
+
+
+def _format_sweep_comparison_report(
+    rows: list[SweepComparisonRow],
+    *,
+    ranking_min_lfb_blocks: int | None,
+) -> str:
+    ranking_column = " | Ranking precheck" if ranking_min_lfb_blocks is not None else ""
+    ranking_separator = " |---" if ranking_min_lfb_blocks is not None else ""
+    ranking_note = (
+        f" `Ranking precheck` uses `--ranking-min-lfb-blocks {ranking_min_lfb_blocks}` and only checks whether a row's effective required LFB gate is strict enough for ranking."
+        if ranking_min_lfb_blocks is not None
+        else ""
+    )
     lines = [
         "# Jetson Sweep Comparison Report",
         "",
-        "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower.",
+        "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower."
+        + ranking_note,
         "",
-        "| Model | Variant | Selection | Run prefix | Runtime | Preflight lfb | Required lfb | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
-        "|---|---|---|---|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
+        "| Model | Variant | Selection | Run prefix | Runtime | Preflight lfb | Required lfb"
+        + ranking_column
+        + " | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
+        "|---|---|---|---|---|---:|---:"
+        + ranking_separator
+        + "|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
     ]
     for row in rows:
         failures = ", ".join(row.guard_failures)
+        ranking_precheck = ""
+        if ranking_min_lfb_blocks is not None:
+            ranking_precheck_text = _format_ranking_precheck(row).replace("|", "\\|")
+            ranking_precheck = f" | {ranking_precheck_text}"
         lines.append(
-            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {lfb} | {required_lfb} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {lfb} | {required_lfb}{ranking_precheck} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 selection=_format_selection(row).replace("|", "\\|"),
@@ -680,6 +735,7 @@ def _format_sweep_comparison_report(rows: list[SweepComparisonRow]) -> str:
                 runtime=_format_runtime(row),
                 lfb=row.preflight_lfb,
                 required_lfb="" if row.preflight_required_lfb_blocks is None else row.preflight_required_lfb_blocks,
+                ranking_precheck=ranking_precheck,
                 prepare_lfb_delta=_fmt_signed_int(row.preflight_prepare_lfb_delta),
                 prepare_avail_delta=_fmt_signed_float(row.preflight_prepare_mem_available_mb_delta),
                 trials="" if row.trials is None else row.trials,
@@ -719,6 +775,7 @@ def build_sweep_comparison_report(
     baseline_variant_ids: Iterable[str] = (),
     min_output_chars: int = 32,
     max_repeat_ratio: float = 0.65,
+    ranking_min_lfb_blocks: int | None = None,
 ) -> list[SweepComparisonRow]:
     rows: list[SweepComparisonRow] = []
     for manifest_path in manifest_paths:
@@ -730,9 +787,13 @@ def build_sweep_comparison_report(
             )
         )
     _add_comparison_deltas(rows, baseline_variant_ids)
+    _add_ranking_prechecks(rows, ranking_min_lfb_blocks)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(_format_sweep_comparison_report(rows), encoding="utf-8")
+    output.write_text(
+        _format_sweep_comparison_report(rows, ranking_min_lfb_blocks=ranking_min_lfb_blocks),
+        encoding="utf-8",
+    )
     return rows
 
 
@@ -780,18 +841,29 @@ def main(argv: list[str] | None = None) -> int:
     compare_parser.add_argument("--min-output-chars", type=int, default=32)
     compare_parser.add_argument("--max-repeat-ratio", type=float, default=0.65)
     compare_parser.add_argument("--fail-on-guard", action="store_true")
+    compare_parser.add_argument(
+        "--ranking-min-lfb-blocks",
+        type=int,
+        help="Strict ranking gate for preflight LFB requirements; rows below this remain in the report but fail ranking precheck",
+    )
+    compare_parser.add_argument("--fail-on-ranking-precheck", action="store_true")
     args = parser.parse_args(argv)
 
     if args.command == "compare":
+        if args.fail_on_ranking_precheck and args.ranking_min_lfb_blocks is None:
+            parser.error("--fail-on-ranking-precheck requires --ranking-min-lfb-blocks")
         rows = build_sweep_comparison_report(
             manifest_paths=args.manifest,
             output_path=args.output,
             baseline_variant_ids=args.baseline_variant,
             min_output_chars=args.min_output_chars,
             max_repeat_ratio=args.max_repeat_ratio,
+            ranking_min_lfb_blocks=args.ranking_min_lfb_blocks,
         )
         print(json.dumps({"runs": len(rows), "output": args.output}, ensure_ascii=False))
         if args.fail_on_guard and any(not row.guard_passed for row in rows):
+            return 1
+        if args.fail_on_ranking_precheck and any(row.ranking_precheck_passed is False for row in rows):
             return 1
         return 0
     if args.command != "report":

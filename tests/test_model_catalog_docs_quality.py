@@ -612,6 +612,8 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS", text)
         for text in (readme, readme_zh, protocol_doc, strategy_doc):
             self.assertIn("Selection", text)
+            self.assertIn("ranking-min-lfb-blocks", text)
+            self.assertIn("Ranking precheck", text)
         for text in (protocol_doc,):
             self.assertIn("selection_contexts", text)
             self.assertIn("--selection-context-json", text)

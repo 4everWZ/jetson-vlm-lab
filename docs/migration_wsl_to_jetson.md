@@ -58,7 +58,10 @@ fallback decision and writes the result as JSON. The remote lightweight suite
 now calls the same selector automatically, using the suite-wide
 `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS` gate for Q4 and
 `JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS=100` for the Q8 fallback
-lane unless `JETSON_LIGHTWEIGHT_QWEN3_SELECTOR=0`.
+lane unless `JETSON_LIGHTWEIGHT_QWEN3_SELECTOR=0`. The suite compare step now
+also forwards `--ranking-min-lfb-blocks "${JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS}"`
+so the resulting report can show `Selection`, `Required lfb`, and a
+`Ranking precheck` label for relaxed fallback rows.
 
 Remote Jetson connection settings belong in the ignored `.env.jetson` file.
 `scripts/jetson/remote_exec.sh` sources it automatically. Do not put SSH hosts,

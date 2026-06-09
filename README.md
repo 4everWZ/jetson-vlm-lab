@@ -373,6 +373,9 @@ manifest, so `edge_vlm.optimization compare` can show the auto-selected lane in
 its `Selection` column instead of leaving the Qwen3 row as an unlabeled static
 variant id. The comparison table also shows a `Required lfb` column so the
 effective preflight gate is visible next to the observed `Preflight lfb`.
+When you also pass `--ranking-min-lfb-blocks <strict-gate>`, the report adds a
+`Ranking precheck` column so relaxed fallback rows remain visible without being
+mistaken for promotable strict-gate evidence.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

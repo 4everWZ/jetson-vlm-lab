@@ -395,6 +395,7 @@ Build a comparison table from one or more sweep manifests with:
 PYTHONPATH=src python -m edge_vlm.optimization compare \
   --manifest outputs/optimization_sweeps/minicpm-promo-iso-001/minicpm-promo-iso-001.manifest.json \
   --baseline-variant minicpm-q4-baseline-b128-u32-kvq8 \
+  --ranking-min-lfb-blocks 150 \
   --output outputs/optimization_sweeps/minicpm-promo-iso-001/comparison.md
 ```
 
@@ -414,9 +415,12 @@ auto-selected lanes remain visible in promotion evidence instead of reading like
 anonymous static variant ids. The sweep manifest also carries any
 `variant_min_lfb_blocks` overrides used to keep a selected fallback lane
 aligned with its selector gate, and the comparison table surfaces that gate in
-its `Required lfb` column next to the observed `Preflight lfb`. Copy only the
-defensible summary rows into
-tracked benchmark docs; keep raw generated reports under ignored `outputs/`.
+its `Required lfb` column next to the observed `Preflight lfb`.
+For ranking decisions, keep only the defensible strict rows: when compare also receives
+`--ranking-min-lfb-blocks`, it adds a `Ranking precheck` column so rows that
+ran under a more relaxed gate stay in the report but are mechanically marked as
+non-ranking evidence. Copy only the defensible summary rows into tracked
+benchmark docs; keep raw generated reports under ignored `outputs/`.
 
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:

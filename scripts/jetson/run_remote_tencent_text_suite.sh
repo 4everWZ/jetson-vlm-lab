@@ -49,4 +49,5 @@ JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
   edge_vlm.optimization \
   compare \
   --manifest "${manifest_path}" \
+  --ranking-min-lfb-blocks "${min_lfb_blocks}" \
   --output "${comparison_output}"
