@@ -536,6 +536,18 @@ Relaxed-gate smoke `qwen3-instruct-q8-smoke-lfb100-20260609T082321Z` did pass
 phase. Use `JETSON_LIGHTWEIGHT_EXTRA_VARIANTS=qwen3-vl-2b-instruct-q8-smoke`
 only for scoped fallback triage until either Q4 or Q8 can satisfy the
 conservative 150-LFB gate.
+A shared relaxed-gate compare `qwen3-instruct-q4q8-lfb100-20260609T091700Z`
+then ran both Instruct lanes under max clocks, per-variant cache-drop plus
+`compact_memory`, three formal trials, and one fake-stream frame. Q4 passed
+18/18 formal records plus 1/1 fake-stream record at 34.865 text tok/s, 31.958
+image tok/s, and 1.827 s fake-stream latency with post-prepare preflight
+`lfb 121x4MB`; its prepare delta was effectively flat at `lfb -1` and
+`MemAvailable +1.816 MB`. Q8 also passed 18/18 formal plus 1/1 fake-stream at
+31.346 text tok/s, 29.393 image tok/s, and 2.144 s fake-stream latency with
+post-prepare preflight `lfb 125x4MB`, but its prepare delta was much larger at
+`lfb +88` and `MemAvailable +963.598 MB`. Under the same relaxed gate, Q4
+remained the better default lane while Q8 stayed a fallback path with much
+stronger prepare sensitivity.
 
 If a host-side HF GGUF download is interrupted after the bytes have completed
 but before the launcher renames the `.partial` file, the generic HF GGUF

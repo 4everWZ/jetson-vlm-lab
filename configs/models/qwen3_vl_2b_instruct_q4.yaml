@@ -36,6 +36,11 @@ notes:
     fake-stream at relaxed min-lfb-blocks 32, but strict min-lfb-blocks 150
     reruns still skip at preflight after cache-drop plus compact-memory prep
     (`lfb 46x4MB` on 2026-06-09T07:46Z and `lfb 117x4MB` on
-    2026-06-09T08:11Z), so keep it at smoke/triage scope. The Q8 fallback lane
-    now exists, but it also fails the conservative 150-LFB preflight gate and
-    only has relaxed-gate smoke evidence so far.
+    2026-06-09T08:11Z), so keep it at smoke/triage scope. A shared relaxed
+    100-LFB compare, qwen3-instruct-q4q8-lfb100-20260609T091700Z, later passed
+    18/18 formal plus 1/1 fake-stream at 34.865 text tok/s, 31.958 image
+    tok/s, and 1.827 s fake-stream latency with post-prepare preflight
+    `lfb 121x4MB`, but its prepare delta was effectively flat (`lfb -1`,
+    `MemAvailable +1.816 MB`). The Q8 fallback lane now exists, but it also
+    fails the conservative 150-LFB preflight gate and only has relaxed-gate
+    smoke evidence so far.

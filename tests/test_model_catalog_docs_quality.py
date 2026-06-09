@@ -526,9 +526,18 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("qwen3-instruct-q4-smoke-compact-20260609T074600Z", text)
             self.assertIn("46x4MB", text)
             self.assertIn("quality review", text)
+            self.assertIn("qwen3-instruct-q4q8-lfb100-20260609T091700Z", text)
+            self.assertIn("34.865", text)
+            self.assertIn("31.958", text)
+            self.assertIn("31.346", text)
+            self.assertIn("29.393", text)
+            self.assertIn("125x4MB", text)
+            self.assertIn("963.598", text)
         for text in (config_doc, variant_catalog):
             self.assertIn("Jetson smoke", text)
             self.assertIn("min-lfb-blocks 32", text)
+        self.assertIn("qwen3-instruct-q4q8-lfb100-20260609T091700Z", config_doc)
+        self.assertIn("1.816", config_doc)
         for text in (protocol_doc, variant_catalog):
             self.assertIn("qwen3-vl-2b-instruct-q8-smoke", text)
         for text in (protocol_doc, strategy_doc, q8_config_doc):
@@ -538,6 +547,10 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("2.142", text)
             self.assertIn("323.05", text)
             self.assertIn("106x4MB", text)
+            self.assertIn("qwen3-instruct-q4q8-lfb100-20260609T091700Z", text)
+            self.assertIn("31.346", text)
+            self.assertIn("29.393", text)
+            self.assertIn("963.598", text)
         for text in (protocol_doc, strategy_doc, variant_catalog):
             self.assertIn("150-LFB", text)
         self.assertIn("relaxed 100-LFB smoke passed with guard", variant_catalog)
@@ -551,7 +564,9 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("Q4", text)
             self.assertIn("Q8", text)
             self.assertIn("Qwen3-VL 2B Instruct", text)
-            self.assertIn("qwen3-instruct-q8-smoke-lfb100-20260609T082321Z", text)
+            self.assertIn("qwen3-instruct-q4q8-lfb100-20260609T091700Z", text)
+            self.assertIn("34.865", text)
+            self.assertIn("31.346", text)
 
     def test_preflight_docs_include_buddyinfo_fragmentation_context(self):
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")

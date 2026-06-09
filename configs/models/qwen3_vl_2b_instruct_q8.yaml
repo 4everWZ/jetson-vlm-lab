@@ -40,4 +40,9 @@ notes:
     reaching 31.076 text tok/s, 25.997 image tok/s, and 2.142 s fake-stream
     latency. That run included a first-download artifact phase of 323.05 s, so
     treat it as diagnostic fallback evidence rather than default ranking
-    evidence.
+    evidence. A later shared relaxed 100-LFB compare,
+    qwen3-instruct-q4q8-lfb100-20260609T091700Z, passed 18/18 formal plus 1/1
+    fake-stream at 31.346 text tok/s, 29.393 image tok/s, and 2.144 s
+    fake-stream latency with post-prepare preflight `lfb 125x4MB`; its prepare
+    delta was much larger than the Q4 lane (`lfb +88`, `MemAvailable +963.598
+    MB`).
