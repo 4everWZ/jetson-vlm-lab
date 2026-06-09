@@ -1,0 +1,426 @@
+"""Optimization report and sweep comparison contract tests."""
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+
+
+class OptimizationReportContractsTest(unittest.TestCase):
+
+    def test_optimization_report_ranks_only_sanity_passing_runs(self):
+        from edge_vlm.optimization import build_optimization_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            fast_but_bad = tmp_path / "fast_bad.jsonl"
+            steady_good = tmp_path / "steady_good.jsonl"
+            report = tmp_path / "report.md"
+            fast_but_bad.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "model": "local-fast",
+                                "run_id": "fast-bad",
+                                "prompt_case_id": "text_case",
+                                "input_type": "text",
+                                "success": True,
+                                "latency_s": 0.5,
+                                "tokens": 64,
+                                "tokens_per_sec": 128.0,
+                                "output_excerpt": "ok ok ok ok ok ok ok ok ok ok ok ok",
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "model": "local-fast",
+                                "run_id": "fast-bad",
+                                "prompt_case_id": "image_case",
+                                "input_type": "image",
+                                "success": True,
+                                "latency_s": 0.5,
+                                "tokens": 64,
+                                "tokens_per_sec": 128.0,
+                                "output_excerpt": "",
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            steady_good.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "model": "local-steady",
+                                "run_id": "steady-good",
+                                "prompt_case_id": "text_case",
+                                "input_type": "text",
+                                "success": True,
+                                "latency_s": 2.0,
+                                "tokens": 64,
+                                "tokens_per_sec": 32.0,
+                                "output_excerpt": "A concise answer that mentions memory, bandwidth, and thermal limits.",
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "model": "local-steady",
+                                "run_id": "steady-good",
+                                "prompt_case_id": "image_case",
+                                "input_type": "image",
+                                "success": True,
+                                "latency_s": 2.5,
+                                "tokens": 64,
+                                "tokens_per_sec": 25.6,
+                                "output_excerpt": "The image contains two high-contrast squares on a simple background.",
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summaries = build_optimization_report(
+                input_paths=[fast_but_bad, steady_good],
+                output_path=report,
+                min_output_chars=24,
+                max_repeat_ratio=0.6,
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual([summary.run_id for summary in summaries], ["steady-good", "fast-bad"])
+        self.assertTrue(summaries[0].guard_passed)
+        self.assertFalse(summaries[1].guard_passed)
+        self.assertIn("| 1 | steady-good | local-steady | yes |", report_text)
+        self.assertIn("| - | fast-bad | local-fast | no |", report_text)
+        self.assertIn("repetitive_output", report_text)
+        self.assertIn("empty_output", report_text)
+
+    def test_optimization_report_rejects_quality_term_miss(self):
+        from edge_vlm.optimization import build_optimization_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            fast_off_topic = tmp_path / "fast_off_topic.jsonl"
+            steady_relevant = tmp_path / "steady_relevant.jsonl"
+            report = tmp_path / "report.md"
+            fast_off_topic.write_text(
+                json.dumps(
+                    {
+                        "model": "local-fast",
+                        "run_id": "fast-off-topic",
+                        "prompt_case_id": "text_case",
+                        "input_type": "text",
+                        "success": True,
+                        "latency_s": 0.5,
+                        "tokens": 64,
+                        "tokens_per_sec": 128.0,
+                        "output_excerpt": "A fluent answer that is long enough but avoids the required subject.",
+                        "quality_terms_any": ["memory", "bandwidth"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            steady_relevant.write_text(
+                json.dumps(
+                    {
+                        "model": "local-steady",
+                        "run_id": "steady-relevant",
+                        "prompt_case_id": "text_case",
+                        "input_type": "text",
+                        "success": True,
+                        "latency_s": 2.0,
+                        "tokens": 64,
+                        "tokens_per_sec": 32.0,
+                        "output_excerpt": "A useful answer that names memory pressure and bandwidth limits.",
+                        "quality_terms_any": ["memory", "bandwidth"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summaries = build_optimization_report(
+                input_paths=[fast_off_topic, steady_relevant],
+                output_path=report,
+                min_output_chars=24,
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual([summary.run_id for summary in summaries], ["steady-relevant", "fast-off-topic"])
+        self.assertTrue(summaries[0].guard_passed)
+        self.assertFalse(summaries[1].guard_passed)
+        self.assertIn("quality_terms_miss", report_text)
+
+    def test_optimization_report_includes_fake_stream_guard_and_latency(self):
+        from edge_vlm.optimization import build_optimization_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            bench = tmp_path / "benchmarks" / "run-a.jsonl"
+            fake_stream = tmp_path / "fake_stream" / "run-a.jsonl"
+            report = tmp_path / "report.md"
+            bench.parent.mkdir()
+            fake_stream.parent.mkdir()
+            bench.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "model": "local-model",
+                                "run_id": "run-a",
+                                "prompt_case_id": "text_case",
+                                "input_type": "text",
+                                "success": True,
+                                "latency_s": 1.0,
+                                "tokens": 64,
+                                "tokens_per_sec": 64.0,
+                                "output_excerpt": "A useful answer with enough detail to pass the sanity guard.",
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "model": "local-model",
+                                "run_id": "run-a",
+                                "prompt_case_id": "image_case",
+                                "input_type": "image",
+                                "success": True,
+                                "latency_s": 2.0,
+                                "tokens": 64,
+                                "tokens_per_sec": 32.0,
+                                "output_excerpt": "The image shows two contrasting square shapes.",
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_stream.write_text(
+                json.dumps(
+                    {
+                        "frame_index": 0,
+                        "frame_id": "frame_001.png",
+                        "success": True,
+                        "latency_s": 3.25,
+                        "output_excerpt": "",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summaries = build_optimization_report(
+                input_paths=[bench],
+                fake_stream_paths=[fake_stream],
+                output_path=report,
+                min_output_chars=24,
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual(len(summaries), 1)
+        self.assertFalse(summaries[0].guard_passed)
+        self.assertEqual(summaries[0].fake_stream_records, 1)
+        self.assertEqual(summaries[0].fake_stream_successful, 1)
+        self.assertEqual(summaries[0].fake_stream_avg_latency_s, 3.25)
+        self.assertIn("Fake latency s", report_text)
+        self.assertIn("fake_stream:frame_001.png:empty_output", report_text)
+
+    def test_optimization_comparison_report_adds_manifest_context_and_deltas(self):
+        from edge_vlm.optimization import build_sweep_comparison_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "gemma-compare"
+            benchmark_dir = output_root / "benchmarks"
+            fake_dir = output_root / "fake_stream"
+            benchmark_dir.mkdir(parents=True)
+            fake_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+
+            def write_run(run_prefix, variant_id, *, text_tps, image_tps, fake_latency, startup_s, lfb_blocks, power_w):
+                run_id = f"{run_prefix}-{variant_id}"
+                benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+                fake_jsonl = fake_dir / f"{run_id}.jsonl"
+                benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+                tegrastats_log = tmp_path / "outputs" / "tegrastats" / f"{run_id}.log"
+                tegrastats_log.parent.mkdir(parents=True, exist_ok=True)
+                benchmark_jsonl.write_text(
+                    "\n".join(
+                        [
+                            json.dumps(
+                                {
+                                    "model": "gemma4-e2b-it-q4",
+                                    "run_id": run_id,
+                                    "prompt_case_id": "text_case",
+                                    "input_type": "text",
+                                    "success": True,
+                                    "latency_s": 64.0 / text_tps,
+                                    "tokens": 64,
+                                    "tokens_per_sec": text_tps,
+                                    "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                                    "quality_terms_any": ["memory", "bandwidth"],
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "model": "gemma4-e2b-it-q4",
+                                    "run_id": run_id,
+                                    "prompt_case_id": "image_case",
+                                    "input_type": "image",
+                                    "success": True,
+                                    "latency_s": 64.0 / image_tps,
+                                    "tokens": 64,
+                                    "tokens_per_sec": image_tps,
+                                    "output_excerpt": "The image shows two contrasting square shapes on a background.",
+                                    "quality_terms_any": ["square", "background"],
+                                }
+                            ),
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                fake_jsonl.write_text(
+                    json.dumps(
+                        {
+                            "frame_id": "frame_001.png",
+                            "success": True,
+                            "latency_s": fake_latency,
+                            "output_excerpt": "The frame shows a simple scene with contrasting square shapes.",
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                tegrastats_log.write_text(
+                    "\n".join(
+                        [
+                            (
+                                "05-31-2026 RAM 2000/7620MB (lfb 200x4MB) "
+                                "GR3D_FREQ 80%@[1020] EMC_FREQ 82%@3199 cpu@50.0C gpu@51.0C tj@51.0C "
+                                f"VDD_IN {int(power_w * 1000)}mW/{int(power_w * 1000)}mW"
+                            ),
+                            (
+                                "05-31-2026 RAM 2100/7620MB (lfb 180x4MB) "
+                                "GR3D_FREQ 90%@[1020] EMC_FREQ 84%@3199 cpu@52.0C gpu@54.5C tj@54.5C "
+                                f"VDD_IN {int((power_w + 1) * 1000)}mW/{int((power_w + 1) * 1000)}mW"
+                            ),
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                benchmark_manifest.write_text(
+                    json.dumps(
+                        {
+                            "run_id": run_id,
+                            "benchmark": {"trial_count": 1},
+                            "cases_written": 2,
+                            "successful": 2,
+                            "failed": 0,
+                            "jetson": {"tegrastats_log": str(tegrastats_log)},
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return {
+                    "plan": {
+                        "server_runtime": {
+                            "image": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                            "image_id": "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844",
+                            "llama_cpp_ref": "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774",
+                        },
+                        "paths": {
+                            "benchmark_jsonl": str(benchmark_jsonl),
+                            "manifest_json": str(benchmark_manifest),
+                            "fake_stream_jsonl": str(fake_jsonl),
+                        }
+                    },
+                    "result": {
+                        "run_id": run_id,
+                        "variant_id": variant_id,
+                        "preflight": {
+                            "tegrastats": {
+                                "lfb": {"free_blocks": lfb_blocks, "block_mb": 4},
+                            }
+                        },
+                        "preflight_passed": True,
+                        "server_startup_seconds": startup_s,
+                        "benchmark_returncode": 0,
+                        "fake_stream_returncode": 0,
+                    },
+                }
+
+            baseline = write_run(
+                "gemma-baseline",
+                "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+                text_tps=10.0,
+                image_tps=8.0,
+                fake_latency=9.0,
+                startup_s=5.0,
+                lfb_blocks=180,
+                power_w=10.0,
+            )
+            candidate = write_run(
+                "gemma-directio",
+                "gemma-q4-baseline-gpu12-b512-u512-kvq8-directio",
+                text_tps=12.0,
+                image_tps=7.0,
+                fake_latency=8.0,
+                startup_s=6.0,
+                lfb_blocks=190,
+                power_w=12.0,
+            )
+            manifest = output_root / "gemma-compare.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {"run_prefix": "gemma-compare", "variants": [baseline["plan"], candidate["plan"]]},
+                        "result": {"results": [baseline["result"], candidate["result"]]},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = build_sweep_comparison_report(
+                manifest_paths=[manifest],
+                output_path=report,
+                baseline_variant_ids=["gemma-q4-baseline-gpu12-b512-u512-kvq8"],
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual([row.variant_id for row in rows], [
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+            "gemma-q4-baseline-gpu12-b512-u512-kvq8-directio",
+        ])
+        self.assertEqual(rows[0].server_image, "ghcr.io/4everwz/jetson-llama-cpp:test")
+        self.assertEqual(rows[0].server_image_id, "sha256:52a8ad644e416b014466be5a35be1c8f92cf58ecd7fc9cffe8133a8955cb7844")
+        self.assertEqual(rows[0].llama_cpp_ref, "b4c0549a49be9e6dc59ac9d0a5bc21dbda910774")
+        self.assertEqual(rows[1].delta_text_tokens_per_s_pct, 20.0)
+        self.assertEqual(rows[1].delta_image_tokens_per_s_pct, -12.5)
+        self.assertAlmostEqual(rows[1].delta_fake_stream_latency_pct, -11.111111, places=5)
+        self.assertIn("| Model | Variant | Run prefix | Runtime | Preflight lfb |", report_text)
+        self.assertIn("Avg GR3D %", report_text)
+        self.assertIn("Avg EMC %", report_text)
+        self.assertIn("Bottlenecks", report_text)
+        self.assertIn("gpu_compute", report_text)
+        self.assertEqual(rows[0].avg_gr3d_util_pct, 85.0)
+        self.assertEqual(rows[0].avg_emc_util_pct, 83.0)
+        self.assertEqual(rows[0].min_lfb_free_blocks, 180)
+        self.assertIn("ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be", report_text)
+        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
+        self.assertIn("Baseline rows use `0.00%` deltas", report_text)
+
+
+if __name__ == "__main__":
+    unittest.main()
