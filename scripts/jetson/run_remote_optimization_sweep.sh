@@ -2,6 +2,10 @@
 set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+env_file="${JETSON_ENV_FILE:-${repo_root}/.env.jetson}"
+. "${repo_root}/scripts/jetson/env_file.sh"
+jetson_load_env_file "${env_file}"
+
 remote_exec="${JETSON_REMOTE_EXEC:-${repo_root}/scripts/jetson/remote_exec.sh}"
 remote_sync="${JETSON_REMOTE_SYNC:-1}"
 remote_branch="${JETSON_REMOTE_BRANCH:-main}"

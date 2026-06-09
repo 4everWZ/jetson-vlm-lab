@@ -4,6 +4,7 @@ set -Eeuo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 env_file="${JETSON_ENV_FILE:-${repo_root}/.env.jetson}"
 temp_files=()
+. "${repo_root}/scripts/jetson/env_file.sh"
 
 cleanup() {
   local path
@@ -13,37 +14,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-trim() {
-  local value="$1"
-  value="${value#"${value%%[![:space:]]*}"}"
-  value="${value%"${value##*[![:space:]]}"}"
-  printf '%s' "${value}"
-}
-
-load_env_file() {
-  local line key value
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    line="$(trim "${line}")"
-    [[ -z "${line}" || "${line}" == \#* ]] && continue
-    if [[ "${line}" == export\ * ]]; then
-      line="$(trim "${line#export }")"
-    fi
-    [[ "${line}" == *=* ]] || continue
-    key="$(trim "${line%%=*}")"
-    value="$(trim "${line#*=}")"
-    [[ "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-    if [[ "${value}" == \"*\" && "${value}" == *\" ]]; then
-      value="${value:1:${#value}-2}"
-    elif [[ "${value}" == \'*\' && "${value}" == *\' ]]; then
-      value="${value:1:${#value}-2}"
-    fi
-    export "${key}=${value}"
-  done < "$1"
-}
-
-if [[ -f "${env_file}" ]]; then
-  load_env_file "${env_file}"
-fi
+jetson_load_env_file "${env_file}"
 
 if [[ $# -eq 0 ]]; then
   echo "Usage: $0 <remote command> [args...]" >&2

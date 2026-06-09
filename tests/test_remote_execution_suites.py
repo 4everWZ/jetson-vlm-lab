@@ -436,6 +436,73 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
         self.assertNotIn("secret-password", result.stdout)
         self.assertNotIn("secret-password", result.stderr)
 
+    def test_remote_optimization_sweep_sources_ignored_env_for_sudo_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            env_file = tmp_path / ".env.jetson"
+            fake_remote = tmp_path / "remote_exec.sh"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=192.168.1.12",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                        "if [[ \"${1:-}\" == \"sudo\" ]]; then",
+                        "  IFS= read -r password_from_stdin || true",
+                        "  printf 'STDIN_BYTES=%s\\n' \"${#password_from_stdin}\" >> \"${FAKE_REMOTE_LOG}\"",
+                        "fi",
+                        "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_remote, 0o755)
+            env = {
+                **os.environ,
+                "JETSON_ENV_FILE": str(env_file),
+                "JETSON_REMOTE_EXEC": str(fake_remote),
+                "JETSON_REMOTE_SYNC": "0",
+                "JETSON_REMOTE_PREPARE_MAX_CLOCKS": "1",
+                "FAKE_REMOTE_LOG": str(log_file),
+            }
+            env.pop("JETSON_SSH_PASSWORD", None)
+            env.pop("JETSON_REMOTE_SUDO_PASSWORD", None)
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--dry-run",
+                    "--variant",
+                    "minicpm-q4-baseline-b128-u32-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 2)
+        self.assertIn("STDIN_BYTES=15\n", log_text)
+        self.assertIn("ARG=sudo\nARG=-S\nARG=sh\nARG=-c\n", log_text)
+        self.assertNotIn("secret-password", log_text)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+
     def test_remote_optimization_sweep_prepare_max_clocks_requires_password(self):
         with tempfile.TemporaryDirectory() as tmp:
             fake_remote = Path(tmp) / "remote_exec.sh"
