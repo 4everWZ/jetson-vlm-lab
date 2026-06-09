@@ -277,8 +277,10 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
 
-        self.assertEqual(log_text.count("CALL\n"), 2)
-        self.assertIn("ARG=git\nARG=pull\nARG=--ff-only\n", log_text)
+        self.assertEqual(log_text.count("CALL\n"), 4)
+        self.assertIn("ARG=git\nARG=fetch\nARG=origin\nARG=main\n", log_text)
+        self.assertIn("ARG=git\nARG=checkout\nARG=main\n", log_text)
+        self.assertIn("ARG=git\nARG=pull\nARG=--ff-only\nARG=origin\nARG=main\n", log_text)
         self.assertIn("ARG=env\n", log_text)
         self.assertIn("ARG=LLAMA_CPP_DOCKER_IMAGE=ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87\n", log_text)
         self.assertIn("ARG=PYTHONPATH=src\n", log_text)
@@ -287,6 +289,55 @@ class RemoteExecutionSuiteContractsTest(unittest.TestCase):
         self.assertIn("ARG=--variant\nARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
         self.assertIn("ARG=--min-lfb-blocks\nARG=150\n", log_text)
         self.assertIn("ARG=--pre-variant-command\nARG=sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'\n", log_text)
+
+    def test_remote_optimization_sweep_can_sync_explicit_remote_branch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            fake_remote.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -Eeuo pipefail",
+                        "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                        "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(fake_remote, 0o755)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--dry-run",
+                    "--variant",
+                    "qwen3-vl-2b-instruct-q4-smoke",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_REMOTE_EXEC": str(fake_remote),
+                    "JETSON_REMOTE_BRANCH": "bench/qwen3-vl-instruct-q4",
+                    "FAKE_REMOTE_LOG": str(log_file),
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 4)
+        self.assertIn("ARG=git\nARG=fetch\nARG=origin\nARG=bench/qwen3-vl-instruct-q4\n", log_text)
+        self.assertIn("ARG=git\nARG=checkout\nARG=bench/qwen3-vl-instruct-q4\n", log_text)
+        self.assertIn(
+            "ARG=git\nARG=pull\nARG=--ff-only\nARG=origin\nARG=bench/qwen3-vl-instruct-q4\n",
+            log_text,
+        )
+        self.assertIn("ARG=--variant\nARG=qwen3-vl-2b-instruct-q4-smoke\n", log_text)
 
     def test_remote_optimization_sweep_can_skip_git_sync(self):
         with tempfile.TemporaryDirectory() as tmp:

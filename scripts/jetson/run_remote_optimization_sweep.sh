@@ -4,6 +4,7 @@ set -Eeuo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 remote_exec="${JETSON_REMOTE_EXEC:-${repo_root}/scripts/jetson/remote_exec.sh}"
 remote_sync="${JETSON_REMOTE_SYNC:-1}"
+remote_branch="${JETSON_REMOTE_BRANCH:-main}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
 llama_cpp_image="${JETSON_REMOTE_LLAMA_CPP_IMAGE:-ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87}"
 prepare_max_clocks="${JETSON_REMOTE_PREPARE_MAX_CLOCKS:-0}"
@@ -15,7 +16,9 @@ if [[ $# -eq 0 ]]; then
 fi
 
 if [[ "${remote_sync}" == "1" ]]; then
-  "${remote_exec}" git pull --ff-only
+  "${remote_exec}" git fetch origin "${remote_branch}"
+  "${remote_exec}" git checkout "${remote_branch}"
+  "${remote_exec}" git pull --ff-only origin "${remote_branch}"
 elif [[ "${remote_sync}" != "0" ]]; then
   echo "JETSON_REMOTE_SYNC must be 0 or 1." >&2
   exit 2

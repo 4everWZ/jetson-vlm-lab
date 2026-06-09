@@ -327,8 +327,12 @@ scripts/jetson/run_remote_optimization_sweep.sh \
   --wait-timeout-s 180
 ```
 
-Set `JETSON_REMOTE_SYNC=0` to skip the initial `git pull --ff-only`, or set
-`JETSON_REMOTE_LLAMA_CPP_IMAGE` to test another pinned llama.cpp image.
+The wrapper syncs the remote Jetson worktree to `main` by default with
+`git fetch origin main`, `git checkout main`, and
+`git pull --ff-only origin main` before the sweep. Set `JETSON_REMOTE_BRANCH` to
+run an unmerged branch intentionally, set `JETSON_REMOTE_SYNC=0` to skip the
+initial branch sync, or set `JETSON_REMOTE_LLAMA_CPP_IMAGE` to test another
+pinned llama.cpp image.
 The generated sweep plan records inherited launcher environment, including the
 pinned llama.cpp image. It also records safe Docker image metadata under
 `plan.variants[].server_runtime` when `docker image inspect` is available:
