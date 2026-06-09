@@ -598,6 +598,7 @@ def _ranking_precheck(
     row: SweepComparisonRow,
     *,
     ranking_min_lfb_blocks: int | None,
+    ranking_require_startup_precheck: bool,
 ) -> tuple[bool | None, str]:
     if ranking_min_lfb_blocks is None:
         return None, ""
@@ -606,6 +607,11 @@ def _ranking_precheck(
         return False, "missing_required_lfb"
     if required_lfb_blocks < ranking_min_lfb_blocks:
         return False, f"required_lfb {required_lfb_blocks} < ranking {ranking_min_lfb_blocks}"
+    if ranking_require_startup_precheck:
+        if row.startup_precheck_passed is None:
+            return False, "missing_startup_precheck"
+        if not row.startup_precheck_passed:
+            return False, "startup_precheck_failed"
     return True, ""
 
 
@@ -942,11 +948,17 @@ def _add_comparison_deltas(rows: list[SweepComparisonRow], baseline_variant_ids:
         row.delta_fake_stream_latency_pct = _percent_delta(row.fake_stream_avg_latency_s, baseline.fake_stream_avg_latency_s)
 
 
-def _add_ranking_prechecks(rows: list[SweepComparisonRow], ranking_min_lfb_blocks: int | None) -> None:
+def _add_ranking_prechecks(
+    rows: list[SweepComparisonRow],
+    ranking_min_lfb_blocks: int | None,
+    *,
+    ranking_require_startup_precheck: bool,
+) -> None:
     for row in rows:
         row.ranking_precheck_passed, row.ranking_precheck_reason = _ranking_precheck(
             row,
             ranking_min_lfb_blocks=ranking_min_lfb_blocks,
+            ranking_require_startup_precheck=ranking_require_startup_precheck,
         )
 
 
@@ -1073,6 +1085,7 @@ def _format_sweep_comparison_report(
     *,
     startup_require_cached_artifacts: bool,
     ranking_min_lfb_blocks: int | None,
+    ranking_require_startup_precheck: bool,
     promotion_precheck_stage: str | None,
     promotion_require_quality_review: bool,
     promotion_require_startup_precheck: bool,
@@ -1087,7 +1100,14 @@ def _format_sweep_comparison_report(
     ranking_column = " | Ranking precheck" if ranking_min_lfb_blocks is not None else ""
     ranking_separator = " |---" if ranking_min_lfb_blocks is not None else ""
     ranking_note = (
-        f" `Ranking precheck` uses `--ranking-min-lfb-blocks {ranking_min_lfb_blocks}` and only checks whether a row's effective required LFB gate is strict enough for ranking."
+        (
+            f" `Ranking precheck` uses `--ranking-min-lfb-blocks {ranking_min_lfb_blocks}` and only checks whether a row's effective required LFB gate is strict enough for ranking."
+            + (
+                " When `--ranking-require-startup-precheck` is also set, the row must already pass `Startup precheck`."
+                if ranking_require_startup_precheck
+                else ""
+            )
+        )
         if ranking_min_lfb_blocks is not None
         else ""
     )
@@ -1241,6 +1261,7 @@ def build_sweep_comparison_report(
     max_repeat_ratio: float = 0.65,
     startup_require_cached_artifacts: bool = False,
     ranking_min_lfb_blocks: int | None = None,
+    ranking_require_startup_precheck: bool = False,
     promotion_precheck_stage: str | None = None,
     promotion_require_quality_review: bool = False,
     promotion_require_startup_precheck: bool = False,
@@ -1256,7 +1277,11 @@ def build_sweep_comparison_report(
         )
     _add_comparison_deltas(rows, baseline_variant_ids)
     _add_startup_prechecks(rows, require_cached_artifacts=startup_require_cached_artifacts)
-    _add_ranking_prechecks(rows, ranking_min_lfb_blocks)
+    _add_ranking_prechecks(
+        rows,
+        ranking_min_lfb_blocks,
+        ranking_require_startup_precheck=ranking_require_startup_precheck,
+    )
     _add_promotion_prechecks(
         rows,
         ranking_min_lfb_blocks=ranking_min_lfb_blocks,
@@ -1271,6 +1296,7 @@ def build_sweep_comparison_report(
             rows,
             startup_require_cached_artifacts=startup_require_cached_artifacts,
             ranking_min_lfb_blocks=ranking_min_lfb_blocks,
+            ranking_require_startup_precheck=ranking_require_startup_precheck,
             promotion_precheck_stage=promotion_precheck_stage,
             promotion_require_quality_review=promotion_require_quality_review,
             promotion_require_startup_precheck=promotion_require_startup_precheck,
@@ -1335,6 +1361,11 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         help="Strict ranking gate for preflight LFB requirements; rows below this remain in the report but fail ranking precheck",
     )
+    compare_parser.add_argument(
+        "--ranking-require-startup-precheck",
+        action="store_true",
+        help="Require a passing Startup precheck when evaluating ranking precheck",
+    )
     compare_parser.add_argument("--fail-on-ranking-precheck", action="store_true")
     compare_parser.add_argument(
         "--promotion-precheck-stage",
@@ -1359,6 +1390,10 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--fail-on-startup-precheck requires --startup-require-cached-artifacts")
         if args.fail_on_ranking_precheck and args.ranking_min_lfb_blocks is None:
             parser.error("--fail-on-ranking-precheck requires --ranking-min-lfb-blocks")
+        if args.ranking_require_startup_precheck and args.ranking_min_lfb_blocks is None:
+            parser.error("--ranking-require-startup-precheck requires --ranking-min-lfb-blocks")
+        if args.ranking_require_startup_precheck and not args.startup_require_cached_artifacts:
+            parser.error("--ranking-require-startup-precheck requires --startup-require-cached-artifacts")
         if args.fail_on_promotion_precheck and args.promotion_precheck_stage is None:
             parser.error("--fail-on-promotion-precheck requires --promotion-precheck-stage")
         if args.promotion_require_quality_review and args.promotion_precheck_stage is None:
@@ -1375,6 +1410,7 @@ def main(argv: list[str] | None = None) -> int:
             max_repeat_ratio=args.max_repeat_ratio,
             startup_require_cached_artifacts=args.startup_require_cached_artifacts,
             ranking_min_lfb_blocks=args.ranking_min_lfb_blocks,
+            ranking_require_startup_precheck=args.ranking_require_startup_precheck,
             promotion_precheck_stage=args.promotion_precheck_stage,
             promotion_require_quality_review=args.promotion_require_quality_review,
             promotion_require_startup_precheck=args.promotion_require_startup_precheck,

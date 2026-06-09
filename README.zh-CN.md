@@ -373,6 +373,9 @@ comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight g
 `--ranking-min-lfb-blocks <strict-gate>` 时，report 还会增加
 `Ranking precheck` 列，这样 relaxed fallback row 会保留在报告里，但不会被误读成
 可直接 promotion 的 strict-gate 证据。
+如果 ranking 或 export 决策还需要排除首次下载行，再加上
+`--ranking-require-startup-precheck`，这样没有 cached-startup 证据的 row
+也会直接失败 `Ranking precheck`。
 如果 startup 时间本身要参与判断，再加上
 `--startup-require-cached-artifacts`。这样 compare 会新增
 `Startup precheck` 列，并且只把 profile phase timings 里明确记录
@@ -405,6 +408,12 @@ suite 在这条 cached-startup gate 失败时直接退出非零，再显式开
 `JETSON_LIGHTWEIGHT_FAIL_ON_STARTUP_PRECHECK=1` 或
 `JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK=1`；默认仍然是 `0`，这样诊断性
 run 仍然能把 first-download 证据保留在报告里。
+这些 wrapper 也会默认转发 `--ranking-require-startup-precheck`，所以
+`Ranking precheck` 现在也只会放过已经通过 `Startup precheck` 的 row。若希望
+suite 在 ranking gate 失败时直接退出非零，再显式开
+`JETSON_CURRENT_DEFAULTS_FAIL_ON_RANKING_PRECHECK=1` 或
+`JETSON_LIGHTWEIGHT_FAIL_ON_RANKING_PRECHECK=1` 或
+`JETSON_TENCENT_TEXT_FAIL_ON_RANKING_PRECHECK=1`；默认同样保持 `0`。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

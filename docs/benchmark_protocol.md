@@ -450,6 +450,9 @@ For ranking decisions, keep only the defensible strict rows: when compare also r
 ran under a more relaxed gate stay in the report but are mechanically marked as
 non-ranking evidence. Copy only the defensible summary rows into tracked
 benchmark docs; keep raw generated reports under ignored `outputs/`.
+Add `--ranking-require-startup-precheck` when ranking or export decisions must
+also reject first-download rows and rows without explicit cached-startup
+evidence.
 For promotion-oriented review, compare also accepts
 `--promotion-precheck-stage formal-repeat` and
 `--promotion-precheck-stage promotion-reference`. This adds a
@@ -608,6 +611,11 @@ so comparison evidence can still be collected during diagnostic runs. Set
 `JETSON_CURRENT_DEFAULTS_FAIL_ON_STARTUP_PRECHECK=1` when the wrapper should
 also return non-zero if any row fails the cached-startup gate; that default
 also remains `0`.
+The wrapper also passes `--ranking-require-startup-precheck` by default, so
+`Ranking precheck` only passes rows that already passed `Startup precheck`.
+Set `JETSON_CURRENT_DEFAULTS_FAIL_ON_RANKING_PRECHECK=1` when the wrapper
+should also return non-zero if any row fails that ranking gate; the default
+remains `0`.
 
 To run the fixed-policy lightweight model ladder with the current MiniCPM and
 Gemma baselines plus the guard-passing lightweight candidates, use:
@@ -635,6 +643,10 @@ return non-zero on a failed promotion gate; the default remains `0` so
 lightweight diagnostic ladders can still emit comparison evidence. Set
 `JETSON_LIGHTWEIGHT_FAIL_ON_STARTUP_PRECHECK=1` when the wrapper should also
 return non-zero on a failed cached-startup gate; that default remains `0`.
+The wrapper also passes `--ranking-require-startup-precheck` by default, so
+`Ranking precheck` only passes rows that already passed `Startup precheck`.
+Set `JETSON_LIGHTWEIGHT_FAIL_ON_RANKING_PRECHECK=1` when the wrapper should
+also return non-zero on a failed ranking gate; that default remains `0`.
 Override `JETSON_LIGHTWEIGHT_RUN_PREFIX` to make the output
 path stable, or override `JETSON_LIGHTWEIGHT_TRIAL_COUNT`,
 `JETSON_LIGHTWEIGHT_MAX_TOKENS`, `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS`,
@@ -716,13 +728,17 @@ a comparison report with `--promotion-precheck-stage formal-repeat` plus
 `--promotion-require-quality-review`. It also passes
 `--startup-require-cached-artifacts`, so the text compare report still shows
 whether startup came from cached artifacts or a first download, and
-`Promotion precheck` now consumes that cached-startup gate as well. Because these rows are text-only,
+`Promotion precheck` now consumes that cached-startup gate as well. It also
+passes `--ranking-require-startup-precheck`, so `Ranking precheck` likewise
+rejects first-download rows. Because these rows are text-only,
 `Promotion precheck` skips the fake-stream requirement. Set
 `JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero if any row fails that promotion gate; the default remains `0`
 so diagnostic text ladders can still emit comparison evidence. Set
 `JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK=1` when the wrapper should also
 return non-zero if any row fails the cached-startup gate; that default remains
+`0`. Set `JETSON_TENCENT_TEXT_FAIL_ON_RANKING_PRECHECK=1` when the wrapper
+should also return non-zero on a failed ranking gate; that default remains
 `0`. Low-bit rows are
 runtime-compatibility canaries inside that dedicated text suite; the first
 Hy-MT1.5 1.25bit Jetson smoke failed before server ready on the pinned llama.cpp

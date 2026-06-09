@@ -693,6 +693,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         for text in (protocol_doc, strategy_doc, readme, readme_zh):
             self.assertIn("startup-require-cached-artifacts", text)
             self.assertIn("Startup precheck", text)
+            self.assertIn("ranking-require-startup-precheck", text)
         for text in (protocol_doc, strategy_doc):
             self.assertIn("artifact_check_or_download", text)
             self.assertIn("cached", text)
@@ -700,6 +701,9 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("JETSON_CURRENT_DEFAULTS_FAIL_ON_STARTUP_PRECHECK", text)
             self.assertIn("JETSON_LIGHTWEIGHT_FAIL_ON_STARTUP_PRECHECK", text)
             self.assertIn("JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK", text)
+            self.assertIn("JETSON_CURRENT_DEFAULTS_FAIL_ON_RANKING_PRECHECK", text)
+            self.assertIn("JETSON_LIGHTWEIGHT_FAIL_ON_RANKING_PRECHECK", text)
+            self.assertIn("JETSON_TENCENT_TEXT_FAIL_ON_RANKING_PRECHECK", text)
 
     def test_compare_docs_explain_promotion_precheck_stage(self):
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")

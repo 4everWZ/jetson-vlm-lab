@@ -87,7 +87,10 @@ itself is under review, compare also accepts
 `--startup-require-cached-artifacts` and emits a `Startup precheck` column that
 only passes rows whose profile phase timings explicitly recorded
 `artifact_check_or_download = cached`; first-download rows and older manifests
-without that phase remain visible but fail the startup precheck. Compare can now also add a
+without that phase remain visible but fail the startup precheck. Compare can also add
+`--ranking-require-startup-precheck`, so `Ranking precheck` can reject the same
+first-download rows instead of letting them remain ranking-eligible just because
+their required LFB gate was strict enough. Compare can now also add a
 `Promotion precheck` column with `--promotion-precheck-stage formal-repeat` or
 `--promotion-precheck-stage promotion-reference`. That precheck is
 intentionally mechanical only: it checks locked clocks, cache drop, strict required-LFB floor, `max_tokens >= 64`, `temperature = 0`, full benchmark success, fake-stream success for image-capable rows, and the stage-specific trial floor. Text-only rows whose configs declare `capabilities.image=false` do not need fake-stream records for this gate. The raw excerpt review remains manual, and route-sensitive promotion still requires `edge_vlm.quality_review` plus human review before any role change.

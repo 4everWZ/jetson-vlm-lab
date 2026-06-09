@@ -376,6 +376,8 @@ effective preflight gate is visible next to the observed `Preflight lfb`.
 When you also pass `--ranking-min-lfb-blocks <strict-gate>`, the report adds a
 `Ranking precheck` column so relaxed fallback rows remain visible without being
 mistaken for promotable strict-gate evidence.
+Add `--ranking-require-startup-precheck` when ranking or export decisions must
+also reject first-download rows and older rows without cached-startup evidence.
 When startup time itself is part of the decision, also pass
 `--startup-require-cached-artifacts`. That adds a `Startup precheck` column and
 only passes rows whose profile phase timings explicitly recorded
@@ -406,6 +408,12 @@ versus first-download rows. Set
 `JETSON_TENCENT_TEXT_FAIL_ON_STARTUP_PRECHECK=1` when a suite should return
 non-zero if any row fails that cached-startup gate; the default remains `0` so
 diagnostic runs can still keep first-download evidence in the report.
+They also pass `--ranking-require-startup-precheck` by default, so `Ranking precheck`
+will only pass rows that already passed `Startup precheck`. Set
+`JETSON_CURRENT_DEFAULTS_FAIL_ON_RANKING_PRECHECK=1` or
+`JETSON_LIGHTWEIGHT_FAIL_ON_RANKING_PRECHECK=1` or
+`JETSON_TENCENT_TEXT_FAIL_ON_RANKING_PRECHECK=1` when a suite should return
+non-zero if any row fails that ranking gate; the default remains `0`.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

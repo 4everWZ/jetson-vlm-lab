@@ -249,6 +249,9 @@ scripts/jetson/run_remote_current_defaults_suite.sh
 Set `JETSON_CURRENT_DEFAULTS_FAIL_ON_PROMOTION_PRECHECK=1` when that wrapper
 should return non-zero after compare marks any row as failing the promotion
 gate. The default remains diagnostic-friendly and leaves this off.
+Set `JETSON_CURRENT_DEFAULTS_FAIL_ON_RANKING_PRECHECK=1` when the same wrapper
+should also return non-zero after `Ranking precheck` fails because the row
+lacks cached-startup evidence under `--ranking-require-startup-precheck`.
 
 It fixes the two current default variants, enables remote max clocks and
 per-variant cache dropping, runs 10 formal trials plus the three-frame

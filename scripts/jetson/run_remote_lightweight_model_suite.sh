@@ -16,6 +16,7 @@ remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
 quality_review_policy="${JETSON_REMOTE_QUALITY_REVIEW_POLICY:-configs/benchmark/quality_review_policy.json}"
 fail_on_promotion_precheck="${JETSON_LIGHTWEIGHT_FAIL_ON_PROMOTION_PRECHECK:-0}"
 fail_on_startup_precheck="${JETSON_LIGHTWEIGHT_FAIL_ON_STARTUP_PRECHECK:-0}"
+fail_on_ranking_precheck="${JETSON_LIGHTWEIGHT_FAIL_ON_RANKING_PRECHECK:-0}"
 qwen3_selector="${JETSON_LIGHTWEIGHT_QWEN3_SELECTOR:-1}"
 qwen3_fallback_min_lfb_blocks="${JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS:-100}"
 
@@ -31,6 +32,10 @@ if [[ "${fail_on_promotion_precheck}" != "0" && "${fail_on_promotion_precheck}" 
 fi
 if [[ "${fail_on_startup_precheck}" != "0" && "${fail_on_startup_precheck}" != "1" ]]; then
   echo "JETSON_LIGHTWEIGHT_FAIL_ON_STARTUP_PRECHECK must be 0 or 1." >&2
+  exit 2
+fi
+if [[ "${fail_on_ranking_precheck}" != "0" && "${fail_on_ranking_precheck}" != "1" ]]; then
+  echo "JETSON_LIGHTWEIGHT_FAIL_ON_RANKING_PRECHECK must be 0 or 1." >&2
   exit 2
 fi
 
@@ -87,12 +92,16 @@ compare_args+=(--startup-require-cached-artifacts)
 if [[ "${fail_on_startup_precheck}" == "1" ]]; then
   compare_args+=(--fail-on-startup-precheck)
 fi
+if [[ "${fail_on_ranking_precheck}" == "1" ]]; then
+  compare_args+=(--fail-on-ranking-precheck)
+fi
 if [[ "${fail_on_promotion_precheck}" == "1" ]]; then
   compare_args+=(--fail-on-promotion-precheck)
 fi
 
 compare_args+=(
   --ranking-min-lfb-blocks "${min_lfb_blocks}"
+  --ranking-require-startup-precheck
   --promotion-precheck-stage formal-repeat
   --promotion-require-startup-precheck
   --promotion-require-quality-review
