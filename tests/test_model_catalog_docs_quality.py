@@ -496,6 +496,9 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             encoding="utf-8"
         )
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        model_doc = Path("docs/specs/next_phase_benchmark_and_models.md").read_text(
+            encoding="utf-8"
+        )
 
         for text in (benchmark_doc, strategy_doc, protocol_doc):
             self.assertIn("tencent-text-repeat5-prepctx-20260609T131412Z", text)
@@ -508,6 +511,14 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         self.assertIn("quality_review_failed 15/20", benchmark_doc)
         self.assertIn("quality_review_failed 10/20", benchmark_doc)
         self.assertIn("Promotion precheck = yes", benchmark_doc)
+        for text in (benchmark_doc, strategy_doc, protocol_doc, model_doc):
+            self.assertIn("youtu-llm-q8-cached-20260609T133339Z", text)
+            self.assertIn("cached", text)
+        self.assertIn("artifact_check_or_download", benchmark_doc)
+        self.assertIn("0.002", benchmark_doc)
+        self.assertIn("24.621", benchmark_doc)
+        self.assertIn("5.015", benchmark_doc)
+        self.assertIn("first artifact download", benchmark_doc)
 
     def test_lightweight_formal_repeat_evidence_is_documented(self):
         benchmark_doc = Path("docs/benchmarks/jetson_lightweight_models_20260531.md").read_text(

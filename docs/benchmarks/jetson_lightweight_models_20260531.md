@@ -302,7 +302,7 @@ they split into two lanes:
 | Hy-MT2 1.8B 2Bit GGUF | `tencent/Hy-MT2-1.8B-2Bit-GGUF` / `Hy-MT2-1.8B-2Bit.gguf` | Added as a default text/router runtime canary; failures are runtime-support evidence, not VLM ranking evidence. |
 | Hy-MT2 1.8B Q4/Q6/Q8 GGUF | `tencent/Hy-MT2-1.8B-GGUF` / `Hy-MT2-1.8B-{Q4_K_M,Q6_K,Q8_0}.gguf` | Added as default text/router configs and variants; Q4/Q6 passed the full text-suite smoke, Q6 cached run `tencent-hy-mt2-q6-smoke64-cached-20260531a` passed at 26.298 tok/s, Q8 cached rerun `tencent-hy-mt2-q8-smoke64-cached-20260531T132724Z` passed at 30.756 tok/s, and 5-trial repeat `tencent-text-repeat5-20260531a` passed Q4/Q6/Q8 at 34.528/26.778/31.395 tok/s. Not VLM candidates. |
 | Hy-MT2 1.8B FP8 | `tencent/Hy-MT2-1.8B-FP8` | Deferred; Safetensors/compressed-tensors path, no low-friction GGUF launcher row. |
-| Youtu-LLM 2B Q8 GGUF | `tencent/Youtu-LLM-2B-GGUF` / `Youtu-LLM-2B-Q8_0.gguf` | Added as a default text/router config and variant. Prepared repeat `tencent-text-repeat5-prepctx-20260609T131412Z` passed 20/20 records, `Quality review = yes (20/20)`, and `Promotion precheck = yes` under locked clocks, cache drop, and `Required lfb = 150`. F16 sibling is deferred from the default suite due higher memory pressure. |
+| Youtu-LLM 2B Q8 GGUF | `tencent/Youtu-LLM-2B-GGUF` / `Youtu-LLM-2B-Q8_0.gguf` | Added as a default text/router config and variant. Prepared repeat `tencent-text-repeat5-prepctx-20260609T131412Z` passed 20/20 records, `Quality review = yes (20/20)`, and `Promotion precheck = yes` under locked clocks, cache drop, and `Required lfb = 150`; cached rerun `youtu-llm-q8-cached-20260609T133339Z` then recorded `artifact_check_or_download = cached (0.002 s)`, `Startup s = 5.015`, and `Text tok/s = 24.621`. F16 sibling is deferred from the default suite due higher memory pressure. |
 | HunyuanOCR 1B Q8 GGUF | `ggml-org/HunyuanOCR-GGUF` / `HunyuanOCR-Q8_0.gguf`, `mmproj-HunyuanOCR-Q8_0.gguf` | Jetson smoke loaded after the launcher-resume fix and completed benchmark/fake-stream records, but failed the guard with repeated exclamation-mark outputs; not an official Tencent-owned GGUF artifact and not ranked. |
 | Penguin-VL-2B | `tencent/Penguin-VL-2B` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
 | HY-Embodied-0.5 / HY-Embodied-0.5-X | `tencent/HY-Embodied-0.5`, `tencent/HY-Embodied-0.5-X` | Deferred; Transformers/Safetensors/custom-code, no low-friction GGUF path in this repo yet. |
@@ -419,6 +419,18 @@ quality gate and `Promotion precheck = yes`.
 | `tencent-hy-mt2-1p8b-q8-text-smoke` | `max_clocks, drop_caches` | 183x4MB | 150 | yes | no (`quality_review_failed 10/20 text_en_reasoning_short,text_code_short`) | no (10/20; `text_en_reasoning_short`, `text_code_short`) | 20/20 | 5.015 | 31.408 | 1.806 | +114 | +954.520 | Second-fastest Hy-MT2 row; promotion blocked by the same review failures as Q6. |
 | `tencent-youtu-llm-2b-q8-text-smoke` | `max_clocks, drop_caches` | 192x4MB | 150 | yes | yes (`Promotion precheck = yes`) | yes (20/20) | 20/20 | 354.568 | 24.577 | 1.865 | +121 | +954.090 | First strict Jetson evidence for Youtu-LLM 2B Q8. Startup includes first artifact download; do not compare it against cached-start rows. |
 
+Youtu-LLM 2B Q8 cached rerun evidence:
+
+Run prefix: `youtu-llm-q8-cached-20260609T133339Z`. This rerun kept the same
+strict remote Tencent text suite policy as the prepared repeat above, but
+reused the already-downloaded artifact. The lifecycle phase timing recorded
+`artifact_check_or_download = cached (0.002 s)`, so the `5.015 s` startup below
+is the useful cached-start datapoint for this route.
+
+| Variant | Prepare ctx | Preflight `lfb` | Required lfb | Ranking precheck | Promotion precheck | Quality review | Success | Startup s | Text tok/s | Text latency s | Prepare lfb delta | Prepare avail MB delta | Artifact phase | Status |
+|---|---|---:|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|---|
+| `tencent-youtu-llm-2b-q8-text-smoke` | `max_clocks, drop_caches` | 198x4MB | 150 | yes | yes (`Promotion precheck = yes`) | yes (20/20) | 20/20 | 5.015 | 24.621 | 1.861 | +118 | +989.227 | `artifact_check_or_download = cached (0.002 s)` | Cached strict text/router evidence; still separate from VLM ranking because the row is text-only. |
+
 ## Next Model Checks
 
 1. Do human full-output review for `lightweight-repeat5-20260531T134554Z`;
@@ -432,10 +444,13 @@ quality gate and `Promotion precheck = yes`.
    Q6/Q8 have cached single-run evidence, Hy-MT2 Q4/Q6/Q8 have valid 5-trial
    text repeat evidence, `tencent-text-repeat5-prepctx-20260609T131412Z`
    refreshes Hy-MT2 Q4/Q6/Q8 under strict `Required lfb = 150` plus
-   `Prepare ctx = max_clocks, drop_caches`, Youtu-LLM 2B Q8 now has Jetson
-   evidence with `Promotion precheck = yes`, HY-MT1.5 Q4/Q6/Q8 rows still need
-   Jetson evidence, and low-bit failures should feed the runtime/build lane,
-   not VLM ranking.
+   `Prepare ctx = max_clocks, drop_caches`, Youtu-LLM 2B Q8 now has both the
+   first-download strict row and cached rerun
+   `youtu-llm-q8-cached-20260609T133339Z` with
+   `artifact_check_or_download = cached (0.002 s)`, `Startup s = 5.015`, and
+   `Promotion precheck = yes`, HY-MT1.5 Q4/Q6/Q8 rows still need Jetson
+   evidence, and low-bit failures should feed the runtime/build lane, not VLM
+   ranking.
 4. Add a separate Youtu Q4 GPU-mmproj/offload canary only if memory allows and
    the result answers an artifact/runtime question; keep it
    distinct from the CPU-mmproj smoke and the official Tencent Q8 failure.

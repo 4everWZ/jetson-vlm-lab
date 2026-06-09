@@ -708,6 +708,13 @@ and Q8 both reported
 Youtu-LLM 2B Q8 passed `20/20` records, `Quality review = yes (20/20)`, and
 `Promotion precheck = yes`; its reported `354.568 s` startup includes the
 first artifact download and should not be treated as cached startup evidence.
+Cached rerun `youtu-llm-q8-cached-20260609T133339Z` then reused the local
+artifact under the same strict gate: lifecycle timing recorded
+`artifact_check_or_download = cached` in `0.002 s`, compare kept
+`Prepare ctx = max_clocks, drop_caches` plus `Required lfb = 150`, and the row
+still passed `Quality review = yes (20/20)` with `Promotion precheck = yes`.
+The cached row reported `5.015 s` startup, `24.621` text tok/s, and `1.861 s`
+average text latency.
 Override
 `JETSON_TENCENT_TEXT_RUN_PREFIX`,
 `JETSON_TENCENT_TEXT_TRIAL_COUNT`, `JETSON_TENCENT_TEXT_MAX_TOKENS`,

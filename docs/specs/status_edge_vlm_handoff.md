@@ -32,7 +32,10 @@ Current position:
   `captured_duration_s` for phase-window profiling.
 - Tencent text/router lane now includes 11 default GGUF rows:
   Hy-MT1.5 1.25bit/2bit/Q4/Q6/Q8, Hy-MT2 1.25Bit/2Bit/Q4/Q6/Q8, and
-  Youtu-LLM 2B Q8. These stay out of VLM ranking.
+  Youtu-LLM 2B Q8. Youtu now has both strict first-download evidence
+  (`tencent-text-repeat5-prepctx-20260609T131412Z`) and cached rerun evidence
+  (`youtu-llm-q8-cached-20260609T133339Z`, `artifact_check_or_download =
+  cached`, `Startup s = 5.015`). These stay out of VLM ranking.
 - Jetson launcher defaults now point to the self-built official llama.cpp image
   used by the observed multimodal smoke runs. dusty-nv `llama_cpp` is not the
   default VLM runtime path because it has not provided the required multimodal
