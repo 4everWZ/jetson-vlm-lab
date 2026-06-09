@@ -144,6 +144,9 @@ if [[ "${qwen3_selector}" == "1" ]]; then
   selector_json="$("${remote_exec}" "${selector_args[@]}")"
   selected_variant_id="$(printf '%s' "${selector_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("selected_variant_id") or "")')"
   selected_reason="$(printf '%s' "${selector_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("selected_reason") or "")')"
+  if [[ -n "${qwen3_selector_output}" ]]; then
+    sweep_args+=(--selection-context-json "${qwen3_selector_output}")
+  fi
   if [[ -n "${selected_variant_id}" ]]; then
     if ! has_variant_arg "${selected_variant_id}" "${sweep_args[@]}"; then
       sweep_args+=(--variant "${selected_variant_id}")

@@ -366,7 +366,9 @@ selection decision rather than a manual variant choice. The selector emits JSON
 with the shared runtime probe, current preflight sample, per-candidate block
 reasons, and `selected_variant_id`. Keep the conservative gate the same for both
 lanes by default; use `--fallback-min-lfb-blocks` only for scoped diagnostic
-fallback triage.
+fallback triage. `edge_vlm.jetson_sweep` also accepts
+`--selection-context-json <path>` so a wrapper can forward that selector JSON
+into the sweep manifest as normalized `selection_contexts`.
 Set `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1` for promotion/comparison sweeps. The
 wrapper runs `sudo jetson_clocks` and captures `sudo jetson_clocks --show` under
 ignored `outputs/jetson_inspect/` before launching the sweep. It reads the sudo
@@ -401,9 +403,11 @@ selected baseline variant, and any recorded prepare-phase
 preflight deltas such as `lfb` or `MemAvailable` changes after cache-drop plus
 `compact_memory`. When variant metadata defines a shared
 `comparison_group`, the delta columns use that group instead of raw model id,
-so Q4/Q8 fallback lanes can be compared directly. Copy only the defensible
-summary rows into tracked benchmark docs; keep raw generated reports under
-ignored `outputs/`.
+so Q4/Q8 fallback lanes can be compared directly. When the sweep manifest also
+includes `selection_contexts`, the report adds a `Selection` column so
+auto-selected lanes remain visible in promotion evidence instead of reading like
+anonymous static variant ids. Copy only the defensible summary rows into
+tracked benchmark docs; keep raw generated reports under ignored `outputs/`.
 
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:

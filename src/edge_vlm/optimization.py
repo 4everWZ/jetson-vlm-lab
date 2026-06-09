@@ -41,6 +41,8 @@ class SweepComparisonRow:
     run_prefix: str
     run_id: str
     variant_id: str
+    selection_id: str
+    selection_reason: str
     model: str
     comparison_group: str
     server_image: str | None
@@ -396,6 +398,30 @@ def _comparison_group(variant_plan: dict[str, Any], model: str) -> str:
     return model
 
 
+def _selection_contexts(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    contexts = plan.get("selection_contexts")
+    if not isinstance(contexts, list):
+        return []
+    return [context for context in contexts if isinstance(context, dict)]
+
+
+def _selection_context_for_variant(
+    plan: dict[str, Any],
+    *,
+    variant_id: str,
+    comparison_group: str,
+) -> dict[str, Any]:
+    for context in _selection_contexts(plan):
+        selected_variant_id = context.get("selected_variant_id")
+        if not isinstance(selected_variant_id, str) or selected_variant_id != variant_id:
+            continue
+        group = context.get("comparison_group")
+        if isinstance(group, str) and group.strip() and group.strip() != comparison_group:
+            continue
+        return context
+    return {}
+
+
 def _short_ref(value: str | None, length: int = 12) -> str | None:
     if not value:
         return None
@@ -416,6 +442,14 @@ def _format_runtime(row: SweepComparisonRow) -> str:
         if part
     ]
     return " / ".join(parts)
+
+
+def _format_selection(row: SweepComparisonRow) -> str:
+    if not row.selection_id:
+        return ""
+    if row.selection_reason:
+        return f"{row.selection_id} ({row.selection_reason})"
+    return row.selection_id
 
 
 def _infer_run_prefix(run_id: str, variant_id: str, fallback: str) -> str:
@@ -479,6 +513,13 @@ def summarize_sweep_manifest(
             variant_plan = plan_variants[index]
         if variant_plan is None:
             variant_plan = {}
+        row_model = str(entry.get("model") or "unknown")
+        inferred_comparison_group = _comparison_group(variant_plan, row_model)
+        selection_context = _selection_context_for_variant(
+            plan,
+            variant_id=variant_id,
+            comparison_group=inferred_comparison_group,
+        )
         paths = variant_plan.get("paths") if isinstance(variant_plan, dict) else None
         paths = paths if isinstance(paths, dict) else {}
         benchmark_path = _path_or_none(paths.get("benchmark_jsonl"))
@@ -518,10 +559,20 @@ def summarize_sweep_manifest(
                 run_prefix=_infer_run_prefix(run_id, variant_id, fallback_run_prefix),
                 run_id=run_id,
                 variant_id=variant_id,
+                selection_id=(
+                    str(selection_context.get("selection_id"))
+                    if isinstance(selection_context.get("selection_id"), str)
+                    else ""
+                ),
+                selection_reason=(
+                    str(selection_context.get("selected_reason"))
+                    if isinstance(selection_context.get("selected_reason"), str)
+                    else ""
+                ),
                 model=summary.model if summary is not None else str(entry.get("model") or "unknown"),
                 comparison_group=_comparison_group(
                     variant_plan,
-                    summary.model if summary is not None else str(entry.get("model") or "unknown"),
+                    summary.model if summary is not None else row_model,
                 ),
                 server_image=str(runtime["image"]) if runtime.get("image") else None,
                 server_image_id=str(runtime["image_id"]) if runtime.get("image_id") else None,
@@ -608,15 +659,16 @@ def _format_sweep_comparison_report(rows: list[SweepComparisonRow]) -> str:
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower.",
         "",
-        "| Model | Variant | Run prefix | Runtime | Preflight lfb | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
-        "|---|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
+        "| Model | Variant | Selection | Run prefix | Runtime | Preflight lfb | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
+        "|---|---|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
     ]
     for row in rows:
         failures = ", ".join(row.guard_failures)
         lines.append(
-            "| {model} | `{variant}` | {run_prefix} | {runtime} | {lfb} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {lfb} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
+                selection=_format_selection(row).replace("|", "\\|"),
                 run_prefix=row.run_prefix,
                 runtime=_format_runtime(row),
                 lfb=row.preflight_lfb,

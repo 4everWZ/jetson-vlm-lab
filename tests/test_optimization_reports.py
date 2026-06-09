@@ -425,7 +425,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(rows[1].delta_text_tokens_per_s_pct, 20.0)
         self.assertEqual(rows[1].delta_image_tokens_per_s_pct, -12.5)
         self.assertAlmostEqual(rows[1].delta_fake_stream_latency_pct, -11.111111, places=5)
-        self.assertIn("| Model | Variant | Run prefix | Runtime | Preflight lfb | Prepare lfb delta | Prepare avail MB delta |", report_text)
+        self.assertIn("| Model | Variant | Selection | Run prefix | Runtime | Preflight lfb | Prepare lfb delta | Prepare avail MB delta |", report_text)
         self.assertIn("Avg GR3D %", report_text)
         self.assertIn("Avg EMC %", report_text)
         self.assertIn("Bottlenecks", report_text)
@@ -434,7 +434,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(rows[0].avg_emc_util_pct, 83.0)
         self.assertEqual(rows[0].min_lfb_free_blocks, 180)
         self.assertIn("ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be", report_text)
-        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | +40 | +488.281 | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
+        self.assertIn("| gemma4-e2b-it-q4 | `gemma-q4-baseline-gpu12-b512-u512-kvq8-directio` |  | gemma-directio | ghcr.io/4everwz/jetson-llama-cpp:test / 52a8ad644e41 / b4c0549a49be | 190x4MB | +40 | +488.281 | 1 | yes | 2/2 | 1/1 | 6.000 | 12.000 | 7.000 | 5.333 | 9.143 | 8.000 | 54.500 | 12.500 | 85.000 | 83.000 | 180 | gpu_compute, emc_memory_bandwidth | +20.00% | -12.50% | +20.00% | -11.11% |", report_text)
         self.assertIn("Baseline rows use `0.00%` deltas", report_text)
 
     def test_optimization_comparison_report_can_use_shared_comparison_group(self):
@@ -629,6 +629,161 @@ class OptimizationReportContractsTest(unittest.TestCase):
             ((2.144 - 1.827) / 1.827) * 100.0,
             places=5,
         )
+
+    def test_optimization_comparison_report_surfaces_auto_selected_lane_context(self):
+        from edge_vlm.optimization import build_sweep_comparison_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "qwen-auto"
+            benchmark_dir = output_root / "benchmarks"
+            fake_dir = output_root / "fake_stream"
+            benchmark_dir.mkdir(parents=True)
+            fake_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+            run_prefix = "qwen-auto"
+            variant_id = "qwen3-vl-2b-instruct-q4-smoke"
+            run_id = f"{run_prefix}-{variant_id}"
+            benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+            fake_jsonl = fake_dir / f"{run_id}.jsonl"
+            benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+            tegrastats_log = tmp_path / "outputs" / "tegrastats" / f"{run_id}.log"
+            tegrastats_log.parent.mkdir(parents=True, exist_ok=True)
+            benchmark_jsonl.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "model": "qwen3-vl-2b-instruct-q4",
+                                "run_id": run_id,
+                                "prompt_case_id": "text_case",
+                                "input_type": "text",
+                                "success": True,
+                                "latency_s": 64.0 / 34.865,
+                                "tokens": 64,
+                                "tokens_per_sec": 34.865,
+                                "output_excerpt": "A useful answer that mentions memory and bandwidth limits.",
+                                "quality_terms_any": ["memory", "bandwidth"],
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "model": "qwen3-vl-2b-instruct-q4",
+                                "run_id": run_id,
+                                "prompt_case_id": "image_case",
+                                "input_type": "image",
+                                "success": True,
+                                "latency_s": 64.0 / 31.958,
+                                "tokens": 64,
+                                "tokens_per_sec": 31.958,
+                                "output_excerpt": "The image shows two contrasting square shapes on a background.",
+                                "quality_terms_any": ["square", "background"],
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_jsonl.write_text(
+                json.dumps(
+                    {
+                        "frame_id": "frame_001.png",
+                        "success": True,
+                        "latency_s": 1.827,
+                        "output_excerpt": "The frame shows a simple scene with contrasting square shapes.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            tegrastats_log.write_text(
+                "\n".join(
+                    [
+                        "05-31-2026 RAM 2000/7620MB (lfb 121x4MB) GR3D_FREQ 95%@[1020] cpu@50.0C gpu@51.0C tj@51.0C VDD_IN 21000mW/21000mW",
+                        "05-31-2026 RAM 2100/7620MB (lfb 118x4MB) GR3D_FREQ 96%@[1020] cpu@52.0C gpu@54.5C tj@54.5C VDD_IN 22000mW/22000mW",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            benchmark_manifest.write_text(
+                json.dumps(
+                    {
+                        "run_id": run_id,
+                        "benchmark": {"trial_count": 1},
+                        "cases_written": 2,
+                        "successful": 2,
+                        "failed": 0,
+                        "jetson": {"tegrastats_log": str(tegrastats_log)},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            manifest = output_root / "qwen-auto.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {
+                            "run_prefix": run_prefix,
+                            "selection_contexts": [
+                                {
+                                    "selection_id": "qwen3-vl-2b-instruct-auto",
+                                    "comparison_group": "qwen3-vl-2b-instruct",
+                                    "selected_variant_id": variant_id,
+                                    "selected_reason": "primary_usable",
+                                }
+                            ],
+                            "variants": [
+                                {
+                                    "variant": {
+                                        "id": variant_id,
+                                        "comparison_group": "qwen3-vl-2b-instruct",
+                                    },
+                                    "paths": {
+                                        "benchmark_jsonl": str(benchmark_jsonl),
+                                        "manifest_json": str(benchmark_manifest),
+                                        "fake_stream_jsonl": str(fake_jsonl),
+                                    },
+                                }
+                            ],
+                        },
+                        "result": {
+                            "results": [
+                                {
+                                    "run_id": run_id,
+                                    "variant_id": variant_id,
+                                    "preflight": {
+                                        "tegrastats": {
+                                            "lfb": {"free_blocks": 121, "block_mb": 4},
+                                        }
+                                    },
+                                    "preflight_passed": True,
+                                    "server_startup_seconds": 5.0,
+                                    "benchmark_returncode": 0,
+                                    "fake_stream_returncode": 0,
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = build_sweep_comparison_report(
+                manifest_paths=[manifest],
+                output_path=report,
+                baseline_variant_ids=[variant_id],
+            )
+            report_text = report.read_text(encoding="utf-8")
+
+        self.assertEqual(rows[0].variant_id, variant_id)
+        self.assertEqual(rows[0].selection_id, "qwen3-vl-2b-instruct-auto")
+        self.assertEqual(rows[0].selection_reason, "primary_usable")
+        self.assertIn("Selection", report_text)
+        self.assertIn("qwen3-vl-2b-instruct-auto (primary_usable)", report_text)
 
 
 if __name__ == "__main__":

@@ -135,6 +135,90 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
         self.assertEqual(fake_command[fake_command.index("--adaptive-interval-scale") + 1], "1.25")
         self.assertEqual(fake_command[fake_command.index("--adaptive-interval-max-s") + 1], "3.0")
 
+    def test_jetson_sweep_dry_run_preserves_selection_contexts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            variants = tmp_path / "variants.jsonl"
+            plan = tmp_path / "plan.json"
+            selection_context = tmp_path / "qwen3-selection-context.json"
+            variants.write_text(
+                json.dumps(
+                    {
+                        "id": "qwen3-vl-2b-instruct-q4-smoke",
+                        "model": "qwen3-vl-2b-instruct-q4",
+                        "config": "configs/models/qwen3_vl_2b_instruct_q4.yaml",
+                        "launcher": "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
+                        "env": {
+                            "MODEL_DIR": str(tmp_path / "models"),
+                            "MODEL_ALIAS": "qwen3-vl-2b-instruct-q4",
+                            "CTX_SIZE": 1024,
+                            "N_GPU_LAYERS": 99,
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            selection_context.write_text(
+                json.dumps(
+                    {
+                        "selection_id": "qwen3-vl-2b-instruct-auto",
+                        "comparison_group": "qwen3-vl-2b-instruct",
+                        "selected_variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                        "selected_reason": "primary_usable",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    "-m",
+                    "edge_vlm.jetson_sweep",
+                    "--variants",
+                    str(variants),
+                    "--variant",
+                    "qwen3-vl-2b-instruct-q4-smoke",
+                    "--run-prefix",
+                    "unit-selection-context",
+                    "--output-root",
+                    str(tmp_path / "outputs"),
+                    "--server-log-dir",
+                    str(tmp_path / "logs"),
+                    "--trial-count",
+                    "1",
+                    "--max-tokens",
+                    "16",
+                    "--temperature",
+                    "0",
+                    "--selection-context-json",
+                    str(selection_context),
+                    "--plan-output",
+                    str(plan),
+                    "--dry-run",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={**os.environ, "PYTHONPATH": "src"},
+            )
+            plan_data = json.loads(plan.read_text(encoding="utf-8"))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            plan_data["selection_contexts"],
+            [
+                {
+                    "selection_id": "qwen3-vl-2b-instruct-auto",
+                    "comparison_group": "qwen3-vl-2b-instruct",
+                    "selected_variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                    "selected_reason": "primary_usable",
+                }
+            ],
+        )
+
     def test_jetson_sweep_plan_records_inherited_launcher_environment(self):
         from edge_vlm.jetson_sweep import build_sweep_plan
 

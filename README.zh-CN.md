@@ -365,6 +365,9 @@ remote lightweight suite 现在也会自动使用这个 selector，而不是把
 Qwen3 Instruct fallback 路线应用
 `JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS=100`。如果想回到完全手工
 控制的 candidate 列表，可以把 `JETSON_LIGHTWEIGHT_QWEN3_SELECTOR=0`。
+remote sweep wrapper 现在也会把这个 selector 决策带进 sweep manifest，
+所以 `edge_vlm.optimization compare` 的 `Selection` 列能直接标出
+auto-selected 的 Qwen3 路线，而不是只剩一个没有决策来源的静态 variant id。
 
 Jetson 远端连接参数在被 Git 忽略的 `.env.jetson` 中。远端 helper 会自动
 读取它；不要把 SSH host、密码、token 或私有路径写进 tracked 文档。

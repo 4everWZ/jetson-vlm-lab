@@ -205,9 +205,11 @@ utilization, minimum profiled `lfb`, conservative bottleneck labels, any
 recorded prepare-phase preflight deltas, and deltas versus the selected
 baseline variant. When variant metadata provides a shared `comparison_group`,
 the delta columns use that group instead of raw model id so Q4/Q8 fallback
-lanes can share one baseline. Treat this as the source table for tracked
-benchmark docs; do not hand-copy raw metrics from multiple JSON files when the
-comparison command can derive them.
+lanes can share one baseline. When the sweep manifest carries normalized
+`selection_contexts`, the comparison table also adds a `Selection` column so an
+auto-selected fallback row stays tied to its selector decision. Treat this as
+the source table for tracked benchmark docs; do not hand-copy raw metrics from
+multiple JSON files when the comparison command can derive them.
 
 For the recurring current-defaults baseline refresh, prefer the wrapper:
 

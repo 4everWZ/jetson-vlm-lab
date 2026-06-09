@@ -465,6 +465,90 @@ def _read_json_object(path: str | Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _variant_comparison_group(variant: dict[str, Any]) -> str:
+    group = variant.get("comparison_group")
+    if isinstance(group, str) and group.strip():
+        return group.strip()
+    model = variant.get("model")
+    return str(model).strip() if isinstance(model, str) else ""
+
+
+def _selector_selection_id(
+    record: dict[str, Any],
+    variant_groups: dict[str, str],
+) -> str | None:
+    explicit = record.get("selection_id")
+    if isinstance(explicit, str) and explicit.strip():
+        return explicit.strip()
+    for key in ("selected_variant_id", "primary_variant_id", "fallback_variant_id"):
+        value = record.get(key)
+        if isinstance(value, str) and value.strip():
+            group = variant_groups.get(value.strip())
+            if group:
+                return f"{group}-auto"
+    return None
+
+
+def _normalize_selection_context(
+    record: dict[str, Any],
+    *,
+    source_path: str | Path,
+    variant_groups: dict[str, str],
+) -> dict[str, Any]:
+    selection_id = _selector_selection_id(record, variant_groups)
+    if not selection_id:
+        raise ValueError(f"{source_path}: selection context requires selection_id or a known variant id")
+    selected_variant_id = record.get("selected_variant_id")
+    selected_variant_id = str(selected_variant_id).strip() if isinstance(selected_variant_id, str) else None
+    primary_variant_id = record.get("primary_variant_id")
+    primary_variant_id = str(primary_variant_id).strip() if isinstance(primary_variant_id, str) else None
+    fallback_variant_id = record.get("fallback_variant_id")
+    fallback_variant_id = str(fallback_variant_id).strip() if isinstance(fallback_variant_id, str) else None
+    comparison_group = record.get("comparison_group")
+    if isinstance(comparison_group, str) and comparison_group.strip():
+        normalized_group = comparison_group.strip()
+    else:
+        normalized_group = ""
+        for candidate in (selected_variant_id, primary_variant_id, fallback_variant_id):
+            if candidate and variant_groups.get(candidate):
+                normalized_group = variant_groups[candidate]
+                break
+    normalized: dict[str, Any] = {
+        "selection_id": selection_id,
+        "selected_variant_id": selected_variant_id,
+    }
+    if isinstance(record.get("selected_reason"), str) and str(record.get("selected_reason")).strip():
+        normalized["selected_reason"] = str(record.get("selected_reason")).strip()
+    if normalized_group:
+        normalized["comparison_group"] = normalized_group
+    if primary_variant_id:
+        normalized["primary_variant_id"] = primary_variant_id
+    if fallback_variant_id:
+        normalized["fallback_variant_id"] = fallback_variant_id
+    return normalized
+
+
+def _load_selection_contexts(
+    paths: Iterable[str | Path],
+    *,
+    variant_groups: dict[str, str],
+) -> list[dict[str, Any]]:
+    contexts: list[dict[str, Any]] = []
+    for path in paths:
+        source = Path(path)
+        record = _read_json_object(source)
+        if not record:
+            raise ValueError(f"{source}: expected selection context JSON object")
+        contexts.append(
+            _normalize_selection_context(
+                record,
+                source_path=source,
+                variant_groups=variant_groups,
+            )
+        )
+    return contexts
+
+
 def _load_variants(path: str | Path) -> list[dict[str, Any]]:
     variants = list(_iter_jsonl(Path(path)))
     for variant in variants:
@@ -551,6 +635,7 @@ def build_sweep_plan(
     fake_stream_adaptive_interval_scale: float = 1.0,
     fake_stream_adaptive_interval_max_s: float | None = None,
     pre_variant_command: str | None = None,
+    selection_contexts: Iterable[dict[str, Any]] = (),
     base_env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     source_env = dict(os.environ if base_env is None else base_env)
@@ -560,7 +645,8 @@ def build_sweep_plan(
     selected_variants = set(variant_filters)
     planned: list[dict[str, Any]] = []
     runtime_by_image: dict[tuple[str | None, str | None, str | None], dict[str, Any]] = {}
-    for variant in _load_variants(variants_path):
+    variants = _load_variants(variants_path)
+    for variant in variants:
         if not _matches_filters(variant, selected_models, selected_variants):
             continue
         variant_id = str(variant["id"])
@@ -684,6 +770,7 @@ def build_sweep_plan(
         "run_prefix": run_prefix,
         "port": port,
         "pre_variant_command": pre_variant_command,
+        "selection_contexts": [dict(context) for context in selection_contexts],
         "variants": planned,
     }
 
@@ -1275,6 +1362,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Shell command to run before each variant preflight; a non-zero exit skips that variant",
     )
+    parser.add_argument(
+        "--selection-context-json",
+        action="append",
+        default=[],
+        help="JSON file describing an auto-selected lane; repeatable",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--plan-output", default=None)
     parser.add_argument("--report-output", default=None)
@@ -1284,6 +1377,16 @@ def main(argv: list[str] | None = None) -> int:
     output_root = args.output_root or f"outputs/optimization_sweeps/{run_prefix}"
     server_log_dir = args.server_log_dir or f"{output_root}/server_logs"
     report_output = args.report_output or f"{output_root}/optimization_report.md"
+    variants = _load_variants(args.variants)
+    variant_groups = {
+        str(variant["id"]): _variant_comparison_group(variant)
+        for variant in variants
+        if isinstance(variant, dict) and variant.get("id") is not None
+    }
+    selection_contexts = _load_selection_contexts(
+        args.selection_context_json,
+        variant_groups=variant_groups,
+    )
     plan = build_sweep_plan(
         variants_path=args.variants,
         model_filters=args.model,
@@ -1307,6 +1410,7 @@ def main(argv: list[str] | None = None) -> int:
         fake_stream_adaptive_interval_scale=args.fake_stream_adaptive_interval_scale,
         fake_stream_adaptive_interval_max_s=args.fake_stream_adaptive_interval_max_s,
         pre_variant_command=args.pre_variant_command,
+        selection_contexts=selection_contexts,
     )
     if not plan["variants"]:
         print(json.dumps({"error": "no variants selected", "variants": args.variants}, ensure_ascii=False), file=sys.stderr)

@@ -368,6 +368,10 @@ keeps the suite-wide `JETSON_LIGHTWEIGHT_MIN_LFB_BLOCKS=150` primary gate and
 applies `JETSON_LIGHTWEIGHT_QWEN3_FALLBACK_MIN_LFB_BLOCKS=100` only to the
 Qwen3 Instruct fallback lane. Override `JETSON_LIGHTWEIGHT_QWEN3_SELECTOR=0`
 if you need to go back to a fully manual candidate list for a scoped rerun.
+The remote sweep wrapper now also forwards that selector decision into the sweep
+manifest, so `edge_vlm.optimization compare` can show the auto-selected lane in
+its `Selection` column instead of leaving the Qwen3 row as an unlabeled static
+variant id.
 
 Remote Jetson connection settings live in the ignored `.env.jetson` file. The
 remote helpers source it automatically; do not copy SSH hosts, passwords,
