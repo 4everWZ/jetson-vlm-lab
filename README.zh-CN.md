@@ -368,6 +368,8 @@ Qwen3 Instruct fallback 路线应用
 remote sweep wrapper 现在也会把这个 selector 决策带进 sweep manifest，
 所以 `edge_vlm.optimization compare` 的 `Selection` 列能直接标出
 auto-selected 的 Qwen3 路线，而不是只剩一个没有决策来源的静态 variant id。
+comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight gate 和
+观测到的 `Preflight lfb` 并排放出来。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

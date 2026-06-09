@@ -50,6 +50,7 @@ class SweepComparisonRow:
     llama_cpp_ref: str | None
     preflight_before_prepare_lfb: str
     preflight_lfb: str
+    preflight_required_lfb_blocks: int | None
     preflight_prepare_lfb_delta: int | None
     preflight_prepare_mem_available_mb_delta: float | None
     preflight_prepare_buddyinfo_max_order_delta: int | None
@@ -452,6 +453,11 @@ def _format_selection(row: SweepComparisonRow) -> str:
     return row.selection_id
 
 
+def _preflight_required_lfb_blocks(entry: dict[str, Any]) -> int | None:
+    value = entry.get("preflight_required_lfb_blocks")
+    return int(value) if isinstance(value, int) else None
+
+
 def _infer_run_prefix(run_id: str, variant_id: str, fallback: str) -> str:
     suffix = f"-{variant_id}"
     if run_id.endswith(suffix):
@@ -579,6 +585,7 @@ def summarize_sweep_manifest(
                 llama_cpp_ref=str(runtime["llama_cpp_ref"]) if runtime.get("llama_cpp_ref") else None,
                 preflight_before_prepare_lfb=_format_lfb(entry.get("preflight_before_prepare")),
                 preflight_lfb=_format_lfb(entry.get("preflight")),
+                preflight_required_lfb_blocks=_preflight_required_lfb_blocks(entry),
                 preflight_prepare_lfb_delta=_preflight_prepare_lfb_delta(entry),
                 preflight_prepare_mem_available_mb_delta=_preflight_prepare_mem_available_mb_delta(entry),
                 preflight_prepare_buddyinfo_max_order_delta=_preflight_prepare_buddyinfo_max_order_delta(entry),
@@ -659,19 +666,20 @@ def _format_sweep_comparison_report(rows: list[SweepComparisonRow]) -> str:
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower.",
         "",
-        "| Model | Variant | Selection | Run prefix | Runtime | Preflight lfb | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
-        "|---|---|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
+        "| Model | Variant | Selection | Run prefix | Runtime | Preflight lfb | Required lfb | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
+        "|---|---|---|---|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
     ]
     for row in rows:
         failures = ", ".join(row.guard_failures)
         lines.append(
-            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {lfb} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime} | {lfb} | {required_lfb} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 selection=_format_selection(row).replace("|", "\\|"),
                 run_prefix=row.run_prefix,
                 runtime=_format_runtime(row),
                 lfb=row.preflight_lfb,
+                required_lfb="" if row.preflight_required_lfb_blocks is None else row.preflight_required_lfb_blocks,
                 prepare_lfb_delta=_fmt_signed_int(row.preflight_prepare_lfb_delta),
                 prepare_avail_delta=_fmt_signed_float(row.preflight_prepare_mem_available_mb_delta),
                 trials="" if row.trials is None else row.trials,

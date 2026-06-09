@@ -616,6 +616,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("selection_contexts", text)
             self.assertIn("--selection-context-json", text)
             self.assertIn("variant_min_lfb_blocks", text)
+            self.assertIn("Required lfb", text)
         for text in (readme, readme_zh, protocol_doc, strategy_doc):
             self.assertIn("--variant-min-lfb-blocks", text)
 

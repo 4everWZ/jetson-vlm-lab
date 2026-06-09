@@ -210,7 +210,9 @@ lanes can share one baseline. When the sweep manifest carries normalized
 auto-selected fallback row stays tied to its selector decision. The sweep plan
 also carries `variant_min_lfb_blocks` so a fallback-selected row can keep its
 relaxed per-variant gate during execution instead of being re-blocked by the
-suite-wide `--min-lfb-blocks`. Treat this as
+suite-wide `--min-lfb-blocks`. The comparison table exposes that effective gate
+in a `Required lfb` column so reviewers can see immediately whether a row ran
+under a relaxed fallback threshold. Treat this as
 the source table for tracked benchmark docs; do not hand-copy raw metrics from
 multiple JSON files when the comparison command can derive them.
 
