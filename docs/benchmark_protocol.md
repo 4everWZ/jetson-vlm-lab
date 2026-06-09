@@ -693,8 +693,22 @@ return non-zero if any row fails that promotion gate; the default remains `0`
 so diagnostic text ladders can still emit comparison evidence. Low-bit rows are
 runtime-compatibility canaries inside that dedicated text suite; the first
 Hy-MT1.5 1.25bit Jetson smoke failed before server ready on the pinned llama.cpp
-image with `invalid ggml type 42`. The HY-MT1.5 Q4/Q6/Q8 and Youtu-LLM Q8 rows
-are executable defaults but still need Jetson evidence before route use. Override
+image with `invalid ggml type 42`. HY-MT1.5 Q4/Q6/Q8 rows remain executable
+defaults without Jetson evidence. Prepared repeat
+`tencent-text-repeat5-prepctx-20260609T131412Z` now provides strict
+`--min-lfb-blocks 150` evidence for Hy-MT2 Q4/Q6/Q8 and Youtu-LLM 2B Q8 with
+`prepare_context={"max_clocks_enabled": true, "drop_caches_before_variant":
+true}` captured in the sweep plan; compare renders that as
+`Prepare ctx = max_clocks, drop_caches`, and each scoped row reports
+`Required lfb = 150`. In that run the Hy-MT2 rows all passed formal records and
+`Ranking precheck`, but `Promotion precheck` failed on the quality gate only:
+Q4 reported `quality_review_failed 15/20 text_en_reasoning_short`, while Q6
+and Q8 both reported
+`quality_review_failed 10/20 text_en_reasoning_short,text_code_short`.
+Youtu-LLM 2B Q8 passed `20/20` records, `Quality review = yes (20/20)`, and
+`Promotion precheck = yes`; its reported `354.568 s` startup includes the
+first artifact download and should not be treated as cached startup evidence.
+Override
 `JETSON_TENCENT_TEXT_RUN_PREFIX`,
 `JETSON_TENCENT_TEXT_TRIAL_COUNT`, `JETSON_TENCENT_TEXT_MAX_TOKENS`,
 `JETSON_TENCENT_TEXT_MIN_LFB_BLOCKS`, `JETSON_TENCENT_TEXT_WAIT_TIMEOUT_S`,

@@ -430,6 +430,8 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             "not in the default text suite",
             "must be passed through `JETSON_TENCENT_TEXT_VARIANTS`",
             "Hy-MT2 Q4/Q6/Q8 rows only",
+            "Youtu-LLM Q8 rows still need Jetson evidence",
+            "No Jetson evidence yet",
         )
 
         for path in checked_paths:
@@ -485,6 +487,27 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         self.assertIn("invalid ggml type 42", benchmark_doc)
         self.assertIn("offset 203248672", benchmark_doc)
         self.assertIn("server_port_still_open_before_start", protocol_doc)
+
+    def test_tencent_text_prepared_repeat_evidence_is_documented(self):
+        benchmark_doc = Path("docs/benchmarks/jetson_lightweight_models_20260531.md").read_text(
+            encoding="utf-8"
+        )
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(
+            encoding="utf-8"
+        )
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+
+        for text in (benchmark_doc, strategy_doc, protocol_doc):
+            self.assertIn("tencent-text-repeat5-prepctx-20260609T131412Z", text)
+            self.assertIn("max_clocks, drop_caches", text)
+            self.assertIn("Required lfb", text)
+            self.assertIn("Youtu-LLM 2B Q8", text)
+        self.assertIn("24.577", benchmark_doc)
+        self.assertIn("354.568", benchmark_doc)
+        self.assertIn("20/20", benchmark_doc)
+        self.assertIn("quality_review_failed 15/20", benchmark_doc)
+        self.assertIn("quality_review_failed 10/20", benchmark_doc)
+        self.assertIn("Promotion precheck = yes", benchmark_doc)
 
     def test_lightweight_formal_repeat_evidence_is_documented(self):
         benchmark_doc = Path("docs/benchmarks/jetson_lightweight_models_20260531.md").read_text(
