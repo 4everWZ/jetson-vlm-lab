@@ -364,6 +364,18 @@ found `/usr/local/bin/llama-server` inside
 `dustynv/llama_cpp:b5283-r36.4-cu128-24.04`, but the real Qwen3-VL 2B Instruct
 Q4 smoke still exited with `error: invalid argument: --mmproj`, so a generic
 `mmproj` substring is not enough to count as multimodal support.
+When evaluating a runtime image directly, run the same lower-level check before
+the sweep:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.llama_cpp_runtime probe-image \
+  --image ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87 \
+  --output outputs/jetson_inspect/llama_cpp_runtime_probe.json
+```
+
+The probe JSON records Docker metadata, resolved `llama-server` path, exact
+`--mmproj` support, and `multimodal_ready`. Treat `multimodal_ready=false` as a
+runtime-infra block for VLM rows until the image is replaced or rebuilt.
 For the Qwen3-VL 2B Instruct Q4/Q8 pair, use
 `scripts/jetson/select_qwen3_instruct_variant.sh` when you need an explicit
 selection decision rather than a manual variant choice. The selector emits JSON

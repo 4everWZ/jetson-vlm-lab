@@ -117,6 +117,9 @@ For image-capable variants, `--mmproj` support is the mechanical proxy for this
 repo's llama.cpp multimodal load path. If the runtime probe reports that the
 selected image lacks it, the sweep skips the row early with
 `runtime_missing_mmproj_support` instead of attempting server startup.
+When the runtime image is under review outside a sweep, run
+`python -m edge_vlm.llama_cpp_runtime probe-image` first and inspect the JSON
+`multimodal_ready` field; it uses the same exact `--mmproj` rule.
 
 Text-only model variants should set `EDGE_VLM_CASES` to
 `configs/benchmark/text_prompt_cases.jsonl` in their variant environment. Do

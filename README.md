@@ -345,6 +345,18 @@ selection. The Jetson sweep plan now probes `llama-server --help` inside the
 selected image and records whether the runtime exposes `--mmproj`; image-capable
 variants are skipped with `runtime_missing_mmproj_support` when that probe says
 the runtime cannot serve this repo's multimodal path.
+Probe a candidate image directly before running a sweep when the runtime itself
+is under review:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.llama_cpp_runtime probe-image \
+  --image ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87 \
+  --output outputs/jetson_inspect/llama_cpp_runtime_probe.json
+```
+
+The JSON includes Docker image labels, the resolved `llama-server` path, exact
+`--mmproj` support, and `multimodal_ready`. A generic `mmproj` help marker
+without the exact `--mmproj` flag does not count as multimodal-ready evidence.
 
 For the Qwen3-VL 2B Instruct pair, use the selector entrypoint when you want an
 actual Q4-first / Q8 fallback decision instead of manually choosing one smoke

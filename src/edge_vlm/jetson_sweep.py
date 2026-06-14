@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from . import llama_cpp_runtime as _llama_cpp_runtime
 from .config import config_supports_images, load_model_config
 from .jetson_profile import REQUIRED_PHASES, summarize_input_timing_records, write_profile_artifacts
 from .optimization import build_optimization_report
@@ -258,80 +259,7 @@ def _string_env(raw_env: dict[str, Any], base_env: dict[str, str]) -> dict[str, 
 
 
 def _docker_image_metadata(image: str | None) -> dict[str, Any]:
-    if not image:
-        return {
-            "image": None,
-            "inspect_ok": False,
-            "inspect_error": "LLAMA_CPP_DOCKER_IMAGE not set in sweep environment",
-        }
-    try:
-        result = subprocess.run(
-            ["docker", "image", "inspect", image],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError:
-        return {
-            "image": image,
-            "inspect_ok": False,
-            "inspect_error": "docker command not found",
-        }
-    if result.returncode != 0:
-        return {
-            "image": image,
-            "inspect_ok": False,
-            "inspect_error": _text_tail(result.stderr or result.stdout, max_chars=1000),
-        }
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        return {
-            "image": image,
-            "inspect_ok": False,
-            "inspect_error": f"invalid docker inspect JSON: {exc}",
-        }
-    if not isinstance(payload, list) or not payload or not isinstance(payload[0], dict):
-        return {
-            "image": image,
-            "inspect_ok": False,
-            "inspect_error": "docker inspect returned no image object",
-        }
-    image_obj = payload[0]
-    config = image_obj.get("Config")
-    labels = config.get("Labels") if isinstance(config, dict) else None
-    labels = labels if isinstance(labels, dict) else {}
-    return {
-        "image": image,
-        "inspect_ok": True,
-        "image_id": image_obj.get("Id"),
-        "created": image_obj.get("Created"),
-        "repo_digests": image_obj.get("RepoDigests") if isinstance(image_obj.get("RepoDigests"), list) else [],
-        "llama_cpp_ref": labels.get("org.opencontainers.image.version"),
-        "source_revision": labels.get("org.opencontainers.image.revision"),
-        "source": labels.get("org.opencontainers.image.source"),
-        "base_image": labels.get("org.opencontainers.image.base.name"),
-    }
-
-
-def _llama_server_probe_default() -> dict[str, Any]:
-    return {
-        "llama_server_probe_ok": False,
-        "llama_server_probe_error": None,
-        "llama_server_found": None,
-        "llama_server_path": None,
-        "llama_server_help_ok": None,
-        "llama_server_supports_mmproj": None,
-        "llama_server_multimodal_markers": [],
-    }
-
-
-def _parse_probe_bool(value: str | None) -> bool | None:
-    if value == "1":
-        return True
-    if value == "0":
-        return False
-    return None
+    return _llama_cpp_runtime.docker_image_metadata(image)
 
 
 def _docker_image_runtime_probe(
@@ -339,114 +267,7 @@ def _docker_image_runtime_probe(
     llama_server_cmd: str | None = None,
     docker_gpu_args: str | None = None,
 ) -> dict[str, Any]:
-    probe = _llama_server_probe_default()
-    if not image:
-        probe["llama_server_probe_error"] = "LLAMA_CPP_DOCKER_IMAGE not set in sweep environment"
-        return probe
-    probe_script = """
-set -Eeuo pipefail
-server_path=""
-server_cmd=()
-if [[ -n "${EDGE_VLM_LLAMA_SERVER_CMD:-}" ]]; then
-  read -r -a server_cmd <<< "${EDGE_VLM_LLAMA_SERVER_CMD}"
-  if [[ ${#server_cmd[@]} -gt 0 ]]; then
-    server_path="${server_cmd[0]}"
-  fi
-else
-  if command -v llama-server >/dev/null 2>&1; then
-    server_path="$(command -v llama-server)"
-  elif [[ -x /usr/local/bin/llama-server ]]; then
-    server_path="/usr/local/bin/llama-server"
-  elif [[ -x /opt/llama.cpp/build/bin/llama-server ]]; then
-    server_path="/opt/llama.cpp/build/bin/llama-server"
-  elif command -v server >/dev/null 2>&1; then
-    server_path="$(command -v server)"
-  fi
-  if [[ -n "${server_path}" ]]; then
-    server_cmd=("${server_path}")
-  fi
-fi
-
-if [[ -z "${server_path}" ]]; then
-  printf 'llama_server_found=0\\n'
-  printf 'llama_server_path=\\n'
-  printf 'llama_server_help_ok=\\n'
-  printf 'llama_server_supports_mmproj=\\n'
-  printf 'llama_server_multimodal_markers=\\n'
-  exit 0
-fi
-
-printf 'llama_server_found=1\\n'
-printf 'llama_server_path=%s\\n' "${server_path}"
-help_output=""
-if help_output="$("${server_cmd[@]}" --help 2>&1)"; then
-  printf 'llama_server_help_ok=1\\n'
-else
-  printf 'llama_server_help_ok=0\\n'
-  printf 'llama_server_supports_mmproj=\\n'
-  printf 'llama_server_multimodal_markers=\\n'
-  exit 0
-fi
-
-markers=()
-supports_mmproj=0
-if grep -Fq -- "--mmproj" <<< "${help_output}"; then
-  markers+=("--mmproj")
-  supports_mmproj=1
-fi
-if grep -Fq -- "mmproj" <<< "${help_output}"; then
-  markers+=("mmproj")
-fi
-if [[ "${supports_mmproj}" == "1" ]]; then
-  printf 'llama_server_supports_mmproj=1\\n'
-else
-  printf 'llama_server_supports_mmproj=0\\n'
-fi
-printf 'llama_server_multimodal_markers=%s\\n' "$(IFS=,; printf '%s' "${markers[*]}")"
-"""
-    env = None
-    if llama_server_cmd:
-        env = {
-            **os.environ,
-            "EDGE_VLM_LLAMA_SERVER_CMD": str(llama_server_cmd),
-        }
-    gpu_args_text = str(docker_gpu_args or "--runtime nvidia").strip()
-    gpu_args = gpu_args_text.split() if gpu_args_text else []
-    try:
-        result = subprocess.run(
-            ["docker", "run", "--rm", *gpu_args, "--entrypoint", "/bin/bash", image, "-lc", probe_script],
-            check=False,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-    except FileNotFoundError:
-        probe["llama_server_probe_error"] = "docker command not found"
-        return probe
-    if result.returncode != 0:
-        probe["llama_server_probe_error"] = _text_tail(result.stderr or result.stdout, max_chars=1000)
-        return probe
-    parsed: dict[str, str] = {}
-    for line in result.stdout.splitlines():
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        parsed[key.strip()] = value.strip()
-    probe.update(
-        {
-            "llama_server_probe_ok": True,
-            "llama_server_found": _parse_probe_bool(parsed.get("llama_server_found")),
-            "llama_server_path": parsed.get("llama_server_path") or None,
-            "llama_server_help_ok": _parse_probe_bool(parsed.get("llama_server_help_ok")),
-            "llama_server_supports_mmproj": _parse_probe_bool(parsed.get("llama_server_supports_mmproj")),
-            "llama_server_multimodal_markers": [
-                marker
-                for marker in (parsed.get("llama_server_multimodal_markers") or "").split(",")
-                if marker
-            ],
-        }
-    )
-    return probe
+    return _llama_cpp_runtime.docker_image_runtime_probe(image, llama_server_cmd, docker_gpu_args)
 
 
 def _runtime_metadata(
@@ -456,6 +277,7 @@ def _runtime_metadata(
 ) -> dict[str, Any]:
     metadata = _docker_image_metadata(image)
     metadata.update(_docker_image_runtime_probe(image, llama_server_cmd, docker_gpu_args))
+    metadata["multimodal_ready"] = _llama_cpp_runtime.runtime_is_multimodal_ready(metadata)
     return metadata
 
 

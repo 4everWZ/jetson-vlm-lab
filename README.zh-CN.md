@@ -343,6 +343,17 @@ Jetson 脚本默认使用已验证多模态 smoke 的自编译官方 llama.cpp �
 Jetson sweep plan 现在会在镜像里探测 `llama-server --help`，记录 runtime
 是否暴露真正的 `--mmproj`；如果图像输入 variant 对应的 runtime 明确不支持
 这条多模态路径，就会直接以 `runtime_missing_mmproj_support` 跳过。
+如果正在评估 runtime 镜像本身，可以在 sweep 前直接 probe：
+
+```bash
+PYTHONPATH=src python -m edge_vlm.llama_cpp_runtime probe-image \
+  --image ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87 \
+  --output outputs/jetson_inspect/llama_cpp_runtime_probe.json
+```
+
+这个 JSON 会记录 Docker image label、解析到的 `llama-server` 路径、精确
+`--mmproj` 支持，以及 `multimodal_ready`。只有泛泛出现 `mmproj` 字样但没有
+精确 `--mmproj` flag 时，不能算多模态可用证据。
 
 对 Qwen3-VL 2B Instruct 这对 Q4/Q8，可以直接用 selector 入口做真正的
 Q4-first / Q8 fallback 决策，而不是手工挑 smoke variant：

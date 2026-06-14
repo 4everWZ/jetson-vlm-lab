@@ -52,6 +52,19 @@ unusual. The Jetson sweep plan also probes `llama-server --help` inside the
 selected image and records whether the runtime exposes `--mmproj`; image-capable
 variants are skipped with `runtime_missing_mmproj_support` when the runtime
 cannot satisfy this repo's multimodal path.
+When the runtime image itself is the question, probe it directly on Jetson
+before scheduling a sweep:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.llama_cpp_runtime probe-image \
+  --image ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87 \
+  --output outputs/jetson_inspect/llama_cpp_runtime_probe.json
+```
+
+The output includes Docker labels, the resolved `llama-server` path, exact
+`--mmproj` support, and `multimodal_ready`. A generic `mmproj` marker without
+the exact flag should be treated the same as `runtime_missing_mmproj_support`
+for VLM rows.
 For the Qwen3-VL 2B Instruct pair, `scripts/jetson/select_qwen3_instruct_variant.sh`
 wraps the current runtime probe plus preflight gate into one Q4-first / Q8
 fallback decision and writes the result as JSON. The remote lightweight suite

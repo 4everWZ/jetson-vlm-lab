@@ -466,6 +466,11 @@ Build rules:
   whether `llama-server --help` exposes the exact `--mmproj` flag; skip rows with
   `runtime_missing_mmproj_support` rather than spending download/startup time on
   an image that cannot satisfy this repo's multimodal path.
+- Use `python -m edge_vlm.llama_cpp_runtime probe-image` when the runtime image
+  itself is being evaluated outside a sweep. Its JSON records Docker labels,
+  resolved `llama-server`, exact `--mmproj` support, and `multimodal_ready`, so
+  dusty-nv versus self-built official llama.cpp claims can be checked before
+  model artifact work starts.
 - Record OCI labels for source revision, llama.cpp ref, build date, and base
   image.
 - Record the copied file list and `llama-server --version` or help excerpt in
