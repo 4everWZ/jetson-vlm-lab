@@ -237,6 +237,9 @@ Required per-run profile data:
   GGUF launchers through `EDGE_VLM_LAUNCH_PHASE_LOG`. Runtime-internal `-hf`
   downloads are labeled not separated until that path is replaced or parsed from
   runtime logs.
+- Host-side GGUF model and mmproj artifacts validated with a GGUF magic-byte
+  check before `llama-server` startup, so corrupt cached files fail as artifact
+  problems instead of polluting runtime startup evidence.
 - Warmup policy recorded from variant args. `--no-warmup` rows are marked
   disabled; warmup-on rows are marked as included in server startup until
   runtime logs or hooks can split the internal llama.cpp warmup duration.

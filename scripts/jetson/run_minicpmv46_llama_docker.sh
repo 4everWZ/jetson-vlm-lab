@@ -6,6 +6,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/resolve_llama_cpp_image.sh"
 # shellcheck source=phase_logging.sh
 source "${script_dir}/phase_logging.sh"
+# shellcheck source=gguf_artifacts.sh
+source "${script_dir}/gguf_artifacts.sh"
 # shellcheck source=llama_cpp_runtime_gate.sh
 source "${script_dir}/llama_cpp_runtime_gate.sh"
 
@@ -72,9 +74,17 @@ if [[ ! -f "${host_model_path}" ]]; then
   echo "Model GGUF not found: ${host_model_path}" >&2
   exit 2
 fi
+if ! require_gguf_artifact "${host_model_path}" "model"; then
+  write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "invalid_model"
+  exit 2
+fi
 if [[ ! -f "${host_mmproj_path}" ]]; then
   write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "missing_mmproj"
   echo "MiniCPM mmproj GGUF not found: ${host_mmproj_path}" >&2
+  exit 2
+fi
+if ! require_gguf_artifact "${host_mmproj_path}" "mmproj"; then
+  write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "invalid_mmproj"
   exit 2
 fi
 write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "cached"

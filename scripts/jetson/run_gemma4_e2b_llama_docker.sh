@@ -6,6 +6,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/resolve_llama_cpp_image.sh"
 # shellcheck source=phase_logging.sh
 source "${script_dir}/phase_logging.sh"
+# shellcheck source=gguf_artifacts.sh
+source "${script_dir}/gguf_artifacts.sh"
 # shellcheck source=llama_cpp_runtime_gate.sh
 source "${script_dir}/llama_cpp_runtime_gate.sh"
 
@@ -91,9 +93,17 @@ if [[ -n "${model_path}" || -n "${mmproj_path}" ]]; then
     echo "MODEL_PATH not found on host: ${model_path}" >&2
     exit 2
   fi
+  if ! require_gguf_artifact "${model_path}" "model"; then
+    write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "invalid_model"
+    exit 2
+  fi
   if [[ ! -f "${mmproj_path}" ]]; then
     write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "missing_mmproj"
     echo "MMPROJ_PATH not found on host: ${mmproj_path}" >&2
+    exit 2
+  fi
+  if ! require_gguf_artifact "${mmproj_path}" "mmproj"; then
+    write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "invalid_mmproj"
     exit 2
   fi
   write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "cached"
