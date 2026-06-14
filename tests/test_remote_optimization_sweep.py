@@ -1,5 +1,6 @@
 """run_remote_optimization_sweep.sh contract tests."""
 
+import os
 import subprocess
 import tempfile
 import unittest
@@ -13,6 +14,108 @@ from tests._remote_execution_helpers import (
 
 
 class RemoteOptimizationSweepContractsTest(unittest.TestCase):
+    def test_remote_optimization_sweep_can_fail_before_ssh_when_access_preflight_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            nc_log = tmp_path / "nc.log"
+            fake_bin = tmp_path / "bin"
+            fake_bin.mkdir()
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_remote_arg_logger(fake_remote)
+            write_executable(
+                fake_bin / "nc",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'ARGS=%s\\n' \"$*\" > \"${FAKE_NC_LOG:?}\"",
+                    "printf 'nc: connect to 100.95.31.18 port 22 timed out\\n' >&2",
+                    "exit 1",
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--run-prefix",
+                    "unit-access-preflight",
+                    "--variant",
+                    "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_ACCESS_PREFLIGHT="1",
+                    JETSON_SSH_HOST="100.95.31.18",
+                    JETSON_SSH_USER="weizheng",
+                    PATH=f"{fake_bin}:{os.environ['PATH']}",
+                    FAKE_NC_LOG=str(nc_log),
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
+            )
+            nc_log_exists = nc_log.exists()
+            nc_log_text = nc_log.read_text(encoding="utf-8") if nc_log_exists else ""
+            remote_log_exists = log_file.exists()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue(nc_log_exists, "access preflight did not run nc")
+        self.assertIn("tcp_probe=tcp_connect_failed", result.stderr)
+        self.assertIn("ARGS=-vz -w 5 100.95.31.18 22", nc_log_text)
+        self.assertFalse(remote_log_exists)
+
+    def test_remote_optimization_sweep_runs_after_successful_access_preflight(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            nc_log = tmp_path / "nc.log"
+            fake_bin = tmp_path / "bin"
+            fake_bin.mkdir()
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_remote_arg_logger(fake_remote)
+            write_executable(
+                fake_bin / "nc",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'ARGS=%s\\n' \"$*\" > \"${FAKE_NC_LOG:?}\"",
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--dry-run",
+                    "--variant",
+                    "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_ACCESS_PREFLIGHT="1",
+                    JETSON_SSH_HOST="100.95.31.18",
+                    JETSON_SSH_USER="weizheng",
+                    PATH=f"{fake_bin}:{os.environ['PATH']}",
+                    FAKE_NC_LOG=str(nc_log),
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
+            )
+            nc_log_exists = nc_log.exists()
+            nc_log_text = nc_log.read_text(encoding="utf-8") if nc_log_exists else ""
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(nc_log_exists, "access preflight did not run nc")
+        self.assertIn("ARGS=-vz -w 5 100.95.31.18 22", nc_log_text)
+        self.assertEqual(log_text.count("CALL\n"), 1)
+        self.assertIn("ARG=bash\nARG=scripts/jetson/run_optimization_sweep.sh\n", log_text)
+
     def test_remote_optimization_sweep_syncs_branch_and_forwards_pinned_sweep_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
