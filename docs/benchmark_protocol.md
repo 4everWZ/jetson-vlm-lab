@@ -545,9 +545,12 @@ PYTHONPATH=src python -m edge_vlm.optimization export-routes \
   --output outputs/optimization_sweeps/<bundle-prefix>/leq2b.routes.json
 ```
 
-The route artifact groups candidates by lane, preserves the bundle's selected
-order, marks the first candidate in each lane as `primary`, and leaves empty
-lanes explicit with `primary: null`. It does not rerank rows or change the
+The route artifact groups candidates by lane and applies the
+`q4_first_q8_fallback` export policy inside each `comparison_group`. If Q4 and
+Q8 rows for the same group both pass the selected gate, the Q4 row is promoted
+to that group's route primary and the Q8 row is recorded in `fallbacks` /
+`fallback_groups`. Cross-group order still follows the bundle's selected order,
+and empty lanes stay explicit with `primary: null`. This does not change the
 Ranking precheck / Promotion precheck semantics.
 
 For route-specific output review, run the benchmark JSONL through the quality
