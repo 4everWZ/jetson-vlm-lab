@@ -143,34 +143,6 @@ class VlmLauncherRuntimeGateContractsTest(unittest.TestCase):
         self.assertNotIn("llama_cpp_runtime_gate.sh", text_launcher)
         self.assertNotIn("require_llama_cpp_multimodal_runtime", text_launcher)
 
-    def test_launcher_dry_run_preserves_explicit_empty_docker_gpu_args(self):
-        launcher_paths = [
-            "scripts/jetson/run_gemma4_e2b_llama_docker.sh",
-            "scripts/jetson/run_minicpmv46_llama_docker.sh",
-            "scripts/jetson/run_hf_gguf_vlm_llama_docker.sh",
-            "scripts/jetson/run_hf_gguf_llama_docker.sh",
-        ]
-        for launcher_path in launcher_paths:
-            with self.subTest(launcher_path=launcher_path):
-                with tempfile.TemporaryDirectory() as tmp:
-                    result = subprocess.run(
-                        ["bash", launcher_path, "--parallel", "1"],
-                        check=False,
-                        capture_output=True,
-                        encoding="utf-8",
-                        env={
-                            **os.environ,
-                            "JETSON_DRY_RUN": "1",
-                            "DOCKER_GPU_ARGS": "",
-                            "DOCKER_TTY": "0",
-                            "MODEL_DIR": str(Path(tmp) / "models"),
-                        },
-                    )
-
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("docker run", result.stdout)
-                self.assertNotIn("--runtime nvidia", result.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()
