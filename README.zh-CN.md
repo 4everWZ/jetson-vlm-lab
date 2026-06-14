@@ -496,6 +496,9 @@ sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又�
 
 Jetson 远端连接参数在被 Git 忽略的 `.env.jetson` 中。远端 helper 会自动
 读取它；不要把 SSH host、密码、token 或私有路径写进 tracked 文档。
+对于 Tailscale 风格的 `100.x` 目标，
+`scripts/jetson/check_remote_access.sh` 还会输出 `tailnet_probe=...`，
+用来区分本机 tailnet CLI/status 问题和 SSH 认证问题。
 
 用 `JETSON_DRY_RUN=1` 可以只打印 Docker 命令，不要求当前机器有 Docker 或 Jetson 硬件：
 

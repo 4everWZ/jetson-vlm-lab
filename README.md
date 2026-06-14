@@ -504,6 +504,9 @@ stricter suite-wide `--min-lfb-blocks`.
 Remote Jetson connection settings live in the ignored `.env.jetson` file. The
 remote helpers source it automatically; do not copy SSH hosts, passwords,
 tokens, or private paths into tracked docs.
+For Tailscale-style `100.x` targets, `scripts/jetson/check_remote_access.sh`
+also prints `tailnet_probe=...` to distinguish local tailnet CLI/status issues
+from SSH authentication failures.
 
 Use `JETSON_DRY_RUN=1` to print the Docker command without requiring Docker or Jetson hardware:
 

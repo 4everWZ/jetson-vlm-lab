@@ -115,6 +115,74 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
         self.assertNotIn("secret-password", nc_log)
         self.assertNotIn("secret-password", ping_log)
 
+    def test_jetson_remote_access_precheck_reports_tailnet_status_for_100x_hosts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            env_file = tmp_path / ".env.jetson"
+            fake_bin = tmp_path / "bin"
+            fake_bin.mkdir()
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=100.95.31.18",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            write_executable(
+                fake_bin / "ping",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "exit 1",
+                ],
+            )
+            write_executable(
+                fake_bin / "tailscale",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'TAILSCALE_ARGS=%s\\n' \"$*\" > \"${FAKE_TAILSCALE_LOG:?}\"",
+                    "printf 'backend state: NeedsLogin\\n' >&2",
+                    "exit 1",
+                ],
+            )
+            write_executable(
+                fake_bin / "nc",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'nc: connect to 100.95.31.18 port 22 timed out\\n' >&2",
+                    "exit 1",
+                ],
+            )
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/check_remote_access.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "FAKE_TAILSCALE_LOG": str(tmp_path / "tailscale.log"),
+                },
+            )
+            tailscale_log = _read_text_if_exists(tmp_path / "tailscale.log")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("icmp_probe=failed", result.stdout)
+        self.assertIn("tailnet_probe=tailscale_status_failed", result.stdout)
+        self.assertIn("tcp_probe=tcp_connect_failed", result.stderr)
+        self.assertIn("TAILSCALE_ARGS=status", tailscale_log)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+        self.assertNotIn("secret-password", tailscale_log)
+
     def test_jetson_remote_access_precheck_reports_tcp_ok_even_when_icmp_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
