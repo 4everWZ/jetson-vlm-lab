@@ -50,6 +50,7 @@ class SweepComparisonRow:
     selection_id: str
     selection_reason: str
     selection_context: dict[str, Any]
+    selection_memory_diagnostics: dict[str, Any]
     model: str
     comparison_group: str
     model_family: str
@@ -322,6 +323,21 @@ def _fmt_signed_float(value: float | None) -> str:
     return "" if value is None else f"{value:+.3f}"
 
 
+def _fmt_bytes(value: int | None) -> str:
+    if value is None:
+        return ""
+    if value == 0:
+        return "0B"
+    units = ("B", "KiB", "MiB", "GiB")
+    amount = float(value)
+    unit = units[0]
+    for unit in units:
+        if abs(amount) < 1024.0 or unit == units[-1]:
+            break
+        amount /= 1024.0
+    return f"{amount:.1f}{unit}" if unit != "B" else f"{int(amount)}B"
+
+
 def _percent_delta(value: float | None, baseline: float | None) -> float | None:
     if value is None or baseline in (None, 0):
         return None
@@ -505,6 +521,23 @@ def _selection_contexts(plan: dict[str, Any]) -> list[dict[str, Any]]:
     return [context for context in contexts if isinstance(context, dict)]
 
 
+def _selection_context_candidate_variant_ids(context: dict[str, Any]) -> set[str]:
+    ids = {
+        str(context.get(key)).strip()
+        for key in ("selected_variant_id", "primary_variant_id", "fallback_variant_id")
+        if isinstance(context.get(key), str) and str(context.get(key)).strip()
+    }
+    candidates = context.get("candidates")
+    if isinstance(candidates, list):
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            variant_id = candidate.get("variant_id")
+            if isinstance(variant_id, str) and variant_id.strip():
+                ids.add(variant_id.strip())
+    return ids
+
+
 def _selection_context_for_variant(
     plan: dict[str, Any],
     *,
@@ -513,12 +546,28 @@ def _selection_context_for_variant(
 ) -> dict[str, Any]:
     for context in _selection_contexts(plan):
         selected_variant_id = context.get("selected_variant_id")
-        if not isinstance(selected_variant_id, str) or selected_variant_id != variant_id:
-            continue
         group = context.get("comparison_group")
         if isinstance(group, str) and group.strip() and group.strip() != comparison_group:
             continue
-        return context
+        if isinstance(selected_variant_id, str) and selected_variant_id == variant_id:
+            return context
+        if isinstance(selected_variant_id, str):
+            continue
+        if variant_id in _selection_context_candidate_variant_ids(context):
+            return context
+    return {}
+
+
+def _selection_memory_diagnostics(selection_context: dict[str, Any]) -> dict[str, Any]:
+    for source, key in (
+        ("sudo", "sudo_memory_diagnostics_summary"),
+        ("regular", "memory_diagnostics_summary"),
+    ):
+        summary = selection_context.get(key)
+        if isinstance(summary, dict) and summary:
+            diagnostics = dict(summary)
+            diagnostics["source"] = source
+            return diagnostics
     return {}
 
 
@@ -569,6 +618,55 @@ def _format_selection(row: SweepComparisonRow) -> str:
     if row.selection_reason:
         return f"{row.selection_id} ({row.selection_reason})"
     return row.selection_id
+
+
+def _format_selection_memory_diagnostics(row: SweepComparisonRow) -> str:
+    diagnostics = row.selection_memory_diagnostics
+    if not diagnostics:
+        return ""
+    parts: list[str] = [str(diagnostics.get("source") or "diagnostics")]
+    lfb_blocks = diagnostics.get("tegrastats_lfb_free_blocks")
+    if isinstance(lfb_blocks, int):
+        parts.append(f"lfb={lfb_blocks}")
+    cma_free_kb = diagnostics.get("cma_free_kb")
+    if isinstance(cma_free_kb, int):
+        parts.append(f"cma={cma_free_kb / 1024.0:.1f}MiB")
+    statuses = diagnostics.get("debugfs_statuses")
+    if isinstance(statuses, dict):
+        debugfs_parts: list[str] = []
+        dma_status = statuses.get("dma_buf_bufinfo")
+        if isinstance(dma_status, str) and dma_status:
+            debugfs_parts.append(f"dma_buf:{dma_status}")
+        nvmap_statuses = [
+            statuses.get("nvmap_iovmm_clients"),
+            statuses.get("nvmap_iovmm_allocations"),
+        ]
+        nvmap_status_texts = [status for status in nvmap_statuses if isinstance(status, str) and status]
+        if nvmap_status_texts:
+            if len(set(nvmap_status_texts)) == 1:
+                debugfs_parts.append(f"nvmap:{nvmap_status_texts[0]}")
+            else:
+                debugfs_parts.append("nvmap:" + "/".join(nvmap_status_texts))
+        if debugfs_parts:
+            parts.append("debugfs=" + ",".join(debugfs_parts))
+    dma_bytes = diagnostics.get("debugfs_dma_buf_total_bytes")
+    if isinstance(dma_bytes, int):
+        parts.append(f"dma={_fmt_bytes(dma_bytes)}")
+    nvmap_client_bytes = diagnostics.get("debugfs_nvmap_clients_total_bytes")
+    nvmap_allocation_bytes = diagnostics.get("debugfs_nvmap_allocations_total_bytes")
+    nvmap_values = [
+        value for value in (nvmap_client_bytes, nvmap_allocation_bytes) if isinstance(value, int)
+    ]
+    if nvmap_values:
+        if len(set(nvmap_values)) == 1:
+            parts.append(f"nvmap={_fmt_bytes(nvmap_values[0])}")
+        elif len(nvmap_values) == 2:
+            parts.append(
+                f"nvmap=clients {_fmt_bytes(nvmap_values[0])}/alloc {_fmt_bytes(nvmap_values[1])}"
+            )
+        else:
+            parts.append(f"nvmap={_fmt_bytes(nvmap_values[0])}")
+    return " ".join(parts)
 
 
 def _preflight_required_lfb_blocks(entry: dict[str, Any]) -> int | None:
@@ -890,6 +988,7 @@ def summarize_sweep_manifest(
                     else ""
                 ),
                 selection_context=dict(selection_context),
+                selection_memory_diagnostics=_selection_memory_diagnostics(selection_context),
                 model=summary.model if summary is not None else str(entry.get("model") or "unknown"),
                 comparison_group=_comparison_group(
                     variant_plan,
@@ -1208,15 +1307,24 @@ def _format_sweep_comparison_report(
         if artifact_phase_enabled
         else ""
     )
+    selection_memory_enabled = any(row.selection_memory_diagnostics for row in rows)
+    selection_memory_column = " | Selector memory" if selection_memory_enabled else ""
+    selection_memory_separator = " |---" if selection_memory_enabled else ""
+    selection_memory_note = (
+        " When selector diagnostics summaries are present, compare adds a `Selector memory` column that surfaces LFB/CMA and debugfs totals from the sudo sidecar when available."
+        if selection_memory_enabled
+        else ""
+    )
     lines = [
         "# Jetson Sweep Comparison Report",
         "",
         "Baseline rows use `0.00%` deltas. Positive throughput deltas are faster; positive startup or fake-stream latency deltas are slower."
         + startup_note
         + ranking_note,
-        promotion_note + quality_review_note + artifact_phase_note,
+        promotion_note + quality_review_note + artifact_phase_note + selection_memory_note,
         "",
         "| Model | Variant | Selection | Run prefix | Runtime"
+        + selection_memory_column
         + artifact_phase_column
         + " | Prepare ctx | Preflight lfb | Required lfb"
         + startup_column
@@ -1225,6 +1333,7 @@ def _format_sweep_comparison_report(
         + quality_review_column
         + " | Prepare lfb delta | Prepare avail MB delta | Trials | Guard | Success | Fake success | Startup s | Text tok/s | Image tok/s | Text latency s | Image latency s | Fake latency s | Max temp C | Avg power W | Avg GR3D % | Avg EMC % | Min lfb blocks | Bottlenecks | Text tok/s delta | Image tok/s delta | Startup delta | Fake latency delta |",
         "|---|---|---|---|---"
+        + selection_memory_separator
         + artifact_phase_separator
         + "|---|---:|---:"
         + startup_separator
@@ -1255,13 +1364,18 @@ def _format_sweep_comparison_report(
         if startup_require_cached_artifacts:
             startup_precheck_text = _format_startup_precheck(row).replace("|", "\\|")
             startup_precheck = f" | {startup_precheck_text}"
+        selection_memory = ""
+        if selection_memory_enabled:
+            selection_memory_text = _format_selection_memory_diagnostics(row).replace("|", "\\|")
+            selection_memory = f" | {selection_memory_text}"
         lines.append(
-            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime}{artifact_phase} | {prepare_context} | {lfb} | {required_lfb}{startup_precheck}{ranking_precheck}{promotion_precheck}{quality_review} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
+            "| {model} | `{variant}` | {selection} | {run_prefix} | {runtime}{selection_memory}{artifact_phase} | {prepare_context} | {lfb} | {required_lfb}{startup_precheck}{ranking_precheck}{promotion_precheck}{quality_review} | {prepare_lfb_delta} | {prepare_avail_delta} | {trials} | {guard} | {success} | {fake_success} | {startup} | {text_tps} | {image_tps} | {text_latency} | {image_latency} | {fake_latency} | {max_temp} | {avg_power} | {avg_gr3d} | {avg_emc} | {min_lfb} | {bottlenecks} | {text_delta} | {image_delta} | {startup_delta} | {fake_delta} |".format(
                 model=row.model,
                 variant=row.variant_id,
                 selection=_format_selection(row).replace("|", "\\|"),
                 run_prefix=row.run_prefix,
                 runtime=_format_runtime(row),
+                selection_memory=selection_memory,
                 artifact_phase=artifact_phase,
                 prepare_context=row.prepare_context_summary.replace("|", "\\|"),
                 lfb=row.preflight_lfb,
@@ -1327,6 +1441,7 @@ def _comparison_row_artifact(row: SweepComparisonRow) -> dict[str, Any]:
             "reason": row.selection_reason,
         },
         "selection_context": row.selection_context,
+        "selection_memory_diagnostics": row.selection_memory_diagnostics,
         "model": row.model,
         "comparison_group": row.comparison_group,
         "model_config": {

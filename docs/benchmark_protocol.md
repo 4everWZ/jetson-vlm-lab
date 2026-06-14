@@ -535,7 +535,12 @@ preflight deltas such as `lfb` or `MemAvailable` changes after cache-drop plus
 so Q4/Q8 fallback lanes can be compared directly. When the sweep manifest also
 includes `selection_contexts`, the report adds a `Selection` column so
 auto-selected lanes remain visible in promotion evidence instead of reading like
-anonymous static variant ids. The sweep manifest also carries any
+anonymous static variant ids. If those contexts include memory diagnostics
+summaries, the report also adds `Selector memory` and the JSON export includes
+`selection_memory_diagnostics`, preferring sudo summaries over regular sidecars.
+When a selector chooses no variant, compare can still attach the context to rows
+whose variant id appears in that selector's primary, fallback, or candidate list
+so blocker evidence remains visible. The sweep manifest also carries any
 `variant_min_lfb_blocks` overrides used to keep a selected fallback lane
 aligned with its selector gate, and the comparison table surfaces that gate in
 its `Required lfb` column next to the observed `Preflight lfb`. Compare first

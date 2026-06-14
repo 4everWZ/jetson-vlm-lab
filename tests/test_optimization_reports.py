@@ -1148,6 +1148,25 @@ class OptimizationReportContractsTest(unittest.TestCase):
                 "selected_reason": "primary_usable",
                 "primary_variant_id": variant_id,
                 "fallback_variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                "memory_diagnostics_summary": {
+                    "debugfs_statuses": {"dma_buf_bufinfo": "unreadable"},
+                    "debugfs_dma_buf_total_bytes": None,
+                    "debugfs_nvmap_clients_total_bytes": None,
+                    "tegrastats_lfb_free_blocks": 69,
+                    "cma_free_kb": 221296,
+                },
+                "sudo_memory_diagnostics_summary": {
+                    "debugfs_statuses": {
+                        "nvmap_iovmm_clients": "readable",
+                        "nvmap_iovmm_allocations": "readable",
+                        "dma_buf_bufinfo": "readable",
+                    },
+                    "debugfs_dma_buf_total_bytes": 0,
+                    "debugfs_nvmap_clients_total_bytes": 0,
+                    "debugfs_nvmap_allocations_total_bytes": 0,
+                    "tegrastats_lfb_free_blocks": 69,
+                    "cma_free_kb": 221296,
+                },
                 "candidates": [
                     {
                         "variant_id": variant_id,
@@ -1222,11 +1241,157 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(rows[0].selection_reason, "primary_usable")
         self.assertEqual(rows[0].selection_context["candidates"], selection_context["candidates"])
         self.assertEqual(eligibility["rows"][0]["selection_context"]["candidates"], selection_context["candidates"])
+        self.assertEqual(rows[0].selection_memory_diagnostics["source"], "sudo")
+        self.assertEqual(rows[0].selection_memory_diagnostics["debugfs_dma_buf_total_bytes"], 0)
+        self.assertEqual(rows[0].selection_memory_diagnostics["debugfs_nvmap_clients_total_bytes"], 0)
+        self.assertEqual(rows[0].selection_memory_diagnostics["tegrastats_lfb_free_blocks"], 69)
+        self.assertEqual(
+            rows[0].selection_memory_diagnostics["debugfs_statuses"]["dma_buf_bufinfo"],
+            "readable",
+        )
+        self.assertEqual(
+            eligibility["rows"][0]["selection_memory_diagnostics"]["debugfs_nvmap_clients_total_bytes"],
+            0,
+        )
         self.assertEqual(rows[0].preflight_required_lfb_blocks, 100)
         self.assertIn("Selection", report_text)
+        self.assertIn("Selector memory", report_text)
+        self.assertIn("sudo lfb=69 cma=216.1MiB debugfs=dma_buf:readable,nvmap:readable dma=0B nvmap=0B", report_text)
         self.assertIn("Required lfb", report_text)
         self.assertIn("qwen3-vl-2b-instruct-auto (primary_usable)", report_text)
-        self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` | qwen3-vl-2b-instruct-auto (primary_usable) | qwen-auto |  |  | 121x4MB | 100 |", report_text)
+        self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` | qwen3-vl-2b-instruct-auto (primary_usable) | qwen-auto |  | sudo lfb=69", report_text)
+
+    def test_optimization_comparison_report_attaches_blocked_selector_context_to_candidate_rows(self):
+        from edge_vlm.optimization import build_sweep_comparison_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_root = tmp_path / "outputs" / "optimization_sweeps" / "qwen-blocked"
+            benchmark_dir = output_root / "benchmarks"
+            fake_dir = output_root / "fake_stream"
+            benchmark_dir.mkdir(parents=True)
+            fake_dir.mkdir(parents=True)
+            report = tmp_path / "comparison.md"
+            eligibility_output = tmp_path / "qwen-blocked.eligibility.json"
+            run_prefix = "qwen-blocked"
+            variant_id = "qwen3-vl-2b-instruct-q4-smoke"
+            run_id = f"{run_prefix}-{variant_id}"
+            benchmark_jsonl = benchmark_dir / f"{run_id}.jsonl"
+            fake_jsonl = fake_dir / f"{run_id}.jsonl"
+            benchmark_manifest = benchmark_dir / f"{run_id}.manifest.json"
+            benchmark_jsonl.write_text(
+                json.dumps(
+                    {
+                        "model": "qwen3-vl-2b-instruct-q4",
+                        "run_id": run_id,
+                        "prompt_case_id": "text_case",
+                        "input_type": "text",
+                        "success": True,
+                        "latency_s": 2.0,
+                        "tokens": 32,
+                        "tokens_per_sec": 16.0,
+                        "output_excerpt": "ok",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            fake_jsonl.write_text(
+                json.dumps({"frame_id": "frame_001.png", "success": True, "latency_s": 1.0})
+                + "\n",
+                encoding="utf-8",
+            )
+            benchmark_manifest.write_text(
+                json.dumps({"run_id": run_id, "benchmark": {"trial_count": 1}, "cases_written": 1, "successful": 1, "failed": 0})
+                + "\n",
+                encoding="utf-8",
+            )
+            selection_context = {
+                "selection_id": "qwen3-vl-2b-instruct-auto",
+                "comparison_group": "qwen3-vl-2b-instruct",
+                "selected_variant_id": None,
+                "selected_reason": "no_usable_variant",
+                "primary_variant_id": variant_id,
+                "fallback_variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                "sudo_memory_diagnostics_summary": {
+                    "debugfs_statuses": {"dma_buf_bufinfo": "readable"},
+                    "debugfs_dma_buf_total_bytes": 0,
+                    "debugfs_nvmap_clients_total_bytes": 0,
+                    "tegrastats_lfb_free_blocks": 69,
+                    "cma_free_kb": 221296,
+                },
+                "candidates": [
+                    {
+                        "variant_id": variant_id,
+                        "usable": False,
+                        "chosen": False,
+                        "block_reasons": ["lfb_free_blocks 69 < required 150"],
+                    },
+                    {
+                        "variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                        "usable": False,
+                        "chosen": False,
+                        "block_reasons": ["lfb_free_blocks 69 < required 100"],
+                    },
+                ],
+            }
+            manifest = output_root / "qwen-blocked.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "plan": {
+                            "run_prefix": run_prefix,
+                            "selection_contexts": [selection_context],
+                            "variants": [
+                                {
+                                    "variant": {
+                                        "id": variant_id,
+                                        "comparison_group": "qwen3-vl-2b-instruct",
+                                    },
+                                    "paths": {
+                                        "benchmark_jsonl": str(benchmark_jsonl),
+                                        "manifest_json": str(benchmark_manifest),
+                                        "fake_stream_jsonl": str(fake_jsonl),
+                                    },
+                                }
+                            ],
+                        },
+                        "result": {
+                            "results": [
+                                {
+                                    "run_id": run_id,
+                                    "variant_id": variant_id,
+                                    "preflight": {"tegrastats": {"lfb": {"free_blocks": 69, "block_mb": 4}}},
+                                    "preflight_required_lfb_blocks": 150,
+                                    "preflight_passed": False,
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = build_sweep_comparison_report(
+                manifest_paths=[manifest],
+                output_path=report,
+                baseline_variant_ids=[variant_id],
+                eligibility_output_path=eligibility_output,
+            )
+            report_text = report.read_text(encoding="utf-8")
+            eligibility = json.loads(eligibility_output.read_text(encoding="utf-8"))
+
+        self.assertEqual(rows[0].selection_id, "qwen3-vl-2b-instruct-auto")
+        self.assertEqual(rows[0].selection_reason, "no_usable_variant")
+        self.assertEqual(rows[0].selection_context["candidates"], selection_context["candidates"])
+        self.assertEqual(rows[0].selection_memory_diagnostics["source"], "sudo")
+        self.assertIn("qwen3-vl-2b-instruct-auto (no_usable_variant)", report_text)
+        self.assertIn("sudo lfb=69 cma=216.1MiB", report_text)
+        self.assertEqual(
+            eligibility["rows"][0]["selection_memory_diagnostics"]["debugfs_dma_buf_total_bytes"],
+            0,
+        )
 
     def test_optimization_comparison_report_can_mark_ranking_precheck_failures(self):
         from edge_vlm.optimization import build_sweep_comparison_report

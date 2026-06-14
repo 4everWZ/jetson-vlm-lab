@@ -442,6 +442,11 @@ as fallback keeps the Q4 blocker evidence in the sweep plan and compare
 eligibility JSON. They also preserve the regular and sudo memory diagnostics
 paths and compact summaries. Launcher environment blocks are intentionally not
 copied into that context.
+When diagnostics summaries are present, compare adds a `Selector memory` column
+and exports a flat `selection_memory_diagnostics` object so LFB/CMA and readable
+debugfs totals are visible without opening nested sidecars. If the selector
+chooses no variant, compare still attaches that context to rows whose variant id
+appears in the selector's primary, fallback, or candidate list.
 When you also pass `--ranking-min-lfb-blocks <strict-gate>`, the report adds a
 `Ranking precheck` column so relaxed fallback rows remain visible without being
 mistaken for promotable strict-gate evidence.

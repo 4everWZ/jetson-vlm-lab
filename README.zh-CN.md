@@ -430,6 +430,10 @@ selector JSON 的 `sudo_memory_diagnostics_summary`，让后续 `selection_conte
 sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住。它也会
 保留常规和 sudo memory diagnostics 的路径与 compact summary。launcher 环境块
 不会被复制进这个 context，避免把环境配置或潜在 secret 混进下游 artifact。
+当 diagnostics summary 存在时，compare 会增加 `Selector memory` 列，并导出
+扁平的 `selection_memory_diagnostics` 对象，这样不用打开嵌套 sidecar 也能看到
+LFB/CMA 和可读 debugfs total。如果 selector 没有选中任何 variant，compare 仍会
+把这个 context 挂到 primary、fallback 或 candidate 列表里的对应 row 上。
 再配合
 `--ranking-min-lfb-blocks <strict-gate>` 时，report 还会增加
 `Ranking precheck` 列，这样 relaxed fallback row 会保留在报告里，但不会被误读成
