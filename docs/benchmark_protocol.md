@@ -318,6 +318,20 @@ classifies the first SSH boundary as `ssh_connect_timeout`,
 probe is a connectivity preflight, not benchmark evidence and not a model
 runtime success.
 
+For the standard no-start remote verification path, run:
+
+```bash
+scripts/jetson/run_remote_preflight_smoke.sh
+```
+
+The smoke launcher runs `check_remote_access.sh`, `remote_probe.sh`, and then
+`run_remote_optimization_sweep.sh --dry-run` with advisory
+`JETSON_REMOTE_GGUF_PREFLIGHT=1`. Override
+`JETSON_REMOTE_SMOKE_RUN_PREFIX` or `JETSON_REMOTE_SMOKE_VARIANT` to change the
+dry-run sidecar location or model lane. Set
+`JETSON_REMOTE_SMOKE_SKIP_ACCESS_CHECK=1` only for SSH proxy setups where a
+direct TCP check is intentionally not representative.
+
 Run a command on the Jetson worktree:
 
 ```bash
