@@ -397,7 +397,7 @@ fallback 使用同一个严格 gate，除非明确在做 scoped fallback triage�
 `--memory-diagnostics-output <path>`。selector JSON 会记录这个 sidecar 路径
 和摘要；完整 sidecar 会只读采集 `/proc/meminfo` 里的 CMA、`/proc/buddyinfo`、
 swap/zram、compaction vmstat counter、memory pressure、RSS 最大的进程以及
-debugfs 可用性，不会改变 LFB gate。
+debugfs 可用性，并在能稳定解析时记录 nvmap/dma-buf total，不会改变 LFB gate。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是
@@ -421,7 +421,8 @@ remote Qwen selector 默认还会写
 nvmap/dma-buf/CMA debugfs preview，可以在 `.env.jetson` 里设置
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` 和
 `JETSON_REMOTE_SUDO_PASSWORD`。wrapper 会在 selector 运行后额外写一个只读
-sidecar：`<selector-output>.memory-diagnostics.sudo.json`；它不会放宽 LFB gate，
+sidecar：`<selector-output>.memory-diagnostics.sudo.json`。它的 compact summary
+会记录 debugfs 状态，以及可解析的 nvmap/dma-buf total；它不会放宽 LFB gate，
 也不会改变模型选择。
 转发后的 `selection_contexts` 现在会保留 selector 的候选摘要，包括
 `block_reasons` 和 GGUF `artifact_manifest`，所以 Q8 作为 fallback 被选中时，

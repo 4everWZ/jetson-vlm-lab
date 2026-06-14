@@ -404,7 +404,8 @@ Pass `--memory-diagnostics-output <path>` when the selector is blocked by LFB
 and you need lower-level memory evidence. The selector records that sidecar path
 and a summary in its JSON; the full sidecar captures `/proc/meminfo` including
 CMA, `/proc/buddyinfo`, swap/zram, compaction vmstat counters, memory pressure,
-top RSS processes, and debugfs availability without changing the LFB gate.
+top RSS processes, debugfs availability, and any parseable nvmap/dma-buf totals
+without changing the LFB gate.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it
@@ -430,7 +431,9 @@ nvmap/dma-buf/CMA debugfs previews, set
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` with
 `JETSON_REMOTE_SUDO_PASSWORD` in `.env.jetson`. The wrapper then writes a second
 read-only sidecar named `<selector-output>.memory-diagnostics.sudo.json` after
-the selector run; it does not relax the LFB gate or change model selection.
+the selector run. Its compact summary records debugfs status plus parseable
+nvmap/dma-buf totals when those debugfs files expose stable `total` lines; it
+does not relax the LFB gate or change model selection.
 The forwarded `selection_contexts` now preserve selector candidate summaries,
 including `block_reasons` and the GGUF `artifact_manifest`, so a Q8 row chosen
 as fallback keeps the Q4 blocker evidence in the sweep plan and compare

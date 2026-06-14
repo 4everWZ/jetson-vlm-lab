@@ -15,6 +15,7 @@ from typing import Any
 
 BUDDYINFO_RE = re.compile(r"^Node\s+(?P<node>\d+),\s+zone\s+(?P<zone>\S+)\s+(?P<counts>.+)$")
 LFB_RE = re.compile(r"\blfb\s+(?P<free_blocks>\d+)x(?P<block_mb>\d+)MB\b")
+DMA_BUF_TOTAL_RE = re.compile(r"^\s*Total\s+(?P<object_count>\d+)\s+objects?,\s+(?P<total_bytes>\d+)\s+bytes\b")
 VMSTAT_KEYS = {
     "compact_success",
     "compact_fail",
@@ -32,6 +33,19 @@ DEBUGFS_PATHS = {
     "nvmap_iovmm_allocations": "kernel/debug/nvmap/iovmm/allocations",
     "dma_buf_bufinfo": "kernel/debug/dma_buf/bufinfo",
     "cma_debug": "kernel/debug/cma",
+}
+SIZE_TOKEN_MULTIPLIERS = {
+    "": 1,
+    "B": 1,
+    "K": 1024,
+    "KB": 1024,
+    "KIB": 1024,
+    "M": 1024 * 1024,
+    "MB": 1024 * 1024,
+    "MIB": 1024 * 1024,
+    "G": 1024 * 1024 * 1024,
+    "GB": 1024 * 1024 * 1024,
+    "GIB": 1024 * 1024 * 1024,
 }
 
 
@@ -290,6 +304,52 @@ def _debugfs_status(sys_root: Path) -> dict[str, Any]:
     return statuses
 
 
+def _parse_size_token_to_bytes(token: str) -> int | None:
+    match = re.fullmatch(r"(?P<value>\d+)(?P<unit>[A-Za-z]*)", token.strip())
+    if match is None:
+        return None
+    multiplier = SIZE_TOKEN_MULTIPLIERS.get(match.group("unit").upper())
+    if multiplier is None:
+        return None
+    return int(match.group("value")) * multiplier
+
+
+def _parse_nvmap_total_bytes(preview: str) -> int | None:
+    for line in preview.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].lower() == "total":
+            return _parse_size_token_to_bytes(parts[-1])
+    return None
+
+
+def _parse_dma_buf_totals(preview: str) -> dict[str, int | None]:
+    for line in preview.splitlines():
+        match = DMA_BUF_TOTAL_RE.match(line)
+        if match is None:
+            continue
+        return {
+            "object_count": int(match.group("object_count")),
+            "total_bytes": int(match.group("total_bytes")),
+        }
+    return {"object_count": None, "total_bytes": None}
+
+
+def _summarize_debugfs(debugfs: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "statuses": {
+            key: value.get("status") if isinstance(value, dict) else None for key, value in debugfs.items()
+        }
+    }
+    for key in ("nvmap_iovmm_clients", "nvmap_iovmm_allocations"):
+        value = debugfs.get(key)
+        preview = value.get("preview", "") if isinstance(value, dict) else ""
+        summary[key] = {"total_bytes": _parse_nvmap_total_bytes(preview)}
+    dma_buf = debugfs.get("dma_buf_bufinfo")
+    dma_buf_preview = dma_buf.get("preview", "") if isinstance(dma_buf, dict) else ""
+    summary["dma_buf_bufinfo"] = _parse_dma_buf_totals(dma_buf_preview)
+    return summary
+
+
 def parse_tegrastats_lfb(line: str) -> dict[str, int] | None:
     match = LFB_RE.search(line)
     if match is None:
@@ -333,6 +393,25 @@ def _summary(diagnostics: dict[str, Any]) -> dict[str, Any]:
     buddyinfo = diagnostics.get("buddyinfo") if isinstance(diagnostics.get("buddyinfo"), dict) else {}
     tegrastats = diagnostics.get("tegrastats") if isinstance(diagnostics.get("tegrastats"), dict) else {}
     lfb = tegrastats.get("lfb") if isinstance(tegrastats.get("lfb"), dict) else {}
+    debugfs_summary = (
+        diagnostics.get("debugfs_summary") if isinstance(diagnostics.get("debugfs_summary"), dict) else {}
+    )
+    debugfs_statuses = (
+        debugfs_summary.get("statuses") if isinstance(debugfs_summary.get("statuses"), dict) else {}
+    )
+    dma_buf_summary = (
+        debugfs_summary.get("dma_buf_bufinfo") if isinstance(debugfs_summary.get("dma_buf_bufinfo"), dict) else {}
+    )
+    nvmap_clients_summary = (
+        debugfs_summary.get("nvmap_iovmm_clients")
+        if isinstance(debugfs_summary.get("nvmap_iovmm_clients"), dict)
+        else {}
+    )
+    nvmap_allocations_summary = (
+        debugfs_summary.get("nvmap_iovmm_allocations")
+        if isinstance(debugfs_summary.get("nvmap_iovmm_allocations"), dict)
+        else {}
+    )
     return {
         "mem_available_kb": meminfo.get("MemAvailable"),
         "mem_free_kb": meminfo.get("MemFree"),
@@ -345,6 +424,11 @@ def _summary(diagnostics: dict[str, Any]) -> dict[str, Any]:
         "tegrastats_lfb_block_mb": lfb.get("block_mb"),
         "zram_device_count": len(diagnostics.get("zram", {}).get("devices", [])),
         "top_rss_processes": diagnostics.get("top_rss_processes", [])[:5],
+        "debugfs_statuses": debugfs_statuses,
+        "debugfs_dma_buf_object_count": dma_buf_summary.get("object_count"),
+        "debugfs_dma_buf_total_bytes": dma_buf_summary.get("total_bytes"),
+        "debugfs_nvmap_clients_total_bytes": nvmap_clients_summary.get("total_bytes"),
+        "debugfs_nvmap_allocations_total_bytes": nvmap_allocations_summary.get("total_bytes"),
     }
 
 
@@ -358,6 +442,7 @@ def capture_memory_diagnostics(
 ) -> dict[str, Any]:
     proc = Path(proc_root)
     sys = Path(sys_root)
+    debugfs = _debugfs_status(sys)
     diagnostics: dict[str, Any] = {
         "schema_version": 1,
         "captured_at": datetime.now(timezone.utc).isoformat(),
@@ -369,7 +454,8 @@ def capture_memory_diagnostics(
         "vmstat": _read_vmstat(proc),
         "pressure": _read_pressure(proc),
         "top_rss_processes": _read_processes(proc, limit=top_process_limit),
-        "debugfs": _debugfs_status(sys),
+        "debugfs": debugfs,
+        "debugfs_summary": _summarize_debugfs(debugfs),
         "tegrastats": _sample_tegrastats() if sample_tegrastats else {"available": False, "raw": None, "lfb": None},
     }
     diagnostics["summary"] = _summary(diagnostics)
