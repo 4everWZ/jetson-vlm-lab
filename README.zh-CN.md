@@ -406,6 +406,18 @@ device-tree `reserved-memory` 节点摘要。device-tree 的字符串属性会�
 preboot reservation 小于某个 candidate 的 required LFB bytes，selector 会把
 `preboot_linux_cma_reserved_bytes ... < required_lfb_bytes ...` 追加到该 candidate 的
 `block_reasons`，但不改变 gate 语义。
+如果要把这个 blocked selector JSON 转成只读的 preboot CMA 实验计划 artifact，可以运行：
+
+```bash
+PYTHONPATH=src python -m edge_vlm.cma_experiment_plan \
+  --selector-json outputs/jetson_inspect/qwen3-instruct-selector.json \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.cma-experiment-plan.json
+```
+
+这个计划会记录当前解码出的 `linux,cma` reservation、每个 candidate 的 required LFB
+bytes 和 reservation deficit、每个 variant 的精确 minimum 实验值，以及按 64MiB
+向上取整后的最大 required 值。它会显式写入 `applies_boot_config=false`；任何 Jetson
+boot configuration 修改仍然需要人工 review 和明确批准。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是

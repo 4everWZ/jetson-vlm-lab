@@ -525,6 +525,20 @@ When decoded `linux,cma` reservation bytes are below a blocked candidate's
 required LFB byte budget, the selector also appends a
 `preboot_linux_cma_reserved_bytes ... < required_lfb_bytes ...` explanation to
 that candidate's `block_reasons`; this is diagnostic context, not a new gate.
+To make the next boot-memory experiment reviewable, convert the selector JSON
+into a read-only CMA plan:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.cma_experiment_plan \
+  --selector-json outputs/jetson_inspect/qwen3-instruct-selector.json \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.cma-experiment-plan.json
+```
+
+The output records the decoded `linux,cma` reservation, per-candidate required
+LFB bytes and deficits, exact variant minimum experiment sizes, and a
+64MiB-rounded max-required candidate. The artifact sets
+`applies_boot_config=false`; it is evidence for manual review, not an automatic
+boot configuration change.
 
 Build a comparison table from one or more sweep manifests with:
 

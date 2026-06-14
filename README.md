@@ -416,6 +416,20 @@ properties as hex-only evidence. When the decoded preboot reservation is below
 a candidate's required LFB byte budget, the selector appends a
 `preboot_linux_cma_reserved_bytes ... < required_lfb_bytes ...` explanation to
 that candidate's `block_reasons` without changing gate semantics.
+To turn that blocked selector JSON into a read-only preboot CMA experiment
+artifact, run:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.cma_experiment_plan \
+  --selector-json outputs/jetson_inspect/qwen3-instruct-selector.json \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.cma-experiment-plan.json
+```
+
+The plan records the current decoded `linux,cma` reservation, each candidate's
+required LFB bytes and reservation deficit, exact per-variant minimum
+experiment sizes, and a 64MiB-rounded max-required candidate. It sets
+`applies_boot_config=false`; any Jetson boot configuration change still needs a
+manual review and explicit approval.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it

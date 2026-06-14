@@ -105,6 +105,12 @@ below the largest required LFB byte budget, assessment exports
 changing gate semantics. Blocked no-selection contexts are matched back to their
 primary/fallback/candidate rows instead of disappearing from Q4/Q8 blocker
 reports.
+`edge_vlm.cma_experiment_plan` now converts a blocked selector JSON into a
+read-only CMA reservation experiment artifact that records current `linux,cma`
+bytes, per-candidate required LFB bytes and deficits, exact variant minimum
+experiment sizes, and a 64MiB-rounded max-required candidate. The artifact
+explicitly sets `applies_boot_config=false`; it is for manual boot-memory
+review only and does not change selector gates or Jetson boot configuration.
 The comparison report now also shows that effective threshold in a `Required
 lfb` column, which makes relaxed fallback evidence mechanically distinguishable
 from strict-gate rows. When compare also receives
