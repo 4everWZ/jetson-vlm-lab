@@ -402,7 +402,10 @@ debugfs 可用性，并在能稳定解析时记录 nvmap/dma-buf total，不会�
 device-tree `reserved-memory` 节点摘要。device-tree 的字符串属性会保留为字符串；
 `reg`、`size` 这类二进制属性会保留 hex bytes。当父级 `reserved-memory` 节点
 提供明确的 `#address-cells` / `#size-cells` 元数据时，sidecar 还会把
-`linux,cma` reservation size 解码成 bytes；否则仍只保留 hex 证据。
+`linux,cma` reservation size 解码成 bytes；否则仍只保留 hex 证据。如果解码后的
+preboot reservation 小于某个 candidate 的 required LFB bytes，selector 会把
+`preboot_linux_cma_reserved_bytes ... < required_lfb_bytes ...` 追加到该 candidate 的
+`block_reasons`，但不改变 gate 语义。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是

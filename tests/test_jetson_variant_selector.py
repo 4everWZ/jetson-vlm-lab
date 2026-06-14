@@ -362,6 +362,9 @@ class JetsonVariantSelectorContractsTest(unittest.TestCase):
                             "debugfs_statuses": {"dma_buf_bufinfo": "unreadable"},
                             "debugfs_dma_buf_total_bytes": None,
                             "debugfs_nvmap_clients_total_bytes": None,
+                            "reserved_memory_node_count": 7,
+                            "reserved_memory_names": ["camdbg_carveout", "linux,cma", "vpr-carveout"],
+                            "linux_cma_reserved_size_bytes": 256 * 1024 * 1024,
                             "top_rss_processes": [{"pid": 12339, "name": "jtop", "rss_kb": 117252}],
                         }
                     },
@@ -397,6 +400,14 @@ class JetsonVariantSelectorContractsTest(unittest.TestCase):
         self.assertEqual(
             selection["memory_blocker_assessment"]["candidate_lfb_deficits"]["qwen3-vl-2b-instruct-q8-smoke"],
             31,
+        )
+        self.assertIn(
+            "preboot_linux_cma_reserved_bytes 268435456 < required_lfb_bytes 629145600",
+            selection["candidates"][0]["block_reasons"],
+        )
+        self.assertIn(
+            "preboot_linux_cma_reserved_bytes 268435456 < required_lfb_bytes 419430400",
+            selection["candidates"][1]["block_reasons"],
         )
 
 

@@ -213,6 +213,40 @@ def _evaluate_candidate(
     }
 
 
+def _append_preboot_capacity_block_reasons(
+    candidates: list[dict[str, Any]],
+    *,
+    assessment: dict[str, Any],
+) -> None:
+    if assessment.get("preboot_capacity_status") != "linux_cma_reserved_below_required_lfb":
+        return
+    linux_cma_reserved_size_bytes = assessment.get("linux_cma_reserved_size_bytes")
+    observed_lfb_block_mb = assessment.get("observed_lfb_block_mb")
+    candidate_deficits = assessment.get("candidate_lfb_deficits")
+    if not isinstance(linux_cma_reserved_size_bytes, int) or not isinstance(observed_lfb_block_mb, int):
+        return
+    if not isinstance(candidate_deficits, dict):
+        return
+    block_bytes = observed_lfb_block_mb * 1024 * 1024
+    for candidate in candidates:
+        variant_id = candidate.get("variant_id")
+        min_lfb_blocks = candidate.get("min_lfb_blocks")
+        if not isinstance(variant_id, str) or not isinstance(min_lfb_blocks, int):
+            continue
+        if variant_id not in candidate_deficits:
+            continue
+        required_lfb_bytes = min_lfb_blocks * block_bytes
+        if linux_cma_reserved_size_bytes >= required_lfb_bytes:
+            continue
+        reason = (
+            f"preboot_linux_cma_reserved_bytes {linux_cma_reserved_size_bytes} "
+            f"< required_lfb_bytes {required_lfb_bytes}"
+        )
+        block_reasons = candidate.get("block_reasons")
+        if isinstance(block_reasons, list) and reason not in block_reasons:
+            block_reasons.append(reason)
+
+
 def select_preferred_variant(
     *,
     variants_path: str | Path,
@@ -270,6 +304,10 @@ def select_preferred_variant(
             selection=selection,
             diagnostics_summary=selection["memory_diagnostics_summary"],
             diagnostics_source="regular",
+        )
+        _append_preboot_capacity_block_reasons(
+            candidates,
+            assessment=selection["memory_blocker_assessment"],
         )
     return selection
 

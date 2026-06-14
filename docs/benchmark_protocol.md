@@ -521,6 +521,10 @@ observed-vs-required LFB, CMA headroom, debugfs-tracked allocation bytes, and
 boot-time CMA configuration evidence from `cmdline_cma` and `reserved_memory`,
 plus evidence signals. These assessment objects are evidence only; they do not
 alter selection semantics, ranking, or promotion gates.
+When decoded `linux,cma` reservation bytes are below a blocked candidate's
+required LFB byte budget, the selector also appends a
+`preboot_linux_cma_reserved_bytes ... < required_lfb_bytes ...` explanation to
+that candidate's `block_reasons`; this is diagnostic context, not a new gate.
 
 Build a comparison table from one or more sweep manifests with:
 

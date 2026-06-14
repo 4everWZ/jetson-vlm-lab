@@ -412,7 +412,10 @@ are preserved as strings, while binary properties such as `reg` or `size` are
 preserved as hex bytes. When the parent `reserved-memory` node exposes
 unambiguous `#address-cells` / `#size-cells` metadata, the sidecar also decodes
 the `linux,cma` reservation size into bytes; otherwise it leaves the binary
-properties as hex-only evidence.
+properties as hex-only evidence. When the decoded preboot reservation is below
+a candidate's required LFB byte budget, the selector appends a
+`preboot_linux_cma_reserved_bytes ... < required_lfb_bytes ...` explanation to
+that candidate's `block_reasons` without changing gate semantics.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it
