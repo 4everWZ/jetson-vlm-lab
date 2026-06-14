@@ -553,6 +553,19 @@ The patch artifact converts the Q8/Q4/rounded CMA candidates into
 `applies_boot_config=false`. It records the current boot config SHA256 and each
 candidate's proposed SHA256 so future approved write tooling can reject stale
 plans before touching `/boot`.
+To validate one reviewed candidate in dry-run mode, run:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.boot_config_cma_apply \
+  --plan outputs/jetson_inspect/qwen3-instruct-selector.boot-config-cma-plan.json \
+  --candidate-id max-required-lfb-rounded-64mib \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.boot-config-cma-apply-result.json
+```
+
+The helper only writes when invoked with both `--apply` and
+`--confirm-manual-approval`. In write mode it rechecks the current SHA256 and
+file size, creates a backup, replaces the file, and leaves reboot and
+post-reboot diagnostics as separate steps.
 The remote Qwen selector wrapper writes this artifact automatically when the
 selector chooses no variant and has a selector output path. It also writes the
 boot-config patch plan next to it as `<selector-output>.boot-config-cma-plan.json`.

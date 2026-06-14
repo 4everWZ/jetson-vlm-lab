@@ -124,6 +124,11 @@ configuration change.
 The remote Qwen selector wrapper now writes that plan automatically for
 no-selection selector outputs and writes the boot-config patch plan next to it,
 with `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` as the opt-out for scoped runs.
+`edge_vlm.boot_config_cma_apply` consumes that patch plan and validates a single
+candidate against the current boot config hash, file size, target line, and
+proposed hash. It defaults to dry-run; write mode requires both `--apply` and
+`--confirm-manual-approval`, creates a backup before replacement, and does not
+perform reboot or post-reboot diagnostics.
 The comparison report now also shows that effective threshold in a `Required
 lfb` column, which makes relaxed fallback evidence mechanically distinguishable
 from strict-gate rows. When compare also receives

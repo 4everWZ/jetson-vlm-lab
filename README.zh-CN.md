@@ -434,6 +434,19 @@ PYTHONPATH=src python -m edge_vlm.boot_config_cma_plan \
 line diff，并写入 `applies_boot_config=false`。它还会记录当前 boot config 的
 SHA256 和每个 candidate 的 proposed SHA256，让后续被批准的写入步骤可以拒绝过期
 plan；备份、手动编辑、reboot 和 reboot 后 diagnostics 仍然是单独批准的步骤。
+如果要先验证某个已 review 的 candidate、但不触碰 `/boot`，可以运行：
+
+```bash
+PYTHONPATH=src python -m edge_vlm.boot_config_cma_apply \
+  --plan outputs/jetson_inspect/qwen3-instruct-selector.boot-config-cma-plan.json \
+  --candidate-id max-required-lfb-rounded-64mib \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.boot-config-cma-apply-result.json
+```
+
+apply helper 默认是 dry-run。它会检查 candidate id、当前 boot config SHA256、当前
+file size、目标 `APPEND` 行和 proposed SHA256。真实写入必须同时传
+`--apply` 和 `--confirm-manual-approval`；写入前会先创建 backup，但仍然不会自动
+reboot Jetson。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是

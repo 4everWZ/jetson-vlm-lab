@@ -450,6 +450,20 @@ artifact only. It records the current boot config SHA256 and each candidate's
 proposed SHA256 so a future approved write step can reject stale plans; manual
 backup, edit, reboot, and post-reboot diagnostics are still separate approved
 steps.
+To validate a reviewed candidate without touching `/boot`, run:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.boot_config_cma_apply \
+  --plan outputs/jetson_inspect/qwen3-instruct-selector.boot-config-cma-plan.json \
+  --candidate-id max-required-lfb-rounded-64mib \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.boot-config-cma-apply-result.json
+```
+
+The apply helper defaults to dry-run. It checks the candidate id, current boot
+config SHA256, current file size, target `APPEND` line, and proposed SHA256.
+An actual write requires both `--apply` and `--confirm-manual-approval`; it
+creates a backup before replacing the boot config and still does not reboot the
+Jetson.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it
