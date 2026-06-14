@@ -117,6 +117,24 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
             )
         )
         self.assertTrue(variant_plan["paths"]["lifecycle_jsonl"].endswith("unit-sweep-minicpm-unit.lifecycle.jsonl"))
+        self.assertTrue(variant_plan["paths"]["gguf_artifacts_json"].endswith("unit-sweep-minicpm-unit.gguf-artifacts.json"))
+        self.assertEqual(
+            variant_plan["artifact_preflight"]["artifacts"],
+            [
+                {
+                    "role": "model",
+                    "path": str(tmp_path / "models" / "MiniCPM-V-4.6-gguf" / "MiniCPM-V-4_6-Q4_K_M.gguf"),
+                },
+                {
+                    "role": "mmproj",
+                    "path": str(tmp_path / "models" / "MiniCPM-V-4.6-gguf" / "mmproj-model-f16.gguf"),
+                },
+            ],
+        )
+        self.assertEqual(
+            variant_plan["artifact_preflight"]["command"][-2:],
+            ["--output", variant_plan["paths"]["gguf_artifacts_json"]],
+        )
         self.assertEqual(
             variant_plan["server_env"]["EDGE_VLM_LAUNCH_PHASE_LOG"],
             variant_plan["paths"]["lifecycle_jsonl"],
@@ -489,6 +507,15 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
         variant_plan = plan["variants"][0]
         self.assertIsNone(variant_plan["fake_stream_command"])
         self.assertEqual(variant_plan["benchmark_env"]["EDGE_VLM_CASES"], "configs/benchmark/text_prompt_cases.jsonl")
+        self.assertEqual(
+            variant_plan["artifact_preflight"]["artifacts"],
+            [
+                {
+                    "role": "model",
+                    "path": "/mnt/nvme/models/tencent/example-GGUF/example.gguf",
+                }
+            ],
+        )
 
     def test_jetson_sweep_plan_records_docker_image_metadata(self):
         from edge_vlm.jetson_sweep import build_sweep_plan

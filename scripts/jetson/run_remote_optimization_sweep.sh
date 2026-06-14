@@ -18,6 +18,8 @@ qwen3_primary_variant="${JETSON_REMOTE_QWEN3_INSTRUCT_PRIMARY_VARIANT:-qwen3-vl-
 qwen3_fallback_variant="${JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_VARIANT:-qwen3-vl-2b-instruct-q8-smoke}"
 qwen3_fallback_min_lfb_blocks="${JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_MIN_LFB_BLOCKS:-}"
 qwen3_selector_output="${JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR_OUTPUT:-}"
+gguf_preflight="${JETSON_REMOTE_GGUF_PREFLIGHT:-0}"
+gguf_preflight_fail="${JETSON_REMOTE_GGUF_PREFLIGHT_FAIL:-0}"
 
 if [[ $# -eq 0 ]]; then
   echo "Usage: $0 <edge_vlm.jetson_sweep args...>" >&2
@@ -180,6 +182,51 @@ if [[ "${qwen3_selector}" == "1" ]]; then
   fi
 elif [[ "${qwen3_selector}" != "0" ]]; then
   echo "JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR must be 0 or 1." >&2
+  exit 2
+fi
+
+if [[ "${gguf_preflight}" == "1" ]]; then
+  if [[ "${gguf_preflight_fail}" != "0" && "${gguf_preflight_fail}" != "1" ]]; then
+    echo "JETSON_REMOTE_GGUF_PREFLIGHT_FAIL must be 0 or 1." >&2
+    exit 2
+  fi
+  preflight_run_prefix="$(extract_arg_value --run-prefix "${sweep_args[@]}" || true)"
+  if [[ -z "${preflight_run_prefix}" ]]; then
+    echo "JETSON_REMOTE_GGUF_PREFLIGHT requires an explicit --run-prefix." >&2
+    exit 2
+  fi
+  preflight_dir="outputs/optimization_sweeps/${preflight_run_prefix}"
+  preflight_plan="${preflight_dir}/${preflight_run_prefix}.preflight-plan.json"
+  preflight_manifest="${preflight_dir}/${preflight_run_prefix}.gguf-artifacts.json"
+  "${remote_exec}" \
+    env \
+    "LLAMA_CPP_DOCKER_IMAGE=${llama_cpp_image}" \
+    "PYTHONPATH=${remote_pythonpath}" \
+    python3 -m edge_vlm.jetson_sweep \
+    "${sweep_args[@]}" \
+    --dry-run \
+    --plan-output "${preflight_plan}"
+  preflight_exit=0
+  if "${remote_exec}" \
+    env \
+    "PYTHONPATH=${remote_pythonpath}" \
+    python3 -m edge_vlm.gguf_artifacts \
+    check-plan \
+    --plan "${preflight_plan}" \
+    --output "${preflight_manifest}"; then
+    preflight_exit=0
+  else
+    preflight_exit=$?
+  fi
+  if [[ "${preflight_exit}" -ne 0 ]]; then
+    if [[ "${gguf_preflight_fail}" == "1" ]]; then
+      echo "GGUF artifact preflight failed; aborting because JETSON_REMOTE_GGUF_PREFLIGHT_FAIL=1." >&2
+      exit "${preflight_exit}"
+    fi
+    echo "GGUF artifact preflight failed; continuing because JETSON_REMOTE_GGUF_PREFLIGHT_FAIL=0. See ${preflight_manifest}." >&2
+  fi
+elif [[ "${gguf_preflight}" != "0" ]]; then
+  echo "JETSON_REMOTE_GGUF_PREFLIGHT must be 0 or 1." >&2
   exit 2
 fi
 

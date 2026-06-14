@@ -193,6 +193,11 @@ scripts/jetson/check_gguf_artifacts.sh check \
 
 manifest 会逐个 artifact 记录 `missing`、`invalid_magic` 或 `ok`，只要有一个
 artifact 没准备好就返回非零。
+remote suite wrapper 也会默认开启 advisory
+`JETSON_REMOTE_GGUF_PREFLIGHT=1`，在 server startup 前写出
+`outputs/optimization_sweeps/<run-prefix>/<run-prefix>.gguf-artifacts.json`。
+如果希望缺失或损坏的缓存 artifact 直接中止，就设置
+`JETSON_REMOTE_GGUF_PREFLIGHT_FAIL=1`。
 
 ## 运行 Gemma 4 E2B-it
 

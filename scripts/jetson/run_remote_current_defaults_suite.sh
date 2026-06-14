@@ -41,6 +41,7 @@ fi
 
 JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
 JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
+JETSON_REMOTE_GGUF_PREFLIGHT="${JETSON_REMOTE_GGUF_PREFLIGHT:-1}" \
 "${remote_sweep}" \
   --run-prefix "${run_prefix}" \
   --variant "${minicpm_variant}" \

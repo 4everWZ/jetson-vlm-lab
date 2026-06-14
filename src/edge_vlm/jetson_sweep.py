@@ -438,6 +438,87 @@ def _config_supports_fake_stream(config_path: str | Path) -> bool:
     return config_supports_images(load_model_config(config_path))
 
 
+def _runtime_mapping(config_path: str | Path) -> dict[str, Any]:
+    config = load_model_config(config_path)
+    runtime = config.get("runtime")
+    return runtime if isinstance(runtime, dict) else {}
+
+
+def _model_mapping(config_path: str | Path) -> dict[str, Any]:
+    config = load_model_config(config_path)
+    model = config.get("model")
+    return model if isinstance(model, dict) else {}
+
+
+def _expand_path_template(value: Any, server_env: dict[str, str]) -> str:
+    expanded = _expand_env_refs(str(value), {"MODEL_DIR": "/mnt/nvme/models", **server_env})
+    if _ENV_REF_RE.search(expanded):
+        raise ValueError(f"unresolved environment reference in artifact path: {expanded}")
+    return expanded
+
+
+def _hf_artifact_path(server_env: dict[str, str], runtime: dict[str, Any], model: dict[str, Any], file_key: str) -> str | None:
+    file_name = server_env.get(file_key.upper()) or runtime.get(file_key.lower())
+    if not file_name:
+        return None
+    model_dir = server_env.get("MODEL_DIR", "/mnt/nvme/models")
+    model_ref = (
+        server_env.get("MODEL_REPO")
+        or server_env.get("MODEL_REF")
+        or model.get("model_ref")
+        or ""
+    )
+    repo_id = str(model_ref).split(":", 1)[0]
+    if not repo_id:
+        return None
+    model_subdir = server_env.get("MODEL_SUBDIR") or str(runtime.get("model_subdir") or repo_id)
+    return str(Path(model_dir) / model_subdir / str(file_name))
+
+
+def _artifact_preflight(variant: dict[str, Any], server_env: dict[str, str], output_path: Path, python_bin: str) -> dict[str, Any]:
+    runtime = _runtime_mapping(str(variant["config"]))
+    model = _model_mapping(str(variant["config"]))
+    artifacts: list[dict[str, str]] = []
+    explicit_model_path = (
+        server_env.get("MODEL_PATH_ON_HOST")
+        or server_env.get("MODEL_PATH")
+        or runtime.get("model_path")
+    )
+    if explicit_model_path:
+        artifacts.append({"role": "model", "path": _expand_path_template(explicit_model_path, server_env)})
+    else:
+        model_path = _hf_artifact_path(server_env, runtime, model, "MODEL_FILE")
+        if model_path:
+            artifacts.append({"role": "model", "path": model_path})
+    explicit_mmproj_path = (
+        server_env.get("MMPROJ_PATH_ON_HOST")
+        or server_env.get("MMPROJ_PATH")
+        or runtime.get("mmproj_path")
+    )
+    if explicit_mmproj_path:
+        artifacts.append({"role": "mmproj", "path": _expand_path_template(explicit_mmproj_path, server_env)})
+    else:
+        mmproj_path = _hf_artifact_path(server_env, runtime, model, "MMPROJ_FILE")
+        if mmproj_path:
+            artifacts.append({"role": "mmproj", "path": mmproj_path})
+    command: list[str] = []
+    if artifacts:
+        command = [
+            python_bin,
+            "-m",
+            "edge_vlm.gguf_artifacts",
+            "check",
+        ]
+        for artifact in artifacts:
+            command.extend(["--artifact", artifact["role"], artifact["path"]])
+        command.extend(["--output", str(output_path)])
+    return {
+        "available": bool(artifacts),
+        "artifacts": artifacts,
+        "command": command,
+    }
+
+
 def _runtime_support_block_reason(variant_plan: dict[str, Any]) -> str | None:
     if not bool(variant_plan.get("supports_images")):
         return None
@@ -530,6 +611,7 @@ def build_sweep_plan(
         profile_jsonl = output_base / "profiles" / f"{run_id}.profile.jsonl"
         profile_summary_json = output_base / "profiles" / f"{run_id}.summary.json"
         lifecycle_jsonl = output_base / "lifecycle" / f"{run_id}.lifecycle.jsonl"
+        gguf_artifacts_json = output_base / "artifacts" / f"{run_id}.gguf-artifacts.json"
         fake_stream_jsonl = output_base / "fake_stream" / f"{run_id}.jsonl"
         server_log = log_base / f"{run_id}.server.log"
         preflight_before_prepare_json = output_base / "preflight" / f"{run_id}.preflight-before-prepare.json"
@@ -609,6 +691,7 @@ def build_sweep_plan(
                 "server_command": ["bash", str(variant["launcher"])] + [str(arg) for arg in variant.get("args", [])],
                 "server_env": server_env,
                 "server_runtime": runtime_by_image[runtime_key],
+                "artifact_preflight": _artifact_preflight(variant, server_env, gguf_artifacts_json, python_bin),
                 "benchmark_command": ["bash", "scripts/jetson/run_formal_benchmark.sh"],
                 "benchmark_env": benchmark_env,
                 "fake_stream_command": fake_stream_command if include_fake_stream and supports_fake_stream else None,
@@ -624,6 +707,7 @@ def build_sweep_plan(
                     "profile_jsonl": str(profile_jsonl),
                     "profile_summary_json": str(profile_summary_json),
                     "lifecycle_jsonl": str(lifecycle_jsonl),
+                    "gguf_artifacts_json": str(gguf_artifacts_json),
                     "fake_stream_jsonl": str(fake_stream_jsonl),
                     "server_log": str(server_log),
                     "preflight_before_prepare_json": str(preflight_before_prepare_json),

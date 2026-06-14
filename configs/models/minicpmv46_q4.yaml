@@ -16,6 +16,8 @@ runtime:
   n_gpu_layers: 0
   model_path_env: MODEL_PATH
   mmproj_path_env: MMPROJ_PATH
+  model_path: ${MODEL_DIR}/MiniCPM-V-4.6-gguf/MiniCPM-V-4_6-Q4_K_M.gguf
+  mmproj_path: ${MODEL_DIR}/MiniCPM-V-4.6-gguf/mmproj-model-f16.gguf
   wsl_script: scripts/wsl/run_minicpmv46_llama.sh
   jetson_script: scripts/jetson/run_minicpmv46_llama_docker.sh
 

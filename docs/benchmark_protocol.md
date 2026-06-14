@@ -354,6 +354,15 @@ probes `llama-server --help` inside the selected image, recording whether the
 server binary was found, which path resolved, and whether the help output
 exposes `--mmproj`. The sweep does not copy container environment variables
 into the manifest.
+Set `JETSON_REMOTE_GGUF_PREFLIGHT=1` to make the remote sweep wrapper write a
+dry-run plan plus a no-start artifact sidecar before benchmark startup:
+`outputs/optimization_sweeps/<run-prefix>/<run-prefix>.preflight-plan.json`
+and `<run-prefix>.gguf-artifacts.json`. This preflight is advisory by default
+so first-download rows can still populate the cache; set
+`JETSON_REMOTE_GGUF_PREFLIGHT_FAIL=1` when missing or invalid cached artifacts
+should abort after any requested max-clocks setup but before drop-caches hooks
+and server startup. The current defaults, lightweight, and Tencent text remote
+suite wrappers enable the advisory preflight by default.
 For image-capable variants, this repo treats `--mmproj` as the mechanical proxy
 for the required llama.cpp multimodal path. When the runtime probe says the
 container lacks that support, the sweep skips the row before server startup with
@@ -464,6 +473,10 @@ For a no-start check before a remote sweep, write a machine-readable preflight
 manifest with `scripts/jetson/check_gguf_artifacts.sh check`; the wrapper calls
 `edge_vlm.gguf_artifacts` and can emit `outputs/artifacts/<run>.gguf-artifacts.json`
 with per-artifact `missing`, `invalid_magic`, or `ok` status.
+Remote suite wrappers also emit a sweep-level `<run-prefix>.gguf-artifacts.json`
+sidecar through `edge_vlm.gguf_artifacts check-plan` before startup.
+Variants whose dry-run plan does not declare any derivable GGUF artifacts are
+marked `unavailable` in that sidecar rather than being treated as artifact-ok.
 When startup time itself is under review, add
 `--startup-require-cached-artifacts`. Compare then adds a `Startup precheck`
 column and only marks rows as startup-comparable when
@@ -636,6 +649,10 @@ instead of surfacing later as runtime startup failures.
 The same check is available without launching Docker through
 `scripts/jetson/check_gguf_artifacts.sh check`, which writes a JSON manifest for
 automation or remote handoff.
+For remote suites, `JETSON_REMOTE_GGUF_PREFLIGHT=1` produces the same
+machine-readable status from the dry-run sweep plan, and
+`JETSON_REMOTE_GGUF_PREFLIGHT_FAIL=1` turns that advisory sidecar into a hard
+gate.
 
 The `input_payload` bottleneck label is emitted only when average payload
 preparation is non-trivial and accounts for a material share of estimated
