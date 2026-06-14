@@ -243,6 +243,11 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
         self.assertIn("ARG=--min-lfb-blocks\nARG=150\n", log_text)
         self.assertIn("ARG=--fallback-min-lfb-blocks\nARG=100\n", log_text)
         self.assertIn(
+            "ARG=--memory-diagnostics-output\n"
+            "ARG=outputs/optimization_sweeps/unit-selector/unit-selector.qwen3-selector.memory-diagnostics.json\n",
+            log_text,
+        )
+        self.assertIn(
             "ARG=--selection-context-json\nARG=outputs/optimization_sweeps/unit-selector/unit-selector.qwen3-selector.json\n",
             log_text,
         )

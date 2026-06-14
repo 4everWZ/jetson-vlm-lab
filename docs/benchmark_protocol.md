@@ -486,6 +486,15 @@ without inferring it from shell snippets alone. When those env flags are used,
 `drop_caches_before_variant`, plus supporting fields like
 `memory_prepare_attempts`, `max_clocks_capture`, and
 `pre_variant_command_source`.
+When `JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR=1` and the wrapper has a selector
+output path, it also writes a read-only memory diagnostics sidecar next to that
+JSON as `<selector-output>.memory-diagnostics.json`. The selector JSON records
+`memory_diagnostics_path` plus a compact summary, while the sidecar keeps the
+lower-level `/proc/meminfo` CMA fields, `/proc/buddyinfo`, swap/zram state,
+compaction vmstat counters, PSI memory pressure, top RSS processes, and debugfs
+availability. Set `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0` to skip
+that sidecar for a scoped rerun; it does not affect model selection semantics
+or the LFB gate.
 
 Build a comparison table from one or more sweep manifests with:
 

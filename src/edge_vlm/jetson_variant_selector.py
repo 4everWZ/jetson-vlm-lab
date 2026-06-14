@@ -19,6 +19,7 @@ from .jetson_sweep import (
     _runtime_metadata,
     capture_preflight_sample,
 )
+from .jetson_memory_diagnostics import capture_memory_diagnostics
 
 
 _ENV_REF_RE = re.compile(r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))")
@@ -218,6 +219,7 @@ def select_preferred_variant(
     fallback_variant_id: str,
     min_lfb_blocks: int | None,
     fallback_min_lfb_blocks: int | None = None,
+    memory_diagnostics_output: str | Path | None = None,
     base_env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     source_env = dict(base_env or {})
@@ -249,7 +251,7 @@ def select_preferred_variant(
         selected_variant_id = str(candidate["variant_id"])
         selected_reason = "primary_usable" if index == 0 else "primary_blocked_selected_fallback"
         break
-    return {
+    selection = {
         "selected_variant_id": selected_variant_id,
         "selected_reason": selected_reason,
         "primary_variant_id": primary_variant_id,
@@ -258,6 +260,12 @@ def select_preferred_variant(
         "preflight": preflight,
         "candidates": candidates,
     }
+    if memory_diagnostics_output is not None:
+        diagnostics_path = Path(memory_diagnostics_output)
+        diagnostics = capture_memory_diagnostics(diagnostics_path)
+        selection["memory_diagnostics_path"] = str(diagnostics_path)
+        selection["memory_diagnostics_summary"] = dict(diagnostics.get("summary", {}))
+    return selection
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -294,6 +302,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional JSON output path",
     )
+    parser.add_argument(
+        "--memory-diagnostics-output",
+        default=None,
+        help="Optional JSON sidecar path for low-level Jetson memory diagnostics",
+    )
     return parser
 
 
@@ -306,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
         fallback_variant_id=args.fallback_variant,
         min_lfb_blocks=args.min_lfb_blocks,
         fallback_min_lfb_blocks=args.fallback_min_lfb_blocks,
+        memory_diagnostics_output=args.memory_diagnostics_output,
         base_env=dict(os.environ),
     )
     text = json.dumps(selection, ensure_ascii=False, indent=2) + "\n"

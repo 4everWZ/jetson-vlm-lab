@@ -329,6 +329,63 @@ class JetsonVariantSelectorContractsTest(unittest.TestCase):
         self.assertEqual(selection["candidates"][1]["min_lfb_blocks"], 100)
         self.assertTrue(selection["candidates"][1]["usable"])
 
+    def test_selector_writes_memory_diagnostics_sidecar_when_requested(self):
+        from edge_vlm.jetson_variant_selector import select_preferred_variant
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = _write_variant_catalog(tmp_path / "variants.jsonl", tmp_path / "models")
+            repo_dir = tmp_path / "models" / "Qwen" / "Qwen3-VL-2B-Instruct-GGUF"
+            repo_dir.mkdir(parents=True)
+            for name in (
+                "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+                "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+                "Qwen3VL-2B-Instruct-Q8_0.gguf",
+            ):
+                (repo_dir / name).write_bytes(b"GGUF")
+            diagnostics_path = tmp_path / "selector.memory-diagnostics.json"
+
+            with patch(
+                "edge_vlm.jetson_variant_selector.capture_preflight_sample",
+                return_value=_preflight(69),
+            ):
+                with patch(
+                    "edge_vlm.jetson_variant_selector.capture_memory_diagnostics",
+                    return_value={
+                        "summary": {
+                            "mem_available_kb": 6940680,
+                            "cma_free_kb": 221296,
+                            "swap_used_kb": 0,
+                            "top_rss_processes": [{"pid": 12339, "name": "jtop", "rss_kb": 117252}],
+                        }
+                    },
+                ) as diagnostics:
+                    with patch(
+                        "edge_vlm.jetson_variant_selector._runtime_metadata",
+                        return_value={
+                            "image": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                            "llama_server_probe_ok": True,
+                            "llama_server_found": True,
+                            "llama_server_help_ok": True,
+                            "llama_server_supports_mmproj": True,
+                            "llama_server_multimodal_markers": ["--mmproj", "mmproj"],
+                        },
+                    ):
+                        selection = select_preferred_variant(
+                            variants_path=catalog,
+                            primary_variant_id="qwen3-vl-2b-instruct-q4-smoke",
+                            fallback_variant_id="qwen3-vl-2b-instruct-q8-smoke",
+                            min_lfb_blocks=150,
+                            fallback_min_lfb_blocks=100,
+                            memory_diagnostics_output=diagnostics_path,
+                        )
+
+        diagnostics.assert_called_once_with(diagnostics_path)
+        self.assertIsNone(selection["selected_variant_id"])
+        self.assertEqual(selection["memory_diagnostics_path"], str(diagnostics_path))
+        self.assertEqual(selection["memory_diagnostics_summary"]["cma_free_kb"], 221296)
+        self.assertEqual(selection["memory_diagnostics_summary"]["top_rss_processes"][0]["name"], "jtop")
+
 
 if __name__ == "__main__":
     unittest.main()

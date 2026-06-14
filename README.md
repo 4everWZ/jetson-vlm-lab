@@ -400,6 +400,11 @@ Cached artifacts that exist but fail the GGUF magic check are blocked as
 still fall through to a valid Q8 fallback. Its standalone default keeps the same
 strict gate for both lanes unless you are intentionally doing scoped fallback
 triage.
+Pass `--memory-diagnostics-output <path>` when the selector is blocked by LFB
+and you need lower-level memory evidence. The selector records that sidecar path
+and a summary in its JSON; the full sidecar captures `/proc/meminfo` including
+CMA, `/proc/buddyinfo`, swap/zram, compaction vmstat counters, memory pressure,
+top RSS processes, and debugfs availability without changing the LFB gate.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it
@@ -416,6 +421,10 @@ If one remote drop-cache/compact-memory pass still leaves the Jetson below the
 requested LFB gate, set `JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS=<N>` together
 with `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`. This repeats preparation
 before selector inspection and variant preflight; it does not relax the gate.
+The remote Qwen selector also writes
+`<selector-output>.memory-diagnostics.json` by default; set
+`JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0` only when you need to skip
+that read-only sidecar.
 The forwarded `selection_contexts` now preserve selector candidate summaries,
 including `block_reasons` and the GGUF `artifact_manifest`, so a Q8 row chosen
 as fallback keeps the Q4 blocker evidence in the sweep plan and compare

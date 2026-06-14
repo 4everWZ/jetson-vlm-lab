@@ -71,6 +71,12 @@ mechanically enabled, and records `memory_prepare_attempts` when the remote
 drop-cache/compact-memory prepare pass is repeated. This leaves later review to
 read structured run intent from the plan instead of reconstructing it from shell
 wrappers or ad hoc filenames.
+The Qwen selector path also writes a read-only
+`<selector-output>.memory-diagnostics.json` sidecar by default. That artifact is
+separate from selection semantics and captures lower-level LFB context such as
+CMA free memory, buddyinfo orders, swap/zram state, compaction vmstat counters,
+memory pressure, top RSS processes, and debugfs availability, so repeated LFB
+blocks can be debugged without rerunning a full model startup.
 The comparison report now also shows that effective threshold in a `Required
 lfb` column, which makes relaxed fallback evidence mechanically distinguishable
 from strict-gate rows. When compare also receives

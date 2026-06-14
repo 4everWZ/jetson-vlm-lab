@@ -20,6 +20,7 @@ qwen3_primary_variant="${JETSON_REMOTE_QWEN3_INSTRUCT_PRIMARY_VARIANT:-qwen3-vl-
 qwen3_fallback_variant="${JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_VARIANT:-qwen3-vl-2b-instruct-q8-smoke}"
 qwen3_fallback_min_lfb_blocks="${JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_MIN_LFB_BLOCKS:-}"
 qwen3_selector_output="${JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR_OUTPUT:-}"
+qwen3_memory_diagnostics="${JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS:-1}"
 gguf_preflight="${JETSON_REMOTE_GGUF_PREFLIGHT:-0}"
 gguf_preflight_fail="${JETSON_REMOTE_GGUF_PREFLIGHT_FAIL:-0}"
 
@@ -152,6 +153,10 @@ elif [[ "${drop_caches_before_variant}" != "0" ]]; then
 fi
 
 if [[ "${qwen3_selector}" == "1" ]]; then
+  if [[ "${qwen3_memory_diagnostics}" != "0" && "${qwen3_memory_diagnostics}" != "1" ]]; then
+    echo "JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS must be 0 or 1." >&2
+    exit 2
+  fi
   selector_min_lfb_blocks="$(extract_arg_value --min-lfb-blocks "${sweep_args[@]}" || true)"
   selector_run_prefix="$(extract_arg_value --run-prefix "${sweep_args[@]}" || true)"
   if [[ -z "${selector_min_lfb_blocks}" ]]; then
@@ -178,6 +183,14 @@ if [[ "${qwen3_selector}" == "1" ]]; then
   fi
   if [[ -n "${qwen3_selector_output}" ]]; then
     selector_args+=(--output "${qwen3_selector_output}")
+  fi
+  if [[ "${qwen3_memory_diagnostics}" == "1" && -n "${qwen3_selector_output}" ]]; then
+    if [[ "${qwen3_selector_output}" == *.json ]]; then
+      selector_memory_diagnostics_output="${qwen3_selector_output%.json}.memory-diagnostics.json"
+    else
+      selector_memory_diagnostics_output="${qwen3_selector_output}.memory-diagnostics.json"
+    fi
+    selector_args+=(--memory-diagnostics-output "${selector_memory_diagnostics_output}")
   fi
   selector_json="$("${remote_exec}" "${selector_args[@]}")"
   selected_variant_id="$(printf '%s' "${selector_json}" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("selected_variant_id") or "")')"

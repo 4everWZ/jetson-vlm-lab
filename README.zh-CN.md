@@ -393,6 +393,11 @@ selector 会写出结构化 JSON，里面包含 runtime probe、preflight sample
 `invalid_model_artifact` 或 `invalid_mmproj_artifact`，所以损坏的 Q4 文件仍
 可以退到可用的 Q8 fallback。它作为独立入口时默认仍保持 primary 和
 fallback 使用同一个严格 gate，除非明确在做 scoped fallback triage。
+当 selector 被 LFB 卡住并且需要更底层的内存证据时，加
+`--memory-diagnostics-output <path>`。selector JSON 会记录这个 sidecar 路径
+和摘要；完整 sidecar 会只读采集 `/proc/meminfo` 里的 CMA、`/proc/buddyinfo`、
+swap/zram、compaction vmstat counter、memory pressure、RSS 最大的进程以及
+debugfs 可用性，不会改变 LFB gate。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是
@@ -409,6 +414,9 @@ comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight g
 可以把 `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1` 和
 `JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS=<N>` 一起设置。它会在 selector inspect
 和每个 variant preflight 前重复准备，但不会放宽 gate 本身。
+remote Qwen selector 默认还会写
+`<selector-output>.memory-diagnostics.json`；只有明确想跳过这个只读 sidecar
+时，才设置 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0`。
 转发后的 `selection_contexts` 现在会保留 selector 的候选摘要，包括
 `block_reasons` 和 GGUF `artifact_manifest`，所以 Q8 作为 fallback 被选中时，
 sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住。launcher
