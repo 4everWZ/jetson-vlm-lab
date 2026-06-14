@@ -534,7 +534,11 @@ PYTHONPATH=src python -m edge_vlm.optimization bundle-selections \
 
 For a remote Jetson bundle, set `JETSON_LEQ2B_VLM_SELECTION_DIR` and
 `JETSON_LEQ2B_TEXT_SELECTION_DIR`, then run
-`scripts/jetson/build_remote_leq2b_candidate_bundle.sh`.
+`scripts/jetson/build_remote_leq2b_candidate_bundle.sh`. The helper now exports
+`leq2b.routes.json` with the `promotion` gate by default after the bundle step.
+Set `JETSON_LEQ2B_BUILD_ROUTES=0` to skip that second remote command, or set
+`JETSON_LEQ2B_ROUTE_GATE` and `JETSON_LEQ2B_ROUTES_OUTPUT` to produce a scoped
+route artifact.
 
 Export a router-facing view from that bundle with `export-routes`:
 

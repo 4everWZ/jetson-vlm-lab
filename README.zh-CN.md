@@ -453,6 +453,9 @@ lightweight suite 会基于这两个过滤条件额外产出
 artifact 合并成一个 `leq2b.candidate_bundle.json`；在 Jetson 上，
 `scripts/jetson/build_remote_leq2b_candidate_bundle.sh` 可以读取
 `JETSON_LEQ2B_VLM_SELECTION_DIR` 和 `JETSON_LEQ2B_TEXT_SELECTION_DIR`，并在远端写出同一个统一 bundle。
+它默认还会从这个 bundle 导出 `leq2b.routes.json`；如果只想构建 bundle，可以设置
+`JETSON_LEQ2B_BUILD_ROUTES=0`，也可以用 `JETSON_LEQ2B_ROUTE_GATE` /
+`JETSON_LEQ2B_ROUTES_OUTPUT` 覆盖 route artifact 的 gate 和输出路径。
 如果下游 router 需要按 lane 分组的主候选和备选候选，就继续运行
 `python -m edge_vlm.optimization export-routes --input
 .../leq2b.candidate_bundle.json --gate promotion --output
