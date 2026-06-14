@@ -127,7 +127,7 @@ class VlmLauncherRuntimeGateContractsTest(unittest.TestCase):
         self.assertTrue(artifact["llama_server_supports_mmproj"])
         self.assertEqual(artifact["llama_server_multimodal_markers"], ["--mmproj", "mmproj"])
 
-    def test_only_vlm_launchers_source_multimodal_runtime_gate(self):
+    def test_vlm_launchers_source_multimodal_runtime_gate(self):
         vlm_launchers = [
             Path("scripts/jetson/run_gemma4_e2b_llama_docker.sh"),
             Path("scripts/jetson/run_minicpmv46_llama_docker.sh"),
@@ -140,7 +140,6 @@ class VlmLauncherRuntimeGateContractsTest(unittest.TestCase):
                 self.assertIn("require_llama_cpp_multimodal_runtime", launcher)
 
         text_launcher = Path("scripts/jetson/run_hf_gguf_llama_docker.sh").read_text(encoding="utf-8")
-        self.assertNotIn("llama_cpp_runtime_gate.sh", text_launcher)
         self.assertNotIn("require_llama_cpp_multimodal_runtime", text_launcher)
 
 

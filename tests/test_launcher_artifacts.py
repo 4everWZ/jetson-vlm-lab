@@ -102,7 +102,12 @@ class LauncherArtifactContractsTest(unittest.TestCase):
 
     def test_hf_gguf_text_launcher_rejects_cached_model_without_gguf_magic(self):
         with tempfile.TemporaryDirectory() as tmp:
-            model_dir = Path(tmp) / "models"
+            tmp_path = Path(tmp)
+            bin_dir = tmp_path / "bin"
+            bin_dir.mkdir()
+            docker_log = tmp_path / "docker.log"
+            self._write_mmproj_ready_docker(bin_dir / "docker", docker_log)
+            model_dir = tmp_path / "models"
             repo_dir = model_dir / "tencent" / "Hy-MT2-1.8B-GGUF"
             repo_dir.mkdir(parents=True)
             (repo_dir / "Hy-MT2-1.8B-Q4_K_M.gguf").write_bytes(b"not-a-gguf")
@@ -110,7 +115,11 @@ class LauncherArtifactContractsTest(unittest.TestCase):
             result = run_launcher(
                 "scripts/jetson/run_hf_gguf_llama_docker.sh",
                 env=launcher_env(
+                    PATH=f"{bin_dir}:{os.environ['PATH']}",
+                    DOCKER_GPU_ARGS="",
                     DOCKER_TTY="0",
+                    LLAMA_CPP_DOCKER_IMAGE="unit/llama-cpp:test",
+                    LLAMA_CPP_RUNTIME_PROBE_OUTPUT=tmp_path / "runtime-probe.json",
                     MODEL_DIR=model_dir,
                     MODEL_REF="tencent/Hy-MT2-1.8B-GGUF:Q4_K_M",
                     MODEL_FILE="Hy-MT2-1.8B-Q4_K_M.gguf",

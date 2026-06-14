@@ -4,14 +4,10 @@ llama_cpp_runtime_gate_safe_name() {
   printf '%s' "${1:?image required}" | tr '/:@' '___' | tr -cd 'A-Za-z0-9_.-'
 }
 
-require_llama_cpp_multimodal_runtime() {
+llama_cpp_runtime_gate_probe_image() {
   local image="${1:?image required}"
   local docker_gpu_args="${2-}"
   local llama_server_cmd="${3-}"
-
-  if [[ "${JETSON_DRY_RUN:-0}" == "1" ]]; then
-    return 0
-  fi
 
   local gate_dir repo_root python_bin probe_output safe_image
   gate_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,7 +37,73 @@ require_llama_cpp_multimodal_runtime() {
     return 2
   fi
 
-  local multimodal_ready
+  printf '%s\n' "${probe_output}"
+}
+
+require_llama_cpp_server_runtime() {
+  local image="${1:?image required}"
+  local docker_gpu_args="${2-}"
+  local llama_server_cmd="${3-}"
+
+  if [[ "${JETSON_DRY_RUN:-0}" == "1" ]]; then
+    return 0
+  fi
+
+  local python_bin probe_output server_ready
+  python_bin="${PYTHON_BIN:-python3}"
+  if ! probe_output="$(llama_cpp_runtime_gate_probe_image "${image}" "${docker_gpu_args}" "${llama_server_cmd}")"; then
+    return 2
+  fi
+
+  if ! server_ready="$("${python_bin}" - "${probe_output}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    artifact = json.load(handle)
+
+ready = (
+    artifact.get("llama_server_probe_ok") is True
+    and artifact.get("llama_server_found") is True
+    and artifact.get("llama_server_help_ok") is True
+)
+if not ready:
+    print(
+        "runtime_probe_detail: "
+        f"llama_server_probe_ok={artifact.get('llama_server_probe_ok')}; "
+        f"llama_server_found={artifact.get('llama_server_found')}; "
+        f"llama_server_path={artifact.get('llama_server_path')}; "
+        f"llama_server_help_ok={artifact.get('llama_server_help_ok')}",
+        file=sys.stderr,
+    )
+print("1" if ready else "0")
+PY
+  )"; then
+    echo "runtime_probe_failed: invalid llama.cpp runtime probe artifact ${probe_output}" >&2
+    return 2
+  fi
+
+  if [[ "${server_ready}" != "1" ]]; then
+    echo "runtime_missing_llama_server: image ${image} did not expose a usable llama-server; see ${probe_output}" >&2
+    return 2
+  fi
+}
+
+require_llama_cpp_multimodal_runtime() {
+  local image="${1:?image required}"
+  local docker_gpu_args="${2-}"
+  local llama_server_cmd="${3-}"
+
+  if [[ "${JETSON_DRY_RUN:-0}" == "1" ]]; then
+    return 0
+  fi
+
+  local python_bin probe_output multimodal_ready
+  python_bin="${PYTHON_BIN:-python3}"
+  if ! probe_output="$(llama_cpp_runtime_gate_probe_image "${image}" "${docker_gpu_args}" "${llama_server_cmd}")"; then
+    return 2
+  fi
+
   if ! multimodal_ready="$("${python_bin}" - "${probe_output}" <<'PY'
 import json
 import sys

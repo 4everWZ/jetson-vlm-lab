@@ -8,6 +8,8 @@ source "${script_dir}/resolve_llama_cpp_image.sh"
 source "${script_dir}/phase_logging.sh"
 # shellcheck source=hf_artifacts.sh
 source "${script_dir}/hf_artifacts.sh"
+# shellcheck source=llama_cpp_runtime_gate.sh
+source "${script_dir}/llama_cpp_runtime_gate.sh"
 
 image="$(resolve_llama_cpp_image)"
 model_dir="${MODEL_DIR:-/mnt/nvme/models}"
@@ -67,6 +69,8 @@ if [[ "${dry_run}" == "1" ]]; then
   printf '\n'
   exit 0
 fi
+
+require_llama_cpp_server_runtime "${image}" "${docker_gpu_args}" "${llama_server_cmd}"
 
 mkdir -p "${model_dir}" "${hf_home_on_host}" "$(dirname "${host_model_path}")"
 
