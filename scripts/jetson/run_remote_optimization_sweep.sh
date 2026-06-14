@@ -218,10 +218,25 @@ if [[ "${gguf_preflight}" == "1" ]]; then
   preflight_dir="outputs/optimization_sweeps/${preflight_run_prefix}"
   preflight_plan="${preflight_dir}/${preflight_run_prefix}.preflight-plan.json"
   preflight_manifest="${preflight_dir}/${preflight_run_prefix}.gguf-artifacts.json"
+  preflight_prepare_env=()
+  if [[ "${prepare_max_clocks}" == "1" ]]; then
+    preflight_prepare_env+=(
+      "EDGE_VLM_PREPARE_MAX_CLOCKS_ENABLED=${prepare_max_clocks}"
+      "EDGE_VLM_PREPARE_MAX_CLOCKS_CAPTURE=${clocks_capture:-}"
+    )
+  fi
+  if [[ "${drop_caches_before_variant}" == "1" ]]; then
+    preflight_prepare_env+=(
+      "EDGE_VLM_DROP_CACHES_BEFORE_VARIANT=${drop_caches_before_variant}"
+      "EDGE_VLM_MEMORY_PREPARE_ATTEMPTS=${memory_prepare_attempts}"
+      "EDGE_VLM_PRE_VARIANT_COMMAND_SOURCE=remote_wrapper_drop_caches"
+    )
+  fi
   "${remote_exec}" \
     env \
     "LLAMA_CPP_DOCKER_IMAGE=${llama_cpp_image}" \
     "PYTHONPATH=${remote_pythonpath}" \
+    "${preflight_prepare_env[@]}" \
     python3 -m edge_vlm.jetson_sweep \
     "${sweep_args[@]}" \
     --dry-run \
