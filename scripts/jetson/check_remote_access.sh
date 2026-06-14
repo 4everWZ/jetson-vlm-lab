@@ -14,6 +14,9 @@ dry_run="${JETSON_REMOTE_ACCESS_DRY_RUN:-0}"
 tcp_timeout="${JETSON_REMOTE_ACCESS_TCP_TIMEOUT:-5}"
 icmp_probe="${JETSON_REMOTE_ACCESS_ICMP_PROBE:-1}"
 icmp_timeout="${JETSON_REMOTE_ACCESS_ICMP_TIMEOUT:-3}"
+tcp_probe="${JETSON_REMOTE_ACCESS_TCP_PROBE:-auto}"
+tailscale_bin="${JETSON_TAILSCALE_BIN:-}"
+powershell_bin="${JETSON_POWERSHELL_BIN:-}"
 
 if [[ -z "${host}" || -z "${user}" ]]; then
   echo "JETSON_SSH_HOST and JETSON_SSH_USER are required." >&2
@@ -30,6 +33,36 @@ if [[ "${icmp_probe}" != "0" && "${icmp_probe}" != "1" ]]; then
   exit 2
 fi
 
+if [[ "${tcp_probe}" != "auto" && "${tcp_probe}" != "nc" && "${tcp_probe}" != "powershell" ]]; then
+  echo "JETSON_REMOTE_ACCESS_TCP_PROBE must be auto, nc, or powershell." >&2
+  exit 2
+fi
+
+resolve_tool() {
+  local explicit="$1"
+  shift
+  local candidate
+  if [[ -n "${explicit}" ]]; then
+    if [[ -x "${explicit}" || -f "${explicit}" ]]; then
+      printf '%s\n' "${explicit}"
+      return 0
+    fi
+    return 1
+  fi
+  for candidate in "$@"; do
+    if [[ "${candidate}" == */* ]]; then
+      if [[ -x "${candidate}" || -f "${candidate}" ]]; then
+        printf '%s\n' "${candidate}"
+        return 0
+      fi
+    elif command -v "${candidate}" >/dev/null 2>&1; then
+      command -v "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 host_is_tailscale_cgnat_ipv4() {
   local candidate="$1"
   local octet1 octet2 octet3 octet4 octet
@@ -45,18 +78,47 @@ host_is_tailscale_cgnat_ipv4() {
 
 emit_tailnet_probe() {
   local candidate="$1"
+  local resolved_tailscale
   if ! host_is_tailscale_cgnat_ipv4 "${candidate}"; then
     return 0
   fi
-  if ! command -v tailscale >/dev/null 2>&1; then
+  if ! resolved_tailscale="$(
+    resolve_tool \
+      "${tailscale_bin}" \
+      tailscale \
+      "/mnt/c/Program Files/Tailscale/tailscale.exe"
+  )"; then
     printf 'tailnet_probe=tailscale_cli_missing\n'
     return 0
   fi
-  if tailscale status >/dev/null 2>&1; then
+  if "${resolved_tailscale}" status >/dev/null 2>&1; then
     printf 'tailnet_probe=tailscale_status_ok\n'
   else
     printf 'tailnet_probe=tailscale_status_failed\n'
   fi
+}
+
+powershell_quote() {
+  local value="$1"
+  printf "'%s'" "${value//\'/\'\'}"
+}
+
+run_powershell_tcp_probe() {
+  local candidate_host="$1"
+  local candidate_port="$2"
+  local resolved_powershell quoted_host
+  if ! resolved_powershell="$(
+    resolve_tool \
+      "${powershell_bin}" \
+      powershell.exe \
+      pwsh \
+      "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+  )"; then
+    return 127
+  fi
+  quoted_host="$(powershell_quote "${candidate_host}")"
+  "${resolved_powershell}" -NoProfile -Command \
+    "if (Test-NetConnection -ComputerName ${quoted_host} -Port ${candidate_port} -InformationLevel Quiet) { exit 0 } else { exit 1 }"
 }
 
 printf 'ssh_target=%s@%s\n' "${user}" "${host}"
@@ -81,25 +143,48 @@ fi
 
 emit_tailnet_probe "${host}"
 
-if ! command -v nc >/dev/null 2>&1; then
-  echo "tcp_probe=nc_missing" >&2
-  echo "nc is required for the local TCP SSH precheck." >&2
-  exit 2
-fi
-
 stderr_file="$(mktemp)"
 cleanup() {
   rm -f "${stderr_file}"
 }
 trap cleanup EXIT
 
-if nc -vz -w "${tcp_timeout}" "${host}" "${port}" 2>"${stderr_file}"; then
-  printf 'tcp_probe=ok\n'
-  exit 0
-else
-  status=$?
+if [[ "${tcp_probe}" != "powershell" ]]; then
+  if ! command -v nc >/dev/null 2>&1; then
+    if [[ "${tcp_probe}" == "nc" ]]; then
+      echo "tcp_probe=nc_missing" >&2
+      echo "nc is required for the local TCP SSH precheck." >&2
+      exit 2
+    fi
+  elif nc -vz -w "${tcp_timeout}" "${host}" "${port}" 2>"${stderr_file}"; then
+    printf 'tcp_probe=ok\n'
+    printf 'tcp_probe_transport=nc\n'
+    exit 0
+  else
+    status=$?
+    if [[ "${tcp_probe}" == "nc" ]]; then
+      echo "tcp_probe=tcp_connect_failed" >&2
+      cat "${stderr_file}" >&2
+      exit "${status}"
+    fi
+  fi
 fi
 
+if [[ "${tcp_probe}" != "nc" ]]; then
+  if run_powershell_tcp_probe "${host}" "${port}" 2>>"${stderr_file}"; then
+    printf 'tcp_probe=ok\n'
+    printf 'tcp_probe_transport=powershell\n'
+    exit 0
+  else
+    status=$?
+  fi
+fi
+
+if [[ "${status:-127}" -eq 127 && ! -s "${stderr_file}" ]]; then
+  echo "tcp_probe=powershell_missing" >&2
+  echo "nc or PowerShell is required for the local TCP SSH precheck." >&2
+  exit 2
+fi
 echo "tcp_probe=tcp_connect_failed" >&2
 cat "${stderr_file}" >&2
-exit "${status}"
+exit "${status:-1}"

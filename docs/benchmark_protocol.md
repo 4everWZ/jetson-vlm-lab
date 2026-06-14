@@ -309,9 +309,13 @@ and never prints `.env.jetson` secrets. When the host is in the Tailscale
 CGNAT range `100.64.0.0/10`, it also prints advisory
 `tailnet_probe=tailscale_cli_missing`, `tailnet_probe=tailscale_status_ok`, or
 `tailnet_probe=tailscale_status_failed` so a host-side tailnet problem can be
-separated from Jetson SSH authentication. Use it to separate local
-VPN/Tailscale/routing failures from SSH authentication or remote worktree
-failures.
+separated from Jetson SSH authentication. In WSL/Windows setups it can use
+`JETSON_TAILSCALE_BIN` for host-side `tailscale.exe` status and, when Linux
+`nc` cannot see the tailnet route, fall back through PowerShell
+`Test-NetConnection`; set `JETSON_POWERSHELL_BIN` if it is not on `PATH`.
+`JETSON_REMOTE_ACCESS_TCP_PROBE=auto` is the default, while `nc` or
+`powershell` can force one transport. Use it to separate local VPN/Tailscale/
+routing failures from SSH authentication or remote worktree failures.
 Set `JETSON_REMOTE_ACCESS_PREFLIGHT=1` on
 `scripts/jetson/run_remote_optimization_sweep.sh` when the wrapper itself
 should run this TCP precheck before `git fetch`, max-clocks setup, selector
@@ -349,12 +353,17 @@ scripts/jetson/remote_exec.sh \
     --variant minicpm-q4-baseline-b128-u32-kvq8
 ```
 
-The helper supports SSH keys by default. If `JETSON_SSH_PASSWORD` or
-`JETSON_SSH_PASSWORD_FILE` is set in `.env.jetson`, it uses `sshpass` when
-available and otherwise falls back to `SSH_ASKPASS` with `setsid`. Set
-`JETSON_SSH_PASSWORD_HELPER=sshpass` or `JETSON_SSH_PASSWORD_HELPER=askpass` to
-force one mode. Dry-run output never prints the password. Do not commit
-`.env.jetson`.
+The helper supports SSH keys by default. Set `JETSON_SSH_BIN` when the SSH
+client needs to come from somewhere other than Linux `ssh`; for WSL hosts where
+Windows has the Tailscale route and SSH keys, use
+`JETSON_SSH_BIN=/mnt/c/Windows/System32/OpenSSH/ssh.exe`. If
+`JETSON_SSH_PASSWORD` or `JETSON_SSH_PASSWORD_FILE` is set in `.env.jetson`, it
+uses `sshpass` when available and otherwise falls back to `SSH_ASKPASS` with
+`setsid`. Set `JETSON_SSH_PASSWORD_HELPER=sshpass` or
+`JETSON_SSH_PASSWORD_HELPER=askpass` to force one password mode, or
+`JETSON_SSH_PASSWORD_HELPER=none` to ignore the password value and force
+key/agent-based SSH through `JETSON_SSH_BIN`. Dry-run output never prints the
+password. Do not commit `.env.jetson`.
 
 For optimization sweeps, prefer the remote sweep wrapper so the Jetson worktree
 is updated and the pinned llama.cpp image is applied consistently:

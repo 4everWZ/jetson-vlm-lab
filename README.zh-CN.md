@@ -501,6 +501,11 @@ Jetson 远端连接参数在被 Git 忽略的 `.env.jetson` 中。远端 helper 
 对于 Tailscale 风格的 `100.x` 目标，
 `scripts/jetson/check_remote_access.sh` 还会输出 `tailnet_probe=...`，
 用来区分本机 tailnet CLI/status 问题和 SSH 认证问题。
+如果在 WSL 中运行，而 Windows 侧有 Tailscale 路由，可以设置
+`JETSON_SSH_BIN=/mnt/c/Windows/System32/OpenSSH/ssh.exe` 和
+`JETSON_SSH_PASSWORD_HELPER=none`，让远端 helper 使用 Windows OpenSSH 的
+key/agent；access precheck 也可以使用 Windows 侧的 `tailscale.exe` 和
+PowerShell TCP probe。
 
 用 `JETSON_DRY_RUN=1` 可以只打印 Docker 命令，不要求当前机器有 Docker 或 Jetson 硬件：
 

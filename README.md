@@ -509,6 +509,10 @@ tokens, or private paths into tracked docs.
 For Tailscale-style `100.x` targets, `scripts/jetson/check_remote_access.sh`
 also prints `tailnet_probe=...` to distinguish local tailnet CLI/status issues
 from SSH authentication failures.
+On WSL hosts where Windows has the Tailscale route, set
+`JETSON_SSH_BIN=/mnt/c/Windows/System32/OpenSSH/ssh.exe` and
+`JETSON_SSH_PASSWORD_HELPER=none` to use Windows OpenSSH keys/agent; the access
+precheck can also use host-side `tailscale.exe` and PowerShell TCP probes.
 
 Use `JETSON_DRY_RUN=1` to print the Docker command without requiring Docker or Jetson hardware:
 
