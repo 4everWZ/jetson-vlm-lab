@@ -508,7 +508,11 @@ selection semantics or LFB thresholds. The wrapper also writes
 `sudo_memory_diagnostics_path` and `sudo_memory_diagnostics_summary` back into
 the selector JSON before forwarding it as `--selection-context-json`, so sweep
 plans, compare rows, and eligibility artifacts can carry the readable debugfs
-evidence instead of relying on wrapper stderr.
+evidence instead of relying on wrapper stderr. Selector diagnostics also include
+`memory_blocker_assessment` / `sudo_memory_blocker_assessment`, which summarize
+observed-vs-required LFB, CMA headroom, debugfs-tracked allocation bytes, and
+evidence signals. These assessment objects are evidence only; they do not alter
+selection semantics, ranking, or promotion gates.
 
 Build a comparison table from one or more sweep manifests with:
 
@@ -538,6 +542,8 @@ auto-selected lanes remain visible in promotion evidence instead of reading like
 anonymous static variant ids. If those contexts include memory diagnostics
 summaries, the report also adds `Selector memory` and the JSON export includes
 `selection_memory_diagnostics`, preferring sudo summaries over regular sidecars.
+The export also includes `selection_memory_assessment`, and the Markdown cell
+adds the assessment status plus largest LFB deficit when available.
 When a selector chooses no variant, compare can still attach the context to rows
 whose variant id appears in that selector's primary, fallback, or candidate list
 so blocker evidence remains visible. The sweep manifest also carries any

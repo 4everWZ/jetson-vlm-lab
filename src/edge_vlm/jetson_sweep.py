@@ -416,7 +416,12 @@ def _normalize_selection_context(
         value = record.get(key)
         if isinstance(value, str) and value.strip():
             normalized[key] = value.strip()
-    for key in ("memory_diagnostics_summary", "sudo_memory_diagnostics_summary"):
+    for key in (
+        "memory_diagnostics_summary",
+        "sudo_memory_diagnostics_summary",
+        "memory_blocker_assessment",
+        "sudo_memory_blocker_assessment",
+    ):
         value = record.get(key)
         if isinstance(value, dict):
             normalized[key] = value

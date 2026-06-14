@@ -20,6 +20,7 @@ from .jetson_sweep import (
     capture_preflight_sample,
 )
 from .jetson_memory_diagnostics import capture_memory_diagnostics
+from .lfb_memory_assessment import assess_selection_memory
 
 
 _ENV_REF_RE = re.compile(r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))")
@@ -265,6 +266,11 @@ def select_preferred_variant(
         diagnostics = capture_memory_diagnostics(diagnostics_path)
         selection["memory_diagnostics_path"] = str(diagnostics_path)
         selection["memory_diagnostics_summary"] = dict(diagnostics.get("summary", {}))
+        selection["memory_blocker_assessment"] = assess_selection_memory(
+            selection=selection,
+            diagnostics_summary=selection["memory_diagnostics_summary"],
+            diagnostics_source="regular",
+        )
     return selection
 
 

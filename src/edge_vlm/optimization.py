@@ -51,6 +51,7 @@ class SweepComparisonRow:
     selection_reason: str
     selection_context: dict[str, Any]
     selection_memory_diagnostics: dict[str, Any]
+    selection_memory_assessment: dict[str, Any]
     model: str
     comparison_group: str
     model_family: str
@@ -571,6 +572,14 @@ def _selection_memory_diagnostics(selection_context: dict[str, Any]) -> dict[str
     return {}
 
 
+def _selection_memory_assessment(selection_context: dict[str, Any]) -> dict[str, Any]:
+    for key in ("sudo_memory_blocker_assessment", "memory_blocker_assessment"):
+        assessment = selection_context.get(key)
+        if isinstance(assessment, dict) and assessment:
+            return dict(assessment)
+    return {}
+
+
 def _short_ref(value: str | None, length: int = 12) -> str | None:
     if not value:
         return None
@@ -666,6 +675,14 @@ def _format_selection_memory_diagnostics(row: SweepComparisonRow) -> str:
             )
         else:
             parts.append(f"nvmap={_fmt_bytes(nvmap_values[0])}")
+    assessment = row.selection_memory_assessment
+    status = assessment.get("status") if isinstance(assessment, dict) else None
+    if isinstance(status, str) and status:
+        assessment_text = f"assessment={status}"
+        deficit = assessment.get("lfb_free_block_deficit_max")
+        if isinstance(deficit, int):
+            assessment_text += f" deficit={deficit} blocks"
+        parts.append(assessment_text)
     return " ".join(parts)
 
 
@@ -989,6 +1006,7 @@ def summarize_sweep_manifest(
                 ),
                 selection_context=dict(selection_context),
                 selection_memory_diagnostics=_selection_memory_diagnostics(selection_context),
+                selection_memory_assessment=_selection_memory_assessment(selection_context),
                 model=summary.model if summary is not None else str(entry.get("model") or "unknown"),
                 comparison_group=_comparison_group(
                     variant_plan,
@@ -1442,6 +1460,7 @@ def _comparison_row_artifact(row: SweepComparisonRow) -> dict[str, Any]:
         },
         "selection_context": row.selection_context,
         "selection_memory_diagnostics": row.selection_memory_diagnostics,
+        "selection_memory_assessment": row.selection_memory_assessment,
         "model": row.model,
         "comparison_group": row.comparison_group,
         "model_config": {

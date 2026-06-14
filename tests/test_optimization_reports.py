@@ -1167,6 +1167,17 @@ class OptimizationReportContractsTest(unittest.TestCase):
                     "tegrastats_lfb_free_blocks": 69,
                     "cma_free_kb": 221296,
                 },
+                "sudo_memory_blocker_assessment": {
+                    "status": "lfb_gate_not_met",
+                    "diagnostics_source": "sudo",
+                    "lfb_free_block_deficit_max": 81,
+                    "signals": [
+                        "lfb_below_required",
+                        "debugfs_tracked_allocations_zero",
+                        "cma_free_below_required_lfb_bytes",
+                    ],
+                    "selection_implication": "no_candidate_meets_lfb_gate",
+                },
                 "candidates": [
                     {
                         "variant_id": variant_id,
@@ -1249,14 +1260,23 @@ class OptimizationReportContractsTest(unittest.TestCase):
             rows[0].selection_memory_diagnostics["debugfs_statuses"]["dma_buf_bufinfo"],
             "readable",
         )
+        self.assertEqual(rows[0].selection_memory_assessment["status"], "lfb_gate_not_met")
+        self.assertEqual(rows[0].selection_memory_assessment["lfb_free_block_deficit_max"], 81)
         self.assertEqual(
             eligibility["rows"][0]["selection_memory_diagnostics"]["debugfs_nvmap_clients_total_bytes"],
             0,
         )
+        self.assertEqual(
+            eligibility["rows"][0]["selection_memory_assessment"]["signals"][0],
+            "lfb_below_required",
+        )
         self.assertEqual(rows[0].preflight_required_lfb_blocks, 100)
         self.assertIn("Selection", report_text)
         self.assertIn("Selector memory", report_text)
-        self.assertIn("sudo lfb=69 cma=216.1MiB debugfs=dma_buf:readable,nvmap:readable dma=0B nvmap=0B", report_text)
+        self.assertIn(
+            "sudo lfb=69 cma=216.1MiB debugfs=dma_buf:readable,nvmap:readable dma=0B nvmap=0B assessment=lfb_gate_not_met deficit=81 blocks",
+            report_text,
+        )
         self.assertIn("Required lfb", report_text)
         self.assertIn("qwen3-vl-2b-instruct-auto (primary_usable)", report_text)
         self.assertIn("| qwen3-vl-2b-instruct-q4 | `qwen3-vl-2b-instruct-q4-smoke` | qwen3-vl-2b-instruct-auto (primary_usable) | qwen-auto |  | sudo lfb=69", report_text)
@@ -1319,6 +1339,12 @@ class OptimizationReportContractsTest(unittest.TestCase):
                     "debugfs_nvmap_clients_total_bytes": 0,
                     "tegrastats_lfb_free_blocks": 69,
                     "cma_free_kb": 221296,
+                },
+                "sudo_memory_blocker_assessment": {
+                    "status": "lfb_gate_not_met",
+                    "diagnostics_source": "sudo",
+                    "lfb_free_block_deficit_max": 81,
+                    "signals": ["lfb_below_required"],
                 },
                 "candidates": [
                     {
@@ -1386,11 +1412,17 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(rows[0].selection_reason, "no_usable_variant")
         self.assertEqual(rows[0].selection_context["candidates"], selection_context["candidates"])
         self.assertEqual(rows[0].selection_memory_diagnostics["source"], "sudo")
+        self.assertEqual(rows[0].selection_memory_assessment["status"], "lfb_gate_not_met")
         self.assertIn("qwen3-vl-2b-instruct-auto (no_usable_variant)", report_text)
         self.assertIn("sudo lfb=69 cma=216.1MiB", report_text)
+        self.assertIn("assessment=lfb_gate_not_met deficit=81 blocks", report_text)
         self.assertEqual(
             eligibility["rows"][0]["selection_memory_diagnostics"]["debugfs_dma_buf_total_bytes"],
             0,
+        )
+        self.assertEqual(
+            eligibility["rows"][0]["selection_memory_assessment"]["lfb_free_block_deficit_max"],
+            81,
         )
 
     def test_optimization_comparison_report_can_mark_ranking_precheck_failures(self):

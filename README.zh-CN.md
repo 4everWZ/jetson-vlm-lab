@@ -425,6 +425,11 @@ sidecar：`<selector-output>.memory-diagnostics.sudo.json`。它的 compact summ
 会记录 debugfs 状态，以及可解析的 nvmap/dma-buf total；wrapper 还会把它写回
 selector JSON 的 `sudo_memory_diagnostics_summary`，让后续 `selection_contexts`
 能带上这份可读 debugfs 证据。它不会放宽 LFB gate，也不会改变模型选择。
+selector 和 sudo enrichment 还会写
+`memory_blocker_assessment` / `sudo_memory_blocker_assessment`。这些对象只汇总
+观测 LFB 与 required LFB 的差距、CMA headroom、debugfs 追踪到的 allocator
+bytes，以及 `lfb_below_required` 这类 evidence signal；它们不是新的 gate，
+也不是唯一 root cause 结论。
 转发后的 `selection_contexts` 现在会保留 selector 的候选摘要，包括
 `block_reasons` 和 GGUF `artifact_manifest`，所以 Q8 作为 fallback 被选中时，
 sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住。它也会
@@ -432,8 +437,10 @@ sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住
 不会被复制进这个 context，避免把环境配置或潜在 secret 混进下游 artifact。
 当 diagnostics summary 存在时，compare 会增加 `Selector memory` 列，并导出
 扁平的 `selection_memory_diagnostics` 对象，这样不用打开嵌套 sidecar 也能看到
-LFB/CMA 和可读 debugfs total。如果 selector 没有选中任何 variant，compare 仍会
-把这个 context 挂到 primary、fallback 或 candidate 列表里的对应 row 上。
+LFB/CMA 和可读 debugfs total。JSON export 也会保留
+`selection_memory_assessment`，Markdown 列会在存在时追加 assessment status 和最大
+LFB deficit。如果 selector 没有选中任何 variant，compare 仍会把这个 context 挂到
+primary、fallback 或 candidate 列表里的对应 row 上。
 再配合
 `--ranking-min-lfb-blocks <strict-gate>` 时，report 还会增加
 `Ranking precheck` 列，这样 relaxed fallback row 会保留在报告里，但不会被误读成

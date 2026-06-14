@@ -89,9 +89,13 @@ remain raw preview evidence. The remote wrapper writes the sudo diagnostics
 path and compact summary back into the selector JSON before it becomes a sweep
 `selection_context`, so reports can retain readable debugfs evidence alongside
 candidate block reasons. Compare now surfaces that data in a `Selector memory`
-column and flat `selection_memory_diagnostics` export field, and blocked
-no-selection contexts are matched back to their primary/fallback/candidate rows
-instead of disappearing from Q4/Q8 blocker reports.
+column and flat `selection_memory_diagnostics` export field. Selector and sudo
+diagnostics also carry conservative `memory_blocker_assessment` summaries that
+record observed-vs-required LFB deficits, CMA headroom, debugfs-tracked bytes,
+and evidence signals without changing gate semantics or asserting a single root
+cause. Blocked no-selection contexts are matched back to their
+primary/fallback/candidate rows instead of disappearing from Q4/Q8 blocker
+reports.
 The comparison report now also shows that effective threshold in a `Required
 lfb` column, which makes relaxed fallback evidence mechanically distinguishable
 from strict-gate rows. When compare also receives

@@ -354,8 +354,14 @@ class JetsonVariantSelectorContractsTest(unittest.TestCase):
                     return_value={
                         "summary": {
                             "mem_available_kb": 6940680,
+                            "cma_total_kb": 262144,
                             "cma_free_kb": 221296,
                             "swap_used_kb": 0,
+                            "tegrastats_lfb_free_blocks": 69,
+                            "tegrastats_lfb_block_mb": 4,
+                            "debugfs_statuses": {"dma_buf_bufinfo": "unreadable"},
+                            "debugfs_dma_buf_total_bytes": None,
+                            "debugfs_nvmap_clients_total_bytes": None,
                             "top_rss_processes": [{"pid": 12339, "name": "jtop", "rss_kb": 117252}],
                         }
                     },
@@ -385,6 +391,13 @@ class JetsonVariantSelectorContractsTest(unittest.TestCase):
         self.assertEqual(selection["memory_diagnostics_path"], str(diagnostics_path))
         self.assertEqual(selection["memory_diagnostics_summary"]["cma_free_kb"], 221296)
         self.assertEqual(selection["memory_diagnostics_summary"]["top_rss_processes"][0]["name"], "jtop")
+        self.assertEqual(selection["memory_blocker_assessment"]["status"], "lfb_gate_not_met")
+        self.assertEqual(selection["memory_blocker_assessment"]["required_lfb_blocks_max"], 150)
+        self.assertEqual(selection["memory_blocker_assessment"]["lfb_free_block_deficit_max"], 81)
+        self.assertEqual(
+            selection["memory_blocker_assessment"]["candidate_lfb_deficits"]["qwen3-vl-2b-instruct-q8-smoke"],
+            31,
+        )
 
 
 if __name__ == "__main__":

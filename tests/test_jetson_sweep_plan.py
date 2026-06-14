@@ -197,6 +197,12 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
                             "debugfs_dma_buf_total_bytes": 0,
                             "debugfs_nvmap_clients_total_bytes": 0,
                         },
+                        "sudo_memory_blocker_assessment": {
+                            "status": "lfb_gate_not_met",
+                            "diagnostics_source": "sudo",
+                            "lfb_free_block_deficit_max": 81,
+                            "signals": ["lfb_below_required"],
+                        },
                         "candidates": [
                             {
                                 "variant_id": "qwen3-vl-2b-instruct-q4-smoke",
@@ -273,6 +279,12 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
                         "debugfs_statuses": {"dma_buf_bufinfo": "readable"},
                         "debugfs_dma_buf_total_bytes": 0,
                         "debugfs_nvmap_clients_total_bytes": 0,
+                    },
+                    "sudo_memory_blocker_assessment": {
+                        "status": "lfb_gate_not_met",
+                        "diagnostics_source": "sudo",
+                        "lfb_free_block_deficit_max": 81,
+                        "signals": ["lfb_below_required"],
                     },
                     "candidates": [
                         {

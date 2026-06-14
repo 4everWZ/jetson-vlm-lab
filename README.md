@@ -436,6 +436,11 @@ nvmap/dma-buf totals when those debugfs files expose stable `total` lines; it
 is also written back to the selector JSON as `sudo_memory_diagnostics_summary`
 so downstream `selection_contexts` carry the readable debugfs evidence. It does
 not relax the LFB gate or change model selection.
+The selector and sudo enrichment also add conservative
+`memory_blocker_assessment` / `sudo_memory_blocker_assessment` objects. These
+summarize observed-vs-required LFB blocks, CMA headroom, debugfs-tracked
+allocator bytes, and evidence signals such as `lfb_below_required`; they are
+evidence summaries only, not new gates or root-cause claims.
 The forwarded `selection_contexts` now preserve selector candidate summaries,
 including `block_reasons` and the GGUF `artifact_manifest`, so a Q8 row chosen
 as fallback keeps the Q4 blocker evidence in the sweep plan and compare
@@ -444,9 +449,11 @@ paths and compact summaries. Launcher environment blocks are intentionally not
 copied into that context.
 When diagnostics summaries are present, compare adds a `Selector memory` column
 and exports a flat `selection_memory_diagnostics` object so LFB/CMA and readable
-debugfs totals are visible without opening nested sidecars. If the selector
-chooses no variant, compare still attaches that context to rows whose variant id
-appears in the selector's primary, fallback, or candidate list.
+debugfs totals are visible without opening nested sidecars. The JSON export also
+keeps `selection_memory_assessment`, and the Markdown column appends the
+assessment status and largest LFB deficit when present. If the selector chooses
+no variant, compare still attaches that context to rows whose variant id appears
+in the selector's primary, fallback, or candidate list.
 When you also pass `--ranking-min-lfb-blocks <strict-gate>`, the report adds a
 `Ranking precheck` column so relaxed fallback rows remain visible without being
 mistaken for promotable strict-gate evidence.

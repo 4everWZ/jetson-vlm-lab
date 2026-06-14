@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .lfb_memory_assessment import assess_selection_memory
+
 
 def _read_json_object(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -29,6 +31,11 @@ def enrich_with_sudo_memory_diagnostics(
 
     selector["sudo_memory_diagnostics_path"] = str(diagnostics_path)
     selector["sudo_memory_diagnostics_summary"] = dict(summary)
+    selector["sudo_memory_blocker_assessment"] = assess_selection_memory(
+        selection=selector,
+        diagnostics_summary=selector["sudo_memory_diagnostics_summary"],
+        diagnostics_source="sudo",
+    )
     selector_path.write_text(json.dumps(selector, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return selector
 
