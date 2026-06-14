@@ -569,8 +569,16 @@ post-reboot diagnostics as separate steps.
 The remote Qwen selector wrapper writes this artifact automatically when the
 selector chooses no variant and has a selector output path. It also writes the
 boot-config patch plan next to it as `<selector-output>.boot-config-cma-plan.json`.
+It then writes a dry-run apply sidecar for
+`max-required-lfb-rounded-64mib` as
+`<selector-output>.boot-config-cma-apply-dry-run.json`, proving that the plan
+still matches the current boot config without writing `/boot`.
 Set `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` only when these extra read-only
 artifacts should be skipped for a scoped run.
+Set `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_DRY_RUN=0` to skip only the apply
+dry-run sidecar, or
+`JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_CANDIDATE_ID=<candidate_id>` to validate
+a different candidate.
 
 Build a comparison table from one or more sweep manifests with:
 

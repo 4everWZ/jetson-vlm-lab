@@ -464,6 +464,12 @@ config SHA256, current file size, target `APPEND` line, and proposed SHA256.
 An actual write requires both `--apply` and `--confirm-manual-approval`; it
 creates a backup before replacing the boot config and still does not reboot the
 Jetson.
+When the remote Qwen selector writes a no-selection boot-config patch plan, the
+remote wrapper also writes this dry-run apply result automatically for
+`max-required-lfb-rounded-64mib`. Set
+`JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_CANDIDATE_ID=<candidate_id>` to validate
+a different candidate, or `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_DRY_RUN=0` to
+skip the sidecar.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it

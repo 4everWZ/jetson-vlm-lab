@@ -306,7 +306,7 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
 
-        self.assertEqual(log_text.count("CALL\n"), 4)
+        self.assertEqual(log_text.count("CALL\n"), 5)
         self.assertIn(
             "ARG=env\n"
             "ARG=PYTHONPATH=src\n"
@@ -438,7 +438,7 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
 
-        self.assertEqual(log_text.count("CALL\n"), 6)
+        self.assertEqual(log_text.count("CALL\n"), 7)
         self.assertIn("STDIN_BYTES=2\n", log_text)
         self.assertIn(
             "ARG=sudo\n"

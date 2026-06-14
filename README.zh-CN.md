@@ -447,6 +447,11 @@ apply helper 默认是 dry-run。它会检查 candidate id、当前 boot config 
 file size、目标 `APPEND` 行和 proposed SHA256。真实写入必须同时传
 `--apply` 和 `--confirm-manual-approval`；写入前会先创建 backup，但仍然不会自动
 reboot Jetson。
+当 remote Qwen selector 写出 no-selection boot-config patch plan 时，remote wrapper
+也会自动给 `max-required-lfb-rounded-64mib` 写一个 dry-run apply result sidecar。
+如果要验证不同 candidate，可以设置
+`JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_CANDIDATE_ID=<candidate_id>`；如果要跳过
+这个 sidecar，可以设置 `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_DRY_RUN=0`。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是

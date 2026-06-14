@@ -23,6 +23,8 @@ qwen3_selector_output="${JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR_OUTPUT:-}"
 qwen3_memory_diagnostics="${JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS:-1}"
 qwen3_memory_diagnostics_sudo="${JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO:-0}"
 qwen3_cma_experiment_plan="${JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN:-1}"
+qwen3_cma_apply_dry_run="${JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_DRY_RUN:-1}"
+qwen3_cma_apply_candidate_id="${JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_CANDIDATE_ID:-max-required-lfb-rounded-64mib}"
 gguf_preflight="${JETSON_REMOTE_GGUF_PREFLIGHT:-0}"
 gguf_preflight_fail="${JETSON_REMOTE_GGUF_PREFLIGHT_FAIL:-0}"
 
@@ -148,6 +150,15 @@ derive_boot_config_cma_plan_output() {
   fi
 }
 
+derive_boot_config_cma_apply_dry_run_output() {
+  local selector_output="$1"
+  if [[ "${selector_output}" == *.json ]]; then
+    printf '%s.boot-config-cma-apply-dry-run.json' "${selector_output%.json}"
+  else
+    printf '%s.boot-config-cma-apply-dry-run.json' "${selector_output}"
+  fi
+}
+
 run_remote_sudo_memory_diagnostics() {
   local output="$1"
   printf '%s\n' "${sudo_password}" | "${remote_exec}" \
@@ -185,6 +196,18 @@ write_remote_boot_config_cma_plan() {
     python3 -m edge_vlm.boot_config_cma_plan \
     --cma-plan "${cma_plan_output}" \
     --output "${boot_config_plan_output}"
+}
+
+write_remote_boot_config_cma_apply_dry_run() {
+  local boot_config_plan_output="$1"
+  local candidate_id="$2"
+  local apply_output="$3"
+  "${remote_exec}" \
+    env "PYTHONPATH=${remote_pythonpath}" \
+    python3 -m edge_vlm.boot_config_cma_apply \
+    --plan "${boot_config_plan_output}" \
+    --candidate-id "${candidate_id}" \
+    --output "${apply_output}"
 }
 
 if [[ "${prepare_max_clocks}" == "1" ]]; then
@@ -240,6 +263,14 @@ if [[ "${qwen3_selector}" == "1" ]]; then
   fi
   if [[ "${qwen3_cma_experiment_plan}" != "0" && "${qwen3_cma_experiment_plan}" != "1" ]]; then
     echo "JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN must be 0 or 1." >&2
+    exit 2
+  fi
+  if [[ "${qwen3_cma_apply_dry_run}" != "0" && "${qwen3_cma_apply_dry_run}" != "1" ]]; then
+    echo "JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_DRY_RUN must be 0 or 1." >&2
+    exit 2
+  fi
+  if [[ "${qwen3_cma_apply_dry_run}" == "1" && -z "${qwen3_cma_apply_candidate_id}" ]]; then
+    echo "JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_CANDIDATE_ID must not be empty." >&2
     exit 2
   fi
   selector_min_lfb_blocks="$(extract_arg_value --min-lfb-blocks "${sweep_args[@]}" || true)"
@@ -316,6 +347,11 @@ if [[ "${qwen3_selector}" == "1" ]]; then
     selector_boot_config_cma_plan_output="$(derive_boot_config_cma_plan_output "${qwen3_selector_output}")"
     selector_boot_config_cma_plan_json="$(write_remote_boot_config_cma_plan "${selector_cma_experiment_plan_output}" "${selector_boot_config_cma_plan_output}")"
     echo "Qwen3 selector boot config CMA patch plan output: ${selector_boot_config_cma_plan_output}" >&2
+    if [[ "${qwen3_cma_apply_dry_run}" == "1" ]]; then
+      selector_boot_config_cma_apply_output="$(derive_boot_config_cma_apply_dry_run_output "${qwen3_selector_output}")"
+      selector_boot_config_cma_apply_json="$(write_remote_boot_config_cma_apply_dry_run "${selector_boot_config_cma_plan_output}" "${qwen3_cma_apply_candidate_id}" "${selector_boot_config_cma_apply_output}")"
+      echo "Qwen3 selector boot config CMA apply dry-run output: ${selector_boot_config_cma_apply_output}" >&2
+    fi
   fi
   if [[ -n "${selected_variant_id}" ]]; then
     echo "Qwen3 selector chose ${selected_variant_id} (${selected_reason:-unknown_reason})." >&2

@@ -129,6 +129,12 @@ candidate against the current boot config hash, file size, target line, and
 proposed hash. It defaults to dry-run; write mode requires both `--apply` and
 `--confirm-manual-approval`, creates a backup before replacement, and does not
 perform reboot or post-reboot diagnostics.
+The remote Qwen selector wrapper now writes the dry-run apply sidecar
+automatically for the rounded max-required candidate whenever it writes the
+boot-config patch plan. `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_DRY_RUN=0`
+skips only that sidecar, and
+`JETSON_REMOTE_QWEN3_INSTRUCT_CMA_APPLY_CANDIDATE_ID=<candidate_id>` changes the
+validated candidate without applying it.
 The comparison report now also shows that effective threshold in a `Required
 lfb` column, which makes relaxed fallback evidence mechanically distinguishable
 from strict-gate rows. When compare also receives
