@@ -487,8 +487,10 @@ artifact 合并成一个 `leq2b.candidate_bundle.json`；在 Jetson 上，
 .../leq2b.candidate_bundle.json --gate promotion --output
 .../leq2b.routes.json`。这个 route export 会在每个 `comparison_group`
 内部应用 `q4_first_q8_fallback`：同一组的 Q4 和 Q8 都通过当前 gate 时，
-Q4 会成为该组的 primary，Q8 会作为 fallback metadata 写出。不同组之间仍保留
-bundle 顺序，也不改写 ranking/promotion gate 语义。
+Q4 会成为该组的 primary，Q8 会作为 fallback metadata 写出。如果原始 row
+带有 `selection` 和 `selection_context`，fallback metadata 也会保留它们，
+所以 selector 选中的 Q8 路线仍然带着 Q4 被挡住的证据。不同组之间仍保留 bundle
+顺序，也不改写 ranking/promotion gate 语义。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

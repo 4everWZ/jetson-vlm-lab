@@ -148,9 +148,11 @@ artifact.
 lane, then the `q4_first_q8_fallback` policy is applied within each
 `comparison_group`. If Q4 and Q8 rows for the same group both pass the selected
 gate, Q4 becomes that group's route primary and Q8 is emitted as explicit
-fallback metadata. Cross-group order remains the bundle order, and empty lanes
-stay explicit. This is a consumer/export layer only; it does not redefine
-`Ranking precheck` / `Promotion precheck`.
+fallback metadata. That metadata carries `selection` and `selection_context`
+when present, so selector-chosen fallback routes keep the Q4 blocker context.
+Cross-group order remains the bundle order, and empty lanes stay explicit. This
+is a consumer/export layer only; it does not redefine `Ranking precheck` /
+`Promotion precheck`.
 
 | HunyuanOCR 1B Q8 | Jetson smoke `hunyuanocr-q8-smoke64-20260531c` loaded through `ggml-org/HunyuanOCR-GGUF` after the launcher-resume fix and completed formal/fake-stream records, but the guard failed because all output excerpts were repetitive exclamation-mark strings. This is not an official Tencent-owned GGUF artifact. | Do not run formal repeats for the current Q8 artifact/runtime path. Revisit only with bounded quality triage of artifact, prompt/template handling, or runtime lane. |
 | Tencent Youtu-VL-4B official Q8/BF16-mmproj | Downloaded but failed before server ready with CUDA OOM allocating the mmproj buffer. | Defer until lower-bit official artifact or different runtime path exists. |
