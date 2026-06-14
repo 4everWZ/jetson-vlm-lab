@@ -171,7 +171,7 @@ printf 'llama_server_multimodal_markers=%s\\n' "$(IFS=,; printf '%s' "${markers[
             **os.environ,
             "EDGE_VLM_LLAMA_SERVER_CMD": str(llama_server_cmd),
         }
-    gpu_args_text = str(docker_gpu_args or "--runtime nvidia").strip()
+    gpu_args_text = "--runtime nvidia" if docker_gpu_args is None else str(docker_gpu_args).strip()
     gpu_args = gpu_args_text.split() if gpu_args_text else []
     try:
         result = subprocess.run(

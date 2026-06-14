@@ -359,6 +359,10 @@ for the required llama.cpp multimodal path. When the runtime probe says the
 container lacks that support, the sweep skips the row before server startup with
 `preflight_reason=runtime_missing_mmproj_support` instead of paying model
 download and startup cost first.
+The direct VLM Docker launchers use the same lower-level check before real
+startup and before artifact checks or downloads. `JETSON_DRY_RUN=1` remains a
+command preview only; set `LLAMA_CPP_RUNTIME_PROBE_OUTPUT=...` to choose the
+launcher probe JSON path for a reproducible artifact.
 This exact-flag check matters in practice: on June 9, 2026, the Jetson probe
 found `/usr/local/bin/llama-server` inside
 `dustynv/llama_cpp:b5283-r36.4-cu128-24.04`, but the real Qwen3-VL 2B Instruct

@@ -6,6 +6,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/resolve_llama_cpp_image.sh"
 # shellcheck source=phase_logging.sh
 source "${script_dir}/phase_logging.sh"
+# shellcheck source=llama_cpp_runtime_gate.sh
+source "${script_dir}/llama_cpp_runtime_gate.sh"
 
 image="$(resolve_llama_cpp_image)"
 model_dir="${MODEL_DIR:-/mnt/nvme/models}"
@@ -14,7 +16,7 @@ port="${VLM_SERVER_PORT:-8080}"
 ctx_size="${CTX_SIZE:-2048}"
 n_gpu_layers="${N_GPU_LAYERS:-99}"
 model_alias="${MODEL_ALIAS:-minicpmv46-q4}"
-docker_gpu_args="${DOCKER_GPU_ARGS:---runtime nvidia}"
+docker_gpu_args="${DOCKER_GPU_ARGS---runtime nvidia}"
 docker_tty="${DOCKER_TTY:-1}"
 dry_run="${JETSON_DRY_RUN:-0}"
 llama_server_cmd="${LLAMA_SERVER_CMD:-}"
@@ -61,6 +63,8 @@ if [[ "${dry_run}" == "1" ]]; then
   printf '\n'
   exit 0
 fi
+
+require_llama_cpp_multimodal_runtime "${image}" "${docker_gpu_args}" "${llama_server_cmd}"
 
 artifact_phase_start_ns="$(phase_now_ns)"
 if [[ ! -f "${host_model_path}" ]]; then

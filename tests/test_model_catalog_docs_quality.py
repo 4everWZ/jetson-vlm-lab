@@ -644,6 +644,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("edge_vlm.llama_cpp_runtime", text)
             self.assertIn("probe-image", text)
             self.assertIn("multimodal_ready", text)
+            self.assertIn("LLAMA_CPP_RUNTIME_PROBE_OUTPUT", text)
 
         for text in (readme, readme_zh, protocol_doc, migration_doc):
             self.assertIn("invalid argument: --mmproj", text)

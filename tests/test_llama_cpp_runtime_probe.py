@@ -175,3 +175,54 @@ class LlamaCppRuntimeProbeContractsTest(unittest.TestCase):
         self.assertFalse(artifact["llama_server_supports_mmproj"])
         self.assertEqual(artifact["llama_server_multimodal_markers"], ["mmproj"])
         self.assertFalse(artifact["multimodal_ready"])
+
+    def test_probe_image_cli_honors_empty_docker_gpu_args(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            fake_bin = tmp_path / "bin"
+            fake_bin.mkdir()
+            docker_log = tmp_path / "docker.log"
+            output = tmp_path / "runtime.json"
+            image = "unit/llama-cpp:test"
+            self._write_fake_docker(
+                fake_bin,
+                run_stdout="\n".join(
+                    [
+                        "llama_server_found=1",
+                        "llama_server_path=/usr/local/bin/llama-server",
+                        "llama_server_help_ok=1",
+                        "llama_server_supports_mmproj=1",
+                        "llama_server_multimodal_markers=--mmproj,mmproj",
+                    ]
+                ),
+            )
+
+            result = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    "-m",
+                    "edge_vlm.llama_cpp_runtime",
+                    "probe-image",
+                    "--image",
+                    image,
+                    "--output",
+                    str(output),
+                    "--docker-gpu-args",
+                    "",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "DOCKER_LOG": str(docker_log),
+                    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "PYTHONPATH": "src",
+                },
+            )
+
+            docker_commands = docker_log.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"run --rm --entrypoint /bin/bash {image}", docker_commands)
+        self.assertNotIn("--runtime nvidia", docker_commands)

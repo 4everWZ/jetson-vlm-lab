@@ -343,6 +343,9 @@ Jetson 脚本默认使用已验证多模态 smoke 的自编译官方 llama.cpp �
 Jetson sweep plan 现在会在镜像里探测 `llama-server --help`，记录 runtime
 是否暴露真正的 `--mmproj`；如果图像输入 variant 对应的 runtime 明确不支持
 这条多模态路径，就会直接以 `runtime_missing_mmproj_support` 跳过。
+直连 VLM Docker launcher 在真实启动前也会跑同一套 probe，并且发生在
+artifact 检查或下载之前。`JETSON_DRY_RUN=1` 仍然只打印 Docker 命令。
+需要固定 probe JSON 路径用于审查时，设置 `LLAMA_CPP_RUNTIME_PROBE_OUTPUT=...`。
 如果正在评估 runtime 镜像本身，可以在 sweep 前直接 probe：
 
 ```bash

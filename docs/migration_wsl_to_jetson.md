@@ -52,6 +52,10 @@ unusual. The Jetson sweep plan also probes `llama-server --help` inside the
 selected image and records whether the runtime exposes `--mmproj`; image-capable
 variants are skipped with `runtime_missing_mmproj_support` when the runtime
 cannot satisfy this repo's multimodal path.
+Direct VLM Docker launchers also run that same probe before a real startup and
+before artifact checks or downloads. `JETSON_DRY_RUN=1` stays side-effect-light
+and only prints the Docker command. Set `LLAMA_CPP_RUNTIME_PROBE_OUTPUT=...` to
+pin the launcher probe JSON artifact path.
 When the runtime image itself is the question, probe it directly on Jetson
 before scheduling a sweep:
 

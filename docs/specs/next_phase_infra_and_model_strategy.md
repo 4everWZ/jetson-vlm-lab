@@ -466,6 +466,9 @@ Build rules:
   whether `llama-server --help` exposes the exact `--mmproj` flag; skip rows with
   `runtime_missing_mmproj_support` rather than spending download/startup time on
   an image that cannot satisfy this repo's multimodal path.
+- Run the same runtime probe in direct VLM Docker launchers before real startup
+  and before artifact checks or downloads. Set `LLAMA_CPP_RUNTIME_PROBE_OUTPUT`
+  when a launcher probe artifact needs a stable review path.
 - Use `python -m edge_vlm.llama_cpp_runtime probe-image` when the runtime image
   itself is being evaluated outside a sweep. Its JSON records Docker labels,
   resolved `llama-server`, exact `--mmproj` support, and `multimodal_ready`, so

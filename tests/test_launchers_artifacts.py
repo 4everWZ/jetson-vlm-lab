@@ -1,5 +1,6 @@
 """Jetson launcher and Hugging Face GGUF artifact contract tests."""
 
+import json
 import os
 import subprocess
 import tempfile
@@ -80,6 +81,36 @@ class LauncherArtifactContractsTest(unittest.TestCase):
                     [
                         "#!/usr/bin/env bash",
                         "set -Eeuo pipefail",
+                        "if [[ \"${1:-}\" == \"image\" && \"${2:-}\" == \"inspect\" ]]; then",
+                        "  cat <<'JSON'",
+                        json.dumps(
+                            [
+                                {
+                                    "Id": "sha256:unit-test",
+                                    "Created": "2026-06-14T00:00:00+00:00",
+                                    "RepoDigests": [],
+                                    "Config": {
+                                        "Labels": {
+                                            "org.opencontainers.image.version": "unit-ref",
+                                            "org.opencontainers.image.source": "https://github.com/ggml-org/llama.cpp",
+                                        }
+                                    },
+                                }
+                            ]
+                        ),
+                        "JSON",
+                        "  exit 0",
+                        "fi",
+                        "if [[ \"${1:-}\" == \"run\" && \"$*\" == *\"--entrypoint /bin/bash\"* ]]; then",
+                        "  cat <<'PROBE'",
+                        "llama_server_found=1",
+                        "llama_server_path=/usr/local/bin/llama-server",
+                        "llama_server_help_ok=1",
+                        "llama_server_supports_mmproj=1",
+                        "llama_server_multimodal_markers=--mmproj,mmproj",
+                        "PROBE",
+                        "  exit 0",
+                        "fi",
                         "printf '%s\\n' \"$*\" > \"${FAKE_DOCKER_LOG:?}\"",
                     ]
                 )
