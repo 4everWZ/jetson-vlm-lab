@@ -21,6 +21,7 @@ qwen3_fallback_variant="${JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_VARIANT:-qwen3-v
 qwen3_fallback_min_lfb_blocks="${JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_MIN_LFB_BLOCKS:-}"
 qwen3_selector_output="${JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR_OUTPUT:-}"
 qwen3_memory_diagnostics="${JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS:-1}"
+qwen3_memory_diagnostics_sudo="${JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO:-0}"
 gguf_preflight="${JETSON_REMOTE_GGUF_PREFLIGHT:-0}"
 gguf_preflight_fail="${JETSON_REMOTE_GGUF_PREFLIGHT_FAIL:-0}"
 
@@ -110,6 +111,33 @@ run_remote_memory_prepare() {
     sudo -S -p '' sh -c "${prepare_command}"
 }
 
+derive_selector_memory_diagnostics_output() {
+  local selector_output="$1"
+  if [[ "${selector_output}" == *.json ]]; then
+    printf '%s.memory-diagnostics.json' "${selector_output%.json}"
+  else
+    printf '%s.memory-diagnostics.json' "${selector_output}"
+  fi
+}
+
+derive_sudo_memory_diagnostics_output() {
+  local diagnostics_output="$1"
+  if [[ "${diagnostics_output}" == *.json ]]; then
+    printf '%s.sudo.json' "${diagnostics_output%.json}"
+  else
+    printf '%s.sudo.json' "${diagnostics_output}"
+  fi
+}
+
+run_remote_sudo_memory_diagnostics() {
+  local output="$1"
+  printf '%s\n' "${sudo_password}" | "${remote_exec}" \
+    sudo -S -p '' \
+    env "PYTHONPATH=${remote_pythonpath}" \
+    python3 -m edge_vlm.jetson_memory_diagnostics \
+    --output "${output}"
+}
+
 if [[ "${prepare_max_clocks}" == "1" ]]; then
   sudo_password="$(sudo_password_from_env)"
   if [[ -z "${sudo_password}" ]]; then
@@ -157,6 +185,10 @@ if [[ "${qwen3_selector}" == "1" ]]; then
     echo "JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS must be 0 or 1." >&2
     exit 2
   fi
+  if [[ "${qwen3_memory_diagnostics_sudo}" != "0" && "${qwen3_memory_diagnostics_sudo}" != "1" ]]; then
+    echo "JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO must be 0 or 1." >&2
+    exit 2
+  fi
   selector_min_lfb_blocks="$(extract_arg_value --min-lfb-blocks "${sweep_args[@]}" || true)"
   selector_run_prefix="$(extract_arg_value --run-prefix "${sweep_args[@]}" || true)"
   if [[ -z "${selector_min_lfb_blocks}" ]]; then
@@ -164,6 +196,21 @@ if [[ "${qwen3_selector}" == "1" ]]; then
   fi
   if [[ -z "${qwen3_selector_output}" && -n "${selector_run_prefix}" ]]; then
     qwen3_selector_output="outputs/optimization_sweeps/${selector_run_prefix}/${selector_run_prefix}.qwen3-selector.json"
+  fi
+  selector_memory_diagnostics_output=""
+  if [[ -n "${qwen3_selector_output}" ]]; then
+    selector_memory_diagnostics_output="$(derive_selector_memory_diagnostics_output "${qwen3_selector_output}")"
+  fi
+  if [[ "${qwen3_memory_diagnostics_sudo}" == "1" ]]; then
+    sudo_password="$(sudo_password_from_env)"
+    if [[ -z "${sudo_password}" ]]; then
+      echo "JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO requires JETSON_REMOTE_SUDO_PASSWORD or JETSON_SSH_PASSWORD." >&2
+      exit 2
+    fi
+    if [[ -z "${selector_memory_diagnostics_output}" ]]; then
+      echo "JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO requires --run-prefix or JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR_OUTPUT." >&2
+      exit 2
+    fi
   fi
   if [[ "${drop_caches_before_variant}" == "1" ]]; then
     run_remote_memory_prepare
@@ -184,12 +231,7 @@ if [[ "${qwen3_selector}" == "1" ]]; then
   if [[ -n "${qwen3_selector_output}" ]]; then
     selector_args+=(--output "${qwen3_selector_output}")
   fi
-  if [[ "${qwen3_memory_diagnostics}" == "1" && -n "${qwen3_selector_output}" ]]; then
-    if [[ "${qwen3_selector_output}" == *.json ]]; then
-      selector_memory_diagnostics_output="${qwen3_selector_output%.json}.memory-diagnostics.json"
-    else
-      selector_memory_diagnostics_output="${qwen3_selector_output}.memory-diagnostics.json"
-    fi
+  if [[ "${qwen3_memory_diagnostics}" == "1" && -n "${selector_memory_diagnostics_output}" ]]; then
     selector_args+=(--memory-diagnostics-output "${selector_memory_diagnostics_output}")
   fi
   selector_json="$("${remote_exec}" "${selector_args[@]}")"
@@ -207,6 +249,11 @@ if [[ "${qwen3_selector}" == "1" ]]; then
     if ! has_variant_arg "${selected_variant_id}" "${sweep_args[@]}"; then
       sweep_args+=(--variant "${selected_variant_id}")
     fi
+  fi
+  if [[ "${qwen3_memory_diagnostics_sudo}" == "1" ]]; then
+    sudo_memory_diagnostics_output="$(derive_sudo_memory_diagnostics_output "${selector_memory_diagnostics_output}")"
+    sudo_memory_diagnostics_json="$(run_remote_sudo_memory_diagnostics "${sudo_memory_diagnostics_output}")"
+    echo "Qwen3 selector sudo memory diagnostics output: ${sudo_memory_diagnostics_output}" >&2
   fi
   if [[ -n "${selected_variant_id}" ]]; then
     echo "Qwen3 selector chose ${selected_variant_id} (${selected_reason:-unknown_reason})." >&2

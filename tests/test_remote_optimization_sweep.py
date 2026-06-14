@@ -258,6 +258,116 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
         self.assertIn("ARG=--variant\nARG=smolvlm2-256m-q8-smoke\n", log_text)
         self.assertIn("ARG=--variant\nARG=qwen3-vl-2b-instruct-q8-smoke\n", log_text)
 
+    def test_remote_optimization_sweep_can_capture_sudo_memory_diagnostics_after_qwen3_selector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_executable(
+                fake_remote,
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                    "if [[ \"${1:-}\" == \"sudo\" ]]; then",
+                    "  IFS= read -r password_from_stdin || true",
+                    "  printf 'STDIN_BYTES=%s\\n' \"${#password_from_stdin}\" >> \"${FAKE_REMOTE_LOG}\"",
+                    "  printf '%s\\n' '{\"output\":\"sudo-sidecar.json\",\"summary\":{\"debugfs\":\"readable\"}}'",
+                    "fi",
+                    "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    "if printf '%s\\n' \"$@\" | grep -q 'select_qwen3_instruct_variant.sh'; then",
+                    "  printf '%s\\n' '{\"selected_variant_id\":\"\",\"selected_reason\":\"no_usable_variant\"}'",
+                    "fi",
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--run-prefix",
+                    "unit-selector-sudo",
+                    "--variant",
+                    "smolvlm2-256m-q8-smoke",
+                    "--min-lfb-blocks",
+                    "150",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR="1",
+                    JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO="1",
+                    JETSON_REMOTE_SUDO_PASSWORD="pw",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 3)
+        self.assertIn("STDIN_BYTES=2\n", log_text)
+        self.assertIn(
+            "ARG=sudo\n"
+            "ARG=-S\n"
+            "ARG=-p\n"
+            "ARG=\n"
+            "ARG=env\n"
+            "ARG=PYTHONPATH=src\n"
+            "ARG=python3\n"
+            "ARG=-m\n"
+            "ARG=edge_vlm.jetson_memory_diagnostics\n"
+            "ARG=--output\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.memory-diagnostics.sudo.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "Qwen3 selector sudo memory diagnostics output: "
+            "outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.memory-diagnostics.sudo.json",
+            result.stderr,
+        )
+        self.assertNotIn("sudo-sidecar.json", result.stdout)
+
+    def test_remote_optimization_sweep_requires_password_for_sudo_memory_diagnostics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_remote_arg_logger(fake_remote)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--run-prefix",
+                    "unit-selector-sudo",
+                    "--variant",
+                    "smolvlm2-256m-q8-smoke",
+                    "--min-lfb-blocks",
+                    "150",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR="1",
+                    JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO="1",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO requires "
+            "JETSON_REMOTE_SUDO_PASSWORD or JETSON_SSH_PASSWORD.",
+            result.stderr,
+        )
+        self.assertFalse(log_file.exists())
+
     def test_remote_optimization_sweep_can_skip_git_sync(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

@@ -417,6 +417,12 @@ comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight g
 remote Qwen selector 默认还会写
 `<selector-output>.memory-diagnostics.json`；只有明确想跳过这个只读 sidecar
 时，才设置 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0`。
+如果 sidecar 里 debugfs 路径显示为 unreadable，而你需要实际的
+nvmap/dma-buf/CMA debugfs preview，可以在 `.env.jetson` 里设置
+`JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` 和
+`JETSON_REMOTE_SUDO_PASSWORD`。wrapper 会在 selector 运行后额外写一个只读
+sidecar：`<selector-output>.memory-diagnostics.sudo.json`；它不会放宽 LFB gate，
+也不会改变模型选择。
 转发后的 `selection_contexts` 现在会保留 selector 的候选摘要，包括
 `block_reasons` 和 GGUF `artifact_manifest`，所以 Q8 作为 fallback 被选中时，
 sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住。launcher

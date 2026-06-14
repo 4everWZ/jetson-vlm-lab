@@ -77,6 +77,12 @@ separate from selection semantics and captures lower-level LFB context such as
 CMA free memory, buddyinfo orders, swap/zram state, compaction vmstat counters,
 memory pressure, top RSS processes, and debugfs availability, so repeated LFB
 blocks can be debugged without rerunning a full model startup.
+For deeper read-only debugfs triage, the remote wrapper can opt in to
+`JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` and write a second
+`<selector-output>.memory-diagnostics.sudo.json` sidecar through `sudo`. This
+keeps nvmap/dma-buf/CMA debugfs previews out of the default path while allowing
+permission-limited LFB investigations to gather the missing lower-level
+evidence without changing selection semantics or LFB gates.
 The comparison report now also shows that effective threshold in a `Required
 lfb` column, which makes relaxed fallback evidence mechanically distinguishable
 from strict-gate rows. When compare also receives

@@ -495,6 +495,13 @@ compaction vmstat counters, PSI memory pressure, top RSS processes, and debugfs
 availability. Set `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0` to skip
 that sidecar for a scoped rerun; it does not affect model selection semantics
 or the LFB gate.
+When debugfs paths are present but unreadable in the regular sidecar, set
+`JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` and keep
+`JETSON_REMOTE_SUDO_PASSWORD` in the ignored `.env.jetson` file. The wrapper
+then runs the same diagnostics module through `sudo` after selector inspection
+and writes `<selector-output>.memory-diagnostics.sudo.json`. This is a
+read-only evidence artifact for nvmap/dma-buf/CMA triage and does not affect
+selection semantics or LFB thresholds.
 
 Build a comparison table from one or more sweep manifests with:
 

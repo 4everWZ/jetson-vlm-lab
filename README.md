@@ -425,6 +425,12 @@ The remote Qwen selector also writes
 `<selector-output>.memory-diagnostics.json` by default; set
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0` only when you need to skip
 that read-only sidecar.
+If the sidecar reports debugfs paths as unreadable and you need the actual
+nvmap/dma-buf/CMA debugfs previews, set
+`JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` with
+`JETSON_REMOTE_SUDO_PASSWORD` in `.env.jetson`. The wrapper then writes a second
+read-only sidecar named `<selector-output>.memory-diagnostics.sudo.json` after
+the selector run; it does not relax the LFB gate or change model selection.
 The forwarded `selection_contexts` now preserve selector candidate summaries,
 including `block_reasons` and the GGUF `artifact_manifest`, so a Q8 row chosen
 as fallback keeps the Q4 blocker evidence in the sweep plan and compare
