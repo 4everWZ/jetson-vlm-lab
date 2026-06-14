@@ -404,7 +404,12 @@ remote sweep wrapper 现在也会把这个 selector 决策带进 sweep manifest�
 所以 `edge_vlm.optimization compare` 的 `Selection` 列能直接标出
 auto-selected 的 Qwen3 路线，而不是只剩一个没有决策来源的静态 variant id。
 comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight gate 和
-观测到的 `Preflight lfb` 并排放出来。再配合
+观测到的 `Preflight lfb` 并排放出来。
+转发后的 `selection_contexts` 现在会保留 selector 的候选摘要，包括
+`block_reasons` 和 GGUF `artifact_manifest`，所以 Q8 作为 fallback 被选中时，
+sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住。launcher
+环境块不会被复制进这个 context，避免把环境配置或潜在 secret 混进下游 artifact。
+再配合
 `--ranking-min-lfb-blocks <strict-gate>` 时，report 还会增加
 `Ranking precheck` 列，这样 relaxed fallback row 会保留在报告里，但不会被误读成
 可直接 promotion 的 strict-gate 证据。

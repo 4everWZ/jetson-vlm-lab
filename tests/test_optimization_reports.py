@@ -1140,19 +1140,36 @@ class OptimizationReportContractsTest(unittest.TestCase):
                 encoding="utf-8",
             )
             manifest = output_root / "qwen-auto.manifest.json"
+            eligibility_output = tmp_path / "qwen-auto.eligibility.json"
+            selection_context = {
+                "selection_id": "qwen3-vl-2b-instruct-auto",
+                "comparison_group": "qwen3-vl-2b-instruct",
+                "selected_variant_id": variant_id,
+                "selected_reason": "primary_usable",
+                "primary_variant_id": variant_id,
+                "fallback_variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                "candidates": [
+                    {
+                        "variant_id": variant_id,
+                        "usable": True,
+                        "chosen": True,
+                        "block_reasons": [],
+                        "artifact_manifest": {"status": "ok", "failed_count": 0},
+                    },
+                    {
+                        "variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                        "usable": False,
+                        "chosen": False,
+                        "block_reasons": ["primary_usable_not_needed"],
+                    },
+                ],
+            }
             manifest.write_text(
                 json.dumps(
                     {
                         "plan": {
                             "run_prefix": run_prefix,
-                            "selection_contexts": [
-                                {
-                                    "selection_id": "qwen3-vl-2b-instruct-auto",
-                                    "comparison_group": "qwen3-vl-2b-instruct",
-                                    "selected_variant_id": variant_id,
-                                    "selected_reason": "primary_usable",
-                                }
-                            ],
+                            "selection_contexts": [selection_context],
                             "variants": [
                                 {
                                     "variant": {
@@ -1195,12 +1212,16 @@ class OptimizationReportContractsTest(unittest.TestCase):
                 manifest_paths=[manifest],
                 output_path=report,
                 baseline_variant_ids=[variant_id],
+                eligibility_output_path=eligibility_output,
             )
             report_text = report.read_text(encoding="utf-8")
+            eligibility = json.loads(eligibility_output.read_text(encoding="utf-8"))
 
         self.assertEqual(rows[0].variant_id, variant_id)
         self.assertEqual(rows[0].selection_id, "qwen3-vl-2b-instruct-auto")
         self.assertEqual(rows[0].selection_reason, "primary_usable")
+        self.assertEqual(rows[0].selection_context["candidates"], selection_context["candidates"])
+        self.assertEqual(eligibility["rows"][0]["selection_context"]["candidates"], selection_context["candidates"])
         self.assertEqual(rows[0].preflight_required_lfb_blocks, 100)
         self.assertIn("Selection", report_text)
         self.assertIn("Required lfb", report_text)

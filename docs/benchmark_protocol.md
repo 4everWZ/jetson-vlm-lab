@@ -441,6 +441,11 @@ chooses a fallback lane under a relaxed gate, forward the same decision as
 those per-variant overrides under `variant_min_lfb_blocks`, and execution uses
 them instead of re-applying the stricter global `--min-lfb-blocks` to the
 selected fallback row.
+The normalized `selection_contexts` also keep per-candidate selector summaries,
+including `block_reasons`, artifact paths, and the GGUF `artifact_manifest`.
+That lets a downstream Q8 fallback row carry the Q4 blocker context through
+the sweep plan and compare artifacts without copying launcher environment
+settings into the manifest.
 Set `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1` for promotion/comparison sweeps. The
 wrapper runs `sudo jetson_clocks` and captures `sudo jetson_clocks --show` under
 ignored `outputs/jetson_inspect/` before launching the sweep. It reads the sudo
@@ -549,7 +554,9 @@ Markdown table, add `--eligibility-output
 outputs/optimization_sweeps/<run-prefix>/comparison.eligibility.json`. That
 JSON sidecar records the same per-row `Startup precheck`, `Ranking precheck`,
 and `Promotion precheck` results, plus top-level eligible row lists for each
-gate.
+gate. Each row also carries the normalized `selection_context` used by the
+comparison row, so selector fallback evidence remains machine-readable in
+downstream selection and route exports.
 To export a filtered downstream artifact from that sidecar, run:
 
 ```bash

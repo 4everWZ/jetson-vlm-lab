@@ -57,8 +57,12 @@ execution path, keeping the suite-wide 150-LFB primary gate while applying a
 100-LFB fallback gate only to the auto-selected Qwen3 Instruct Q8 lane. The
 remote sweep wrapper now also forwards that selector JSON into the sweep
 manifest, so comparison reports can label the selected row in a `Selection`
-column instead of treating it as an unlabeled static variant id. It also
-forwards the fallback lane's relaxed gate as `--variant-min-lfb-blocks`, and
+column instead of treating it as an unlabeled static variant id. The normalized
+context now also preserves per-candidate selector summaries, including
+`block_reasons` and GGUF `artifact_manifest`, so downstream eligibility
+artifacts can show why Q4 was blocked when Q8 is selected as fallback. Launcher
+environment blocks are not copied into that context. It also forwards the
+fallback lane's relaxed gate as `--variant-min-lfb-blocks`, and
 the sweep plan persists that under `variant_min_lfb_blocks` so the selected Q8
 row is not re-blocked by the stricter suite-wide threshold during execution.
 The same wrapper now persists a structured `prepare_context` block in the sweep
