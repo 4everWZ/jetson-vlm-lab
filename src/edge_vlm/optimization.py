@@ -51,6 +51,8 @@ class SweepComparisonRow:
     selection_reason: str
     model: str
     comparison_group: str
+    model_family: str
+    model_quantization: str
     server_image: str | None
     server_image_id: str | None
     llama_cpp_ref: str | None
@@ -765,6 +767,27 @@ def _variant_candidate_scope(variant_plan: dict[str, Any]) -> dict[str, Any]:
     return {"leq2b_candidate": False, "lane": ""}
 
 
+def _variant_model_config_metadata(variant_plan: dict[str, Any]) -> dict[str, str]:
+    variant = variant_plan.get("variant")
+    if not isinstance(variant, dict):
+        return {"family": "", "quantization": ""}
+    config_path = variant.get("config")
+    if not isinstance(config_path, str) or not config_path.strip():
+        return {"family": "", "quantization": ""}
+    try:
+        config = load_model_config(config_path)
+    except (FileNotFoundError, ValueError):
+        return {"family": "", "quantization": ""}
+    model_config = config.get("model")
+    if not isinstance(model_config, dict):
+        return {"family": "", "quantization": ""}
+    metadata: dict[str, str] = {}
+    for key in ("family", "quantization"):
+        value = model_config.get(key)
+        metadata[key] = value.strip() if isinstance(value, str) else ""
+    return metadata
+
+
 def summarize_sweep_manifest(
     manifest_path: str | Path,
     *,
@@ -820,6 +843,7 @@ def summarize_sweep_manifest(
             )
         )
         candidate_scope = _variant_candidate_scope(variant_plan)
+        model_config_metadata = _variant_model_config_metadata(variant_plan)
         summary: RunSummary | None = None
         if benchmark_path is not None and benchmark_path.is_file():
             summary = summarize_run(
@@ -869,6 +893,8 @@ def summarize_sweep_manifest(
                     variant_plan,
                     summary.model if summary is not None else row_model,
                 ),
+                model_family=model_config_metadata["family"],
+                model_quantization=model_config_metadata["quantization"],
                 server_image=str(runtime["image"]) if runtime.get("image") else None,
                 server_image_id=str(runtime["image_id"]) if runtime.get("image_id") else None,
                 llama_cpp_ref=str(runtime["llama_cpp_ref"]) if runtime.get("llama_cpp_ref") else None,
@@ -1300,6 +1326,10 @@ def _comparison_row_artifact(row: SweepComparisonRow) -> dict[str, Any]:
         },
         "model": row.model,
         "comparison_group": row.comparison_group,
+        "model_config": {
+            "family": row.model_family,
+            "quantization": row.model_quantization,
+        },
         "runtime": {
             "server_image": row.server_image,
             "server_image_id": row.server_image_id,

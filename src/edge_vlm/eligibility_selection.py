@@ -8,6 +8,12 @@ from typing import Any, Iterable
 
 
 _VALID_GATES = ("startup", "ranking", "promotion")
+_ROUTE_SELECTION_POLICY = {
+    "name": "q4_first_q8_fallback",
+    "group_key": "comparison_group",
+    "quantization_source": "model_config.quantization",
+    "unknown_quantization": "preserve_input_order",
+}
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:
@@ -23,6 +29,84 @@ def _selected_id(row: dict[str, Any]) -> dict[str, str]:
         "run_id": str(row.get("run_id") or ""),
         "variant_id": str(row.get("variant_id") or ""),
     }
+
+
+def _row_comparison_group(row: dict[str, Any]) -> str:
+    group = row.get("comparison_group")
+    if isinstance(group, str) and group.strip():
+        return group.strip()
+    model = row.get("model")
+    if isinstance(model, str) and model.strip():
+        return model.strip()
+    return str(row.get("variant_id") or "")
+
+
+def _row_quantization(row: dict[str, Any]) -> str:
+    model_config = row.get("model_config")
+    if not isinstance(model_config, dict):
+        return ""
+    quantization = model_config.get("quantization")
+    return quantization.strip() if isinstance(quantization, str) else ""
+
+
+def _quantization_bucket(row: dict[str, Any]) -> str:
+    normalized = _row_quantization(row).upper()
+    if normalized.startswith("Q4"):
+        return "q4"
+    if normalized.startswith("Q8"):
+        return "q8"
+    return ""
+
+
+def _route_member(row: dict[str, Any], *, fallback_reason: str | None = None) -> dict[str, str]:
+    member = {
+        **_selected_id(row),
+        "model": str(row.get("model") or ""),
+        "comparison_group": _row_comparison_group(row),
+        "quantization": _row_quantization(row),
+    }
+    if fallback_reason is not None:
+        member["fallback_reason"] = fallback_reason
+    return member
+
+
+def _ordered_route_candidates(candidates: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    group_order: list[str] = []
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for candidate in candidates:
+        group = _row_comparison_group(candidate)
+        if group not in grouped:
+            group_order.append(group)
+            grouped[group] = []
+        grouped[group].append(candidate)
+
+    ordered: list[dict[str, Any]] = []
+    fallback_groups: list[dict[str, Any]] = []
+    for group in group_order:
+        group_candidates = grouped[group]
+        buckets = [_quantization_bucket(candidate) for candidate in group_candidates]
+        has_q4 = "q4" in buckets
+        has_q8 = "q8" in buckets
+        if has_q4 and has_q8:
+            group_candidates = [
+                *[candidate for candidate in group_candidates if _quantization_bucket(candidate) == "q4"],
+                *[candidate for candidate in group_candidates if _quantization_bucket(candidate) != "q4"],
+            ]
+            q8_fallbacks = [
+                _route_member(candidate, fallback_reason="q4_primary_q8_fallback")
+                for candidate in group_candidates
+                if _quantization_bucket(candidate) == "q8"
+            ]
+            fallback_groups.append(
+                {
+                    "comparison_group": group,
+                    "candidate_count": len(group_candidates),
+                    "primary": _route_member(group_candidates[0]),
+                    "fallbacks": q8_fallbacks,
+                }
+            )
+        ordered.extend(group_candidates)
+    return ordered, fallback_groups
 
 
 def _gate_artifact(row: dict[str, Any], *, gate: str, source: Path) -> dict[str, Any]:
@@ -289,11 +373,19 @@ def build_candidate_route_export_artifact(
 
     routes = {}
     for lane in lane_order:
-        candidates = route_candidates.get(lane, [])
+        candidates, fallback_groups = _ordered_route_candidates(route_candidates.get(lane, []))
+        fallbacks: list[dict[str, str]] = []
+        for group in fallback_groups:
+            group_fallbacks = group.get("fallbacks")
+            if isinstance(group_fallbacks, list):
+                fallbacks.extend(fallback for fallback in group_fallbacks if isinstance(fallback, dict))
         routes[lane] = {
             "candidate_count": len(candidates),
             "selected_ids": [_selected_id(row) for row in candidates],
             "primary": candidates[0] if candidates else None,
+            "fallbacks": fallbacks,
+            "fallback_groups": fallback_groups,
+            "selection_policy": dict(_ROUTE_SELECTION_POLICY),
             "candidates": candidates,
         }
     route_export = {

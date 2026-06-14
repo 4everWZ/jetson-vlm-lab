@@ -3531,6 +3531,8 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertEqual(artifact["eligible"]["ranking"], artifact["eligible"]["startup"])
         self.assertEqual(artifact["eligible"]["promotion"], artifact["eligible"]["startup"])
         self.assertEqual(artifact["rows"][0]["artifact_phase"]["status"], "cached")
+        self.assertEqual(artifact["rows"][0]["model_config"]["family"], "Tencent Youtu-LLM")
+        self.assertEqual(artifact["rows"][0]["model_config"]["quantization"], "Q8_0")
         self.assertEqual(artifact["rows"][0]["candidate_scope"], {"leq2b_candidate": True, "lane": "text"})
         self.assertEqual(artifact["rows"][0]["eligibility"]["startup_precheck"], {"passed": True, "reason": ""})
         self.assertEqual(artifact["rows"][0]["eligibility"]["ranking_precheck"], {"passed": True, "reason": ""})
