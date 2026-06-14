@@ -58,13 +58,19 @@ def _quantization_bucket(row: dict[str, Any]) -> str:
     return ""
 
 
-def _route_member(row: dict[str, Any], *, fallback_reason: str | None = None) -> dict[str, str]:
-    member = {
+def _route_member(row: dict[str, Any], *, fallback_reason: str | None = None) -> dict[str, Any]:
+    member: dict[str, Any] = {
         **_selected_id(row),
         "model": str(row.get("model") or ""),
         "comparison_group": _row_comparison_group(row),
         "quantization": _row_quantization(row),
     }
+    selection = row.get("selection")
+    if isinstance(selection, dict):
+        member["selection"] = selection
+    selection_context = row.get("selection_context")
+    if isinstance(selection_context, dict) and selection_context:
+        member["selection_context"] = selection_context
     if fallback_reason is not None:
         member["fallback_reason"] = fallback_reason
     return member
@@ -374,7 +380,7 @@ def build_candidate_route_export_artifact(
     routes = {}
     for lane in lane_order:
         candidates, fallback_groups = _ordered_route_candidates(route_candidates.get(lane, []))
-        fallbacks: list[dict[str, str]] = []
+        fallbacks: list[dict[str, Any]] = []
         for group in fallback_groups:
             group_fallbacks = group.get("fallbacks")
             if isinstance(group_fallbacks, list):

@@ -14,6 +14,28 @@ class OptimizationRouteExportContractsTest(unittest.TestCase):
             tmp_path = Path(tmp)
             bundle_input = tmp_path / "leq2b.candidate_bundle.json"
             route_output = tmp_path / "leq2b.routes.json"
+            q8_selection_context = {
+                "selection_id": "qwen3-vl-2b-instruct-auto",
+                "comparison_group": "qwen3-vl-2b-instruct",
+                "selected_variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                "selected_reason": "fallback_usable",
+                "primary_variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                "fallback_variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                "candidates": [
+                    {
+                        "variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                        "usable": False,
+                        "chosen": False,
+                        "block_reasons": ["invalid_model_artifact"],
+                    },
+                    {
+                        "variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                        "usable": True,
+                        "chosen": True,
+                        "block_reasons": [],
+                    },
+                ],
+            }
             bundle_input.write_text(
                 json.dumps(
                     {
@@ -64,6 +86,11 @@ class OptimizationRouteExportContractsTest(unittest.TestCase):
                                     "model_config": {"quantization": "Q8_0"},
                                     "candidate_lane": "vlm",
                                     "candidate_scope": {"leq2b_candidate": True, "lane": "vlm"},
+                                    "selection": {
+                                        "id": "qwen3-vl-2b-instruct-auto",
+                                        "reason": "fallback_usable",
+                                    },
+                                    "selection_context": q8_selection_context,
                                     "source_selection_path": "vlm/ranking.selection.json",
                                     "source_gate": "ranking",
                                 },
@@ -124,6 +151,11 @@ class OptimizationRouteExportContractsTest(unittest.TestCase):
                     "model": "qwen3-vl-2b-instruct-q8",
                     "comparison_group": "qwen3-vl-2b-instruct",
                     "quantization": "Q8_0",
+                    "selection": {
+                        "id": "qwen3-vl-2b-instruct-auto",
+                        "reason": "fallback_usable",
+                    },
+                    "selection_context": q8_selection_context,
                     "fallback_reason": "q4_primary_q8_fallback",
                 }
             ],
@@ -148,6 +180,11 @@ class OptimizationRouteExportContractsTest(unittest.TestCase):
                             "model": "qwen3-vl-2b-instruct-q8",
                             "comparison_group": "qwen3-vl-2b-instruct",
                             "quantization": "Q8_0",
+                            "selection": {
+                                "id": "qwen3-vl-2b-instruct-auto",
+                                "reason": "fallback_usable",
+                            },
+                            "selection_context": q8_selection_context,
                             "fallback_reason": "q4_primary_q8_fallback",
                         }
                     ],
