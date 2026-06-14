@@ -466,6 +466,7 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
                     "EDGE_VLM_PREPARE_MAX_CLOCKS_ENABLED": "1",
                     "EDGE_VLM_PREPARE_MAX_CLOCKS_CAPTURE": "outputs/jetson_inspect/jetson-clocks-max-20260609T120000Z.txt",
                     "EDGE_VLM_DROP_CACHES_BEFORE_VARIANT": "1",
+                    "EDGE_VLM_MEMORY_PREPARE_ATTEMPTS": "3",
                     "EDGE_VLM_PRE_VARIANT_COMMAND_SOURCE": "remote_wrapper_drop_caches",
                 },
             )
@@ -476,6 +477,7 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
                 "max_clocks_enabled": True,
                 "max_clocks_capture": "outputs/jetson_inspect/jetson-clocks-max-20260609T120000Z.txt",
                 "drop_caches_before_variant": True,
+                "memory_prepare_attempts": 3,
                 "pre_variant_command_source": "remote_wrapper_drop_caches",
             },
         )

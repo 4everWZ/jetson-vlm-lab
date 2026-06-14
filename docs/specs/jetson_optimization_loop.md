@@ -133,6 +133,7 @@ For promotion or final comparison sweeps, lock Jetson clocks before the run:
 ```bash
 JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
 JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
+JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS=1 \
 scripts/jetson/run_remote_optimization_sweep.sh \
   --run-prefix minicpm-promo-001 \
   --variant minicpm-q4-baseline-b128-u32-kvq8 \
@@ -280,6 +281,7 @@ enable the remote wrapper's page-cache preparation:
 ```bash
 JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
 JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
+JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS=1 \
 scripts/jetson/run_remote_optimization_sweep.sh \
   --run-prefix minicpm-promo-001 \
   --variant minicpm-q4-baseline-b128-u32-kvq8 \
@@ -291,10 +293,13 @@ scripts/jetson/run_remote_optimization_sweep.sh \
 
 The wrapper uses the sudo password from stdin to feed a per-run 0600 FIFO, then
 appends a pre-variant command shaped like
-`sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory' < /tmp/...`
+`sudo -S -p '' sh -c 'prepare_attempt=1; while [ "${prepare_attempt}" -le 1 ]; do sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory; prepare_attempt=$((prepare_attempt + 1)); done' < /tmp/...`
 without putting the password in command-line arguments, the dry-run plan, or
-the sweep manifest. The command itself and the FIFO path are recorded in the
-dry-run plan and sweep manifest. If it returns a non-zero exit code, that
+the sweep manifest. Increase `JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS` only for
+diagnostic runs where one prepare pass still leaves LFB below the requested
+gate; it does not relax `--min-lfb-blocks`. The command itself and the FIFO
+path are recorded in the dry-run plan and sweep manifest. If it returns a
+non-zero exit code, that
 variant is skipped before preflight or Docker startup and the manifest records
 `pre_variant_command_passed=false` plus
 `preflight_reason=pre_variant_command_failed returncode <N>`.

@@ -67,8 +67,10 @@ the sweep plan persists that under `variant_min_lfb_blocks` so the selected Q8
 row is not re-blocked by the stricter suite-wide threshold during execution.
 The same wrapper now persists a structured `prepare_context` block in the sweep
 plan. That block records whether `max_clocks` and `drop_caches` preparation was
-mechanically enabled, instead of leaving later review to reconstruct intent
-from shell wrappers or ad hoc filenames.
+mechanically enabled, and records `memory_prepare_attempts` when the remote
+drop-cache/compact-memory prepare pass is repeated. This leaves later review to
+read structured run intent from the plan instead of reconstructing it from shell
+wrappers or ad hoc filenames.
 The comparison report now also shows that effective threshold in a `Required
 lfb` column, which makes relaxed fallback evidence mechanically distinguishable
 from strict-gate rows. When compare also receives

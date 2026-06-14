@@ -405,6 +405,10 @@ remote sweep wrapper 现在也会把这个 selector 决策带进 sweep manifest�
 auto-selected 的 Qwen3 路线，而不是只剩一个没有决策来源的静态 variant id。
 comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight gate 和
 观测到的 `Preflight lfb` 并排放出来。
+如果远端只做一次 drop-cache/compact-memory 后 Jetson 仍低于要求的 LFB gate，
+可以把 `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1` 和
+`JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS=<N>` 一起设置。它会在 selector inspect
+和每个 variant preflight 前重复准备，但不会放宽 gate 本身。
 转发后的 `selection_contexts` 现在会保留 selector 的候选摘要，包括
 `block_reasons` 和 GGUF `artifact_manifest`，所以 Q8 作为 fallback 被选中时，
 sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住。launcher

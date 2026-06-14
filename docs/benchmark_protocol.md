@@ -371,6 +371,7 @@ is updated and the pinned llama.cpp image is applied consistently:
 ```bash
 JETSON_REMOTE_PREPARE_MAX_CLOCKS=1 \
 JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1 \
+JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS=1 \
 scripts/jetson/run_remote_optimization_sweep.sh \
   --run-prefix minicpm-promo-iso-001 \
   --variant minicpm-q4-baseline-b128-u32-kvq8 \
@@ -469,7 +470,12 @@ Set `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1` for back-to-back promotion
 comparisons where memory fragmentation can bias later variants. The wrapper
 uses the sudo password from stdin to feed a per-run 0600 FIFO, then appends a
 recorded pre-variant command shaped like
-`sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory' < /tmp/...`.
+`sudo -S -p '' sh -c 'prepare_attempt=1; while [ "${prepare_attempt}" -le 1 ]; do sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory; prepare_attempt=$((prepare_attempt + 1)); done' < /tmp/...`.
+Set `JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS=<N>` to repeat that drop-cache and
+compact-memory pass before selector inspection and before each variant
+preflight; it defaults to `1` and must be a positive integer. This does not
+relax the LFB gate by itself, it only makes the memory-prepare step explicit
+and repeatable when fragmentation remains below the requested threshold.
 The manifest records the command and FIFO path, not the password. Do not
 combine this env flag with a manual `--pre-variant-command`; use the lower-level
 local sweep command only when a custom preparation command is required.
@@ -478,7 +484,8 @@ sweep plan so later compare/promote steps can recover how the run was prepared
 without inferring it from shell snippets alone. When those env flags are used,
 `plan.prepare_context` records booleans such as `max_clocks_enabled` and
 `drop_caches_before_variant`, plus supporting fields like
-`max_clocks_capture` and `pre_variant_command_source`.
+`memory_prepare_attempts`, `max_clocks_capture`, and
+`pre_variant_command_source`.
 
 Build a comparison table from one or more sweep manifests with:
 
@@ -813,7 +820,8 @@ scripts/jetson/run_remote_lightweight_model_suite.sh
 
 The wrapper runs the selected defaults for both target models with
 `JETSON_REMOTE_PREPARE_MAX_CLOCKS=1`,
-`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`, `--trial-count 5`,
+`JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`,
+`JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS=1`, `--trial-count 5`,
 `--fake-stream-max-frames 3`, `--min-lfb-blocks 150`, and
 `--wait-timeout-s 600`, then runs the mechanical comparison report against both
 baseline variants. It also runs `edge_vlm.sweep_quality_review` with

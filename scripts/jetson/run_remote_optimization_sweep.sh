@@ -14,6 +14,7 @@ llama_cpp_image="${JETSON_REMOTE_LLAMA_CPP_IMAGE:-ghcr.io/4everwz/jetson-llama-c
 access_preflight="${JETSON_REMOTE_ACCESS_PREFLIGHT:-0}"
 prepare_max_clocks="${JETSON_REMOTE_PREPARE_MAX_CLOCKS:-0}"
 drop_caches_before_variant="${JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT:-0}"
+memory_prepare_attempts="${JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS:-1}"
 qwen3_selector="${JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR:-0}"
 qwen3_primary_variant="${JETSON_REMOTE_QWEN3_INSTRUCT_PRIMARY_VARIANT:-qwen3-vl-2b-instruct-q4-smoke}"
 qwen3_fallback_variant="${JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_VARIANT:-qwen3-vl-2b-instruct-q8-smoke}"
@@ -96,9 +97,16 @@ has_variant_min_lfb_override_arg() {
   return 1
 }
 
-run_remote_drop_caches_once() {
+memory_prepare_shell() {
+  local attempts="$1"
+  printf 'prepare_attempt=1; while [ "${prepare_attempt}" -le %s ]; do sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory; prepare_attempt=$((prepare_attempt + 1)); done' "${attempts}"
+}
+
+run_remote_memory_prepare() {
+  local prepare_command
+  prepare_command="$(memory_prepare_shell "${memory_prepare_attempts}")"
   printf '%s\n' "${sudo_password}" | "${remote_exec}" \
-    sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory'
+    sudo -S -p '' sh -c "${prepare_command}"
 }
 
 if [[ "${prepare_max_clocks}" == "1" ]]; then
@@ -130,6 +138,10 @@ if [[ "${drop_caches_before_variant}" == "1" ]]; then
     echo "JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT requires JETSON_REMOTE_SUDO_PASSWORD or JETSON_SSH_PASSWORD." >&2
     exit 2
   fi
+  if ! [[ "${memory_prepare_attempts}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS must be a positive integer." >&2
+    exit 2
+  fi
   if [[ "${has_pre_variant_command}" == "1" ]]; then
     echo "JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT cannot be combined with --pre-variant-command." >&2
     exit 2
@@ -149,7 +161,7 @@ if [[ "${qwen3_selector}" == "1" ]]; then
     qwen3_selector_output="outputs/optimization_sweeps/${selector_run_prefix}/${selector_run_prefix}.qwen3-selector.json"
   fi
   if [[ "${drop_caches_before_variant}" == "1" ]]; then
-    run_remote_drop_caches_once
+    run_remote_memory_prepare
   fi
   selector_args=(
     env
@@ -243,6 +255,8 @@ if [[ "${drop_caches_before_variant}" == "1" ]]; then
     bash -lc '
 set -Eeuo pipefail
 IFS= read -r sudo_password
+memory_prepare_attempts="${1:?}"
+shift
 pw_fifo="$(mktemp -u "${TMPDIR:-/tmp}/edge-vlm-sudo.XXXXXX")"
 mkfifo "${pw_fifo}"
 chmod 600 "${pw_fifo}"
@@ -263,16 +277,19 @@ trap cleanup EXIT
   done
 ) &
 pw_feeder_pid="$!"
-pre_variant_command="sudo -S -p '\'''\'' sh -c '\''sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory'\'' < ${pw_fifo}"
+printf -v prepare_command "prepare_attempt=1; while [ \"\${prepare_attempt}\" -le %s ]; do sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory; prepare_attempt=\$((prepare_attempt + 1)); done" "${memory_prepare_attempts}"
+pre_variant_command="sudo -S -p '\'''\'' sh -c '\''${prepare_command}'\'' < ${pw_fifo}"
 "$@" --pre-variant-command "${pre_variant_command}"
 ' \
     remote-sweep \
+    "${memory_prepare_attempts}" \
     env \
     "LLAMA_CPP_DOCKER_IMAGE=${llama_cpp_image}" \
     "PYTHONPATH=${remote_pythonpath}" \
     "EDGE_VLM_PREPARE_MAX_CLOCKS_ENABLED=${prepare_max_clocks}" \
     "EDGE_VLM_PREPARE_MAX_CLOCKS_CAPTURE=${clocks_capture:-}" \
     "EDGE_VLM_DROP_CACHES_BEFORE_VARIANT=${drop_caches_before_variant}" \
+    "EDGE_VLM_MEMORY_PREPARE_ATTEMPTS=${memory_prepare_attempts}" \
     "EDGE_VLM_PRE_VARIANT_COMMAND_SOURCE=remote_wrapper_drop_caches" \
     bash scripts/jetson/run_optimization_sweep.sh \
     "${sweep_args[@]}"

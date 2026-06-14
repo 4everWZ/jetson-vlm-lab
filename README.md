@@ -412,6 +412,10 @@ manifest, so `edge_vlm.optimization compare` can show the auto-selected lane in
 its `Selection` column instead of leaving the Qwen3 row as an unlabeled static
 variant id. The comparison table also shows a `Required lfb` column so the
 effective preflight gate is visible next to the observed `Preflight lfb`.
+If one remote drop-cache/compact-memory pass still leaves the Jetson below the
+requested LFB gate, set `JETSON_REMOTE_MEMORY_PREPARE_ATTEMPTS=<N>` together
+with `JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT=1`. This repeats preparation
+before selector inspection and variant preflight; it does not relax the gate.
 The forwarded `selection_contexts` now preserve selector candidate summaries,
 including `block_reasons` and the GGUF `artifact_manifest`, so a Q8 row chosen
 as fallback keeps the Q4 blocker evidence in the sweep plan and compare

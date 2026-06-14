@@ -285,6 +285,17 @@ def _env_flag(source_env: dict[str, str], key: str) -> bool:
     return str(source_env.get(key, "")).strip() == "1"
 
 
+def _env_positive_int(source_env: dict[str, str], key: str) -> int | None:
+    raw_value = str(source_env.get(key, "")).strip()
+    if not raw_value:
+        return None
+    try:
+        value = int(raw_value)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
 def _prepare_context(source_env: dict[str, str]) -> dict[str, Any]:
     context: dict[str, Any] = {}
     if _env_flag(source_env, "EDGE_VLM_PREPARE_MAX_CLOCKS_ENABLED"):
@@ -294,6 +305,9 @@ def _prepare_context(source_env: dict[str, str]) -> dict[str, Any]:
         context["max_clocks_capture"] = max_clocks_capture
     if _env_flag(source_env, "EDGE_VLM_DROP_CACHES_BEFORE_VARIANT"):
         context["drop_caches_before_variant"] = True
+    memory_prepare_attempts = _env_positive_int(source_env, "EDGE_VLM_MEMORY_PREPARE_ATTEMPTS")
+    if memory_prepare_attempts is not None:
+        context["memory_prepare_attempts"] = memory_prepare_attempts
     pre_variant_command_source = str(source_env.get("EDGE_VLM_PRE_VARIANT_COMMAND_SOURCE", "")).strip()
     if pre_variant_command_source:
         context["pre_variant_command_source"] = pre_variant_command_source
