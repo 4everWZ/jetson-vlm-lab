@@ -439,6 +439,11 @@ lightweight suite 会基于这两个过滤条件额外产出
 artifact 合并成一个 `leq2b.candidate_bundle.json`；在 Jetson 上，
 `scripts/jetson/build_remote_leq2b_candidate_bundle.sh` 可以读取
 `JETSON_LEQ2B_VLM_SELECTION_DIR` 和 `JETSON_LEQ2B_TEXT_SELECTION_DIR`，并在远端写出同一个统一 bundle。
+如果下游 router 需要按 lane 分组的主候选和备选候选，就继续运行
+`python -m edge_vlm.optimization export-routes --input
+.../leq2b.candidate_bundle.json --gate promotion --output
+.../leq2b.routes.json`。这个 route export 只消费 bundle 里已有的候选顺序，
+不重新排序，也不改写 ranking/promotion gate 语义。
 如果 selector 在较宽松的 fallback gate 下选择了 Q8，wrapper 还会继续转发
 `--variant-min-lfb-blocks qwen3-vl-2b-instruct-q8-smoke=...`，并把它记进
 sweep plan 的 `variant_min_lfb_blocks`，这样真正执行 sweep 时不会又被更严格

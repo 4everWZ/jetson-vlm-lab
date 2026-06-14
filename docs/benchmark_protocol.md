@@ -520,6 +520,20 @@ For a remote Jetson bundle, set `JETSON_LEQ2B_VLM_SELECTION_DIR` and
 `JETSON_LEQ2B_TEXT_SELECTION_DIR`, then run
 `scripts/jetson/build_remote_leq2b_candidate_bundle.sh`.
 
+Export a router-facing view from that bundle with `export-routes`:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.optimization export-routes \
+  --input outputs/optimization_sweeps/<bundle-prefix>/leq2b.candidate_bundle.json \
+  --gate promotion \
+  --output outputs/optimization_sweeps/<bundle-prefix>/leq2b.routes.json
+```
+
+The route artifact groups candidates by lane, preserves the bundle's selected
+order, marks the first candidate in each lane as `primary`, and leaves empty
+lanes explicit with `primary: null`. It does not rerank rows or change the
+Ranking precheck / Promotion precheck semantics.
+
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:
 

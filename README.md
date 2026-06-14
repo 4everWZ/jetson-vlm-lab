@@ -440,6 +440,11 @@ artifacts into one `leq2b.candidate_bundle.json`; on Jetson,
 `scripts/jetson/build_remote_leq2b_candidate_bundle.sh` accepts
 `JETSON_LEQ2B_VLM_SELECTION_DIR` and `JETSON_LEQ2B_TEXT_SELECTION_DIR` and
 writes the same unified bundle remotely.
+Use `python -m edge_vlm.optimization export-routes --input
+.../leq2b.candidate_bundle.json --gate promotion --output
+.../leq2b.routes.json` when a downstream router needs lane-grouped primary and
+backup candidates. This route export consumes the existing bundle order; it
+does not rerank or redefine the ranking/promotion gate semantics.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

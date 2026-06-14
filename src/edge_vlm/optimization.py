@@ -13,7 +13,11 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from .config import config_candidate_scope, config_supports_images, load_model_config
-from .eligibility_selection import build_eligibility_selection_artifact, build_selection_bundle_artifact
+from .eligibility_selection import (
+    build_candidate_route_export_artifact,
+    build_eligibility_selection_artifact,
+    build_selection_bundle_artifact,
+)
 from .jetson_profile import summarize_tegrastats_log as summarize_jetson_profile_log
 
 
@@ -1581,6 +1585,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     bundle_parser.add_argument("--input", action="append", required=True, help="Selection JSON path; repeatable")
     bundle_parser.add_argument("--output", required=True, help="Candidate bundle JSON output path")
+    route_parser = subparsers.add_parser(
+        "export-routes",
+        help="Export lane-grouped primary/candidate routes from a candidate bundle",
+    )
+    route_parser.add_argument("--input", required=True, help="Candidate bundle JSON path")
+    route_parser.add_argument("--gate", choices=("startup", "ranking", "promotion"), required=True)
+    route_parser.add_argument("--candidate-lane", action="append", default=[], help="Optional lane filter; repeatable")
+    route_parser.add_argument("--output", required=True, help="Route export JSON output path")
     args = parser.parse_args(argv)
 
     if args.command == "compare":
@@ -1643,6 +1655,15 @@ def main(argv: list[str] | None = None) -> int:
             output_path=args.output,
         )
         print(json.dumps({"inputs": len(artifact["input_paths"]), "output": args.output}, ensure_ascii=False))
+        return 0
+    if args.command == "export-routes":
+        artifact = build_candidate_route_export_artifact(
+            input_path=args.input,
+            gate=args.gate,
+            output_path=args.output,
+            candidate_lanes=args.candidate_lane,
+        )
+        print(json.dumps({"gate": args.gate, "lanes": len(artifact["routes"]), "output": args.output}, ensure_ascii=False))
         return 0
     if args.command != "report":
         parser.print_help()

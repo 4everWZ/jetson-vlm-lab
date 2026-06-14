@@ -202,3 +202,110 @@ def build_selection_bundle_artifact(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(bundle, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return bundle
+
+
+def _ordered_unique(values: Iterable[str]) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = value.strip()
+        if normalized and normalized not in seen:
+            ordered.append(normalized)
+            seen.add(normalized)
+    return ordered
+
+
+def _bundle_filter_lanes(bundle: dict[str, Any]) -> list[str]:
+    filters = bundle.get("filters")
+    if not isinstance(filters, dict):
+        return []
+    candidate_lanes = filters.get("candidate_lanes")
+    if not isinstance(candidate_lanes, list):
+        return []
+    return _ordered_unique(str(lane) for lane in candidate_lanes)
+
+
+def build_candidate_route_export_artifact(
+    *,
+    input_path: str | Path,
+    gate: str,
+    output_path: str | Path,
+    candidate_lanes: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    if gate not in _VALID_GATES:
+        raise ValueError(f"unsupported gate {gate!r}; expected one of {_VALID_GATES}")
+    source = Path(input_path)
+    bundle = _read_json_object(source)
+    if bundle.get("kind") != "candidate_selection_bundle":
+        raise ValueError(f"{source}: expected kind candidate_selection_bundle")
+    selected_by_gate = bundle.get("selected")
+    if not isinstance(selected_by_gate, dict):
+        raise ValueError(f"{source}: expected selected object")
+    selected = selected_by_gate.get(gate, [])
+    if not isinstance(selected, list):
+        raise ValueError(f"{source}: expected selected.{gate} list")
+
+    gates = bundle.get("gates")
+    if not isinstance(gates, dict):
+        gates = {}
+    gate_entry = gates.get(gate)
+    gate_lanes = []
+    if isinstance(gate_entry, dict):
+        lanes = gate_entry.get("lanes")
+        if isinstance(lanes, dict):
+            gate_lanes = list(lanes)
+
+    requested_lanes = _ordered_unique(candidate_lanes or [])
+    lane_order = _ordered_unique(
+        [
+            *requested_lanes,
+            *_bundle_filter_lanes(bundle),
+            *gate_lanes,
+            *(
+                _selected_row_lane(row, fallback_lane="")
+                for row in selected
+                if isinstance(row, dict)
+            ),
+        ]
+    )
+    if requested_lanes:
+        requested_lane_set = set(requested_lanes)
+        lane_order = [lane for lane in lane_order if lane in requested_lane_set]
+
+    route_candidates: dict[str, list[dict[str, Any]]] = {lane: [] for lane in lane_order}
+    for row in selected:
+        if not isinstance(row, dict):
+            raise ValueError(f"{source}: each selected.{gate} row must be a JSON object")
+        lane = _selected_row_lane(row, fallback_lane=str(row.get("candidate_lane") or ""))
+        if not lane:
+            lane = str(row.get("candidate_lane") or "").strip()
+        if requested_lanes and lane not in route_candidates:
+            continue
+        if lane and lane not in route_candidates:
+            route_candidates[lane] = []
+            lane_order.append(lane)
+        if lane:
+            route_candidates[lane].append(dict(row))
+
+    routes = {}
+    for lane in lane_order:
+        candidates = route_candidates.get(lane, [])
+        routes[lane] = {
+            "candidate_count": len(candidates),
+            "selected_ids": [_selected_id(row) for row in candidates],
+            "primary": candidates[0] if candidates else None,
+            "candidates": candidates,
+        }
+    route_export = {
+        "kind": "candidate_route_export",
+        "source_bundle": str(source),
+        "gate": gate,
+        "filters": {
+            "candidate_lanes": lane_order,
+        },
+        "routes": routes,
+    }
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(route_export, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return route_export
