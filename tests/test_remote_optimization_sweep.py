@@ -49,6 +49,7 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
                 env=isolated_remote_env(
                     JETSON_REMOTE_EXEC=str(fake_remote),
                     JETSON_REMOTE_ACCESS_PREFLIGHT="1",
+                    JETSON_REMOTE_ACCESS_TCP_PROBE="nc",
                     JETSON_SSH_HOST="100.95.31.18",
                     JETSON_SSH_USER="weizheng",
                     PATH=f"{fake_bin}:{os.environ['PATH']}",

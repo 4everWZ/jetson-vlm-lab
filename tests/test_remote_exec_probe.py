@@ -97,6 +97,7 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
                     **os.environ,
                     "JETSON_ENV_FILE": str(env_file),
                     "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "JETSON_REMOTE_ACCESS_TCP_PROBE": "nc",
                     "FAKE_NC_LOG": str(tmp_path / "nc.log"),
                     "FAKE_PING_LOG": str(tmp_path / "ping.log"),
                 },
@@ -169,6 +170,7 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
                     **os.environ,
                     "JETSON_ENV_FILE": str(env_file),
                     "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "JETSON_REMOTE_ACCESS_TCP_PROBE": "nc",
                     "FAKE_TAILSCALE_LOG": str(tmp_path / "tailscale.log"),
                 },
             )
@@ -182,6 +184,93 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
         self.assertNotIn("secret-password", result.stdout)
         self.assertNotIn("secret-password", result.stderr)
         self.assertNotIn("secret-password", tailscale_log)
+
+    def test_jetson_remote_access_precheck_can_use_powershell_tcp_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            env_file = tmp_path / ".env.jetson"
+            fake_bin = tmp_path / "bin"
+            fake_bin.mkdir()
+            powershell_log = tmp_path / "powershell.log"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=100.95.31.18",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                        f"JETSON_TAILSCALE_BIN={fake_bin / 'tailscale.exe'}",
+                        f"JETSON_POWERSHELL_BIN={fake_bin / 'powershell.exe'}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            write_executable(
+                fake_bin / "ping",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "exit 1",
+                ],
+            )
+            write_executable(
+                fake_bin / "tailscale.exe",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'TAILSCALE_ARGS=%s\\n' \"$*\" > \"${FAKE_TAILSCALE_LOG:?}\"",
+                ],
+            )
+            write_executable(
+                fake_bin / "nc",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'NC_ARGS=%s\\n' \"$*\" > \"${FAKE_NC_LOG:?}\"",
+                    "printf 'nc linux namespace timeout\\n' >&2",
+                    "exit 1",
+                ],
+            )
+            write_executable(
+                fake_bin / "powershell.exe",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'POWERSHELL_ARGS=%s\\n' \"$*\" > \"${FAKE_POWERSHELL_LOG:?}\"",
+                ],
+            )
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/check_remote_access.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "FAKE_NC_LOG": str(tmp_path / "nc.log"),
+                    "FAKE_TAILSCALE_LOG": str(tmp_path / "tailscale.log"),
+                    "FAKE_POWERSHELL_LOG": str(powershell_log),
+                },
+            )
+            nc_log = _read_text_if_exists(tmp_path / "nc.log")
+            tailscale_log = _read_text_if_exists(tmp_path / "tailscale.log")
+            powershell_text = _read_text_if_exists(powershell_log)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("icmp_probe=failed", result.stdout)
+        self.assertIn("tailnet_probe=tailscale_status_ok", result.stdout)
+        self.assertIn("tcp_probe=ok", result.stdout)
+        self.assertIn("tcp_probe_transport=powershell", result.stdout)
+        self.assertIn("NC_ARGS=-vz -w 5 100.95.31.18 22", nc_log)
+        self.assertIn("TAILSCALE_ARGS=status", tailscale_log)
+        self.assertIn("Test-NetConnection", powershell_text)
+        self.assertIn("100.95.31.18", powershell_text)
+        self.assertIn("22", powershell_text)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+        self.assertNotIn("secret-password", powershell_text)
 
     def test_jetson_remote_access_precheck_reports_tcp_ok_even_when_icmp_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -447,6 +536,62 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
         self.assertIn("SSH_ASKPASS_REQUIRE=force", log_text)
         self.assertIn("weizheng@192.168.1.12", log_text)
         self.assertIn("cd ~/code/jetson-vlm-lab && git pull --ff-only", log_text)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+        self.assertNotIn("secret-password", log_text)
+
+    def test_jetson_remote_exec_can_use_custom_ssh_binary_and_ignore_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            env_file = tmp_path / ".env.jetson"
+            fake_ssh = tmp_path / "windows-ssh.exe"
+            log_file = tmp_path / "ssh.log"
+            write_executable(
+                fake_ssh,
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'ARGS=%s\\n' \"$*\" > \"${FAKE_SSH_LOG:?}\"",
+                ],
+            )
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=100.95.31.18",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_REPO_DIR=~/code/jetson-vlm-lab-bench",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                        "JETSON_SSH_PASSWORD_HELPER=none",
+                        f"JETSON_SSH_BIN={fake_ssh}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/remote_exec.sh",
+                    "git",
+                    "status",
+                    "--short",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "FAKE_SSH_LOG": str(log_file),
+                },
+            )
+            log_text = _read_text_if_exists(log_file)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("weizheng@100.95.31.18", log_text)
+        self.assertIn("cd ~/code/jetson-vlm-lab-bench && git status --short", log_text)
+        self.assertNotIn("SSH_ASKPASS", log_text)
         self.assertNotIn("secret-password", result.stdout)
         self.assertNotIn("secret-password", result.stderr)
         self.assertNotIn("secret-password", log_text)

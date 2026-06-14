@@ -27,6 +27,7 @@ repo_dir="${JETSON_REPO_DIR:-~/code/jetson-vlm-lab}"
 port="${JETSON_SSH_PORT:-22}"
 dry_run="${JETSON_REMOTE_DRY_RUN:-0}"
 strict_host_key_checking="${JETSON_SSH_STRICT_HOST_KEY_CHECKING:-accept-new}"
+ssh_bin="${JETSON_SSH_BIN:-ssh}"
 
 if [[ -z "${host}" || -z "${user}" ]]; then
   echo "JETSON_SSH_HOST and JETSON_SSH_USER are required." >&2
@@ -50,7 +51,7 @@ target="${user}@${host}"
 remote_repo_dir="$(quote_remote_path "${repo_dir}")"
 remote_command="cd ${remote_repo_dir} && ${remote_args[*]}"
 
-ssh_cmd=(ssh -p "${port}" -o "StrictHostKeyChecking=${strict_host_key_checking}")
+ssh_cmd=("${ssh_bin}" -p "${port}" -o "StrictHostKeyChecking=${strict_host_key_checking}")
 if [[ -n "${JETSON_SSH_OPTS:-}" ]]; then
   read -r -a extra_ssh_opts <<< "${JETSON_SSH_OPTS}"
   ssh_cmd+=("${extra_ssh_opts[@]}")
@@ -66,9 +67,12 @@ fi
 password_file="${JETSON_SSH_PASSWORD_FILE:-}"
 if [[ -n "${password_file}" || -n "${JETSON_SSH_PASSWORD:-}" ]]; then
   password_helper="${JETSON_SSH_PASSWORD_HELPER:-auto}"
-  if [[ "${password_helper}" != "auto" && "${password_helper}" != "sshpass" && "${password_helper}" != "askpass" ]]; then
-    echo "JETSON_SSH_PASSWORD_HELPER must be auto, sshpass, or askpass." >&2
+  if [[ "${password_helper}" != "auto" && "${password_helper}" != "sshpass" && "${password_helper}" != "askpass" && "${password_helper}" != "none" ]]; then
+    echo "JETSON_SSH_PASSWORD_HELPER must be auto, sshpass, askpass, or none." >&2
     exit 2
+  fi
+  if [[ "${password_helper}" == "none" ]]; then
+    exec "${ssh_cmd[@]}"
   fi
   if [[ "${password_helper}" != "askpass" ]] && command -v sshpass >/dev/null 2>&1; then
     if [[ -n "${password_file}" ]]; then
