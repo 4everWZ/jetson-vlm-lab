@@ -388,9 +388,11 @@ scripts/jetson/select_qwen3_instruct_variant.sh \
 ```
 
 selector 会写出结构化 JSON，里面包含 runtime probe、preflight sample、
-每个候选的 block reason 和最终选择的 variant id。它作为独立入口时默认仍
-保持 primary 和 fallback 使用同一个严格 gate，除非明确在做 scoped
-fallback triage。
+每个候选的 GGUF artifact manifest、block reason 和最终选择的 variant id。
+如果缓存 artifact 存在但没有通过 GGUF magic 检查，会被标成
+`invalid_model_artifact` 或 `invalid_mmproj_artifact`，所以损坏的 Q4 文件仍
+可以退到可用的 Q8 fallback。它作为独立入口时默认仍保持 primary 和
+fallback 使用同一个严格 gate，除非明确在做 scoped fallback triage。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是

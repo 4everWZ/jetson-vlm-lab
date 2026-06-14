@@ -394,9 +394,12 @@ scripts/jetson/select_qwen3_instruct_variant.sh \
 ```
 
 The selector writes a JSON decision with runtime probe, preflight sample, per-
-candidate block reasons, and the chosen variant id. Its standalone default
-keeps the same strict gate for both lanes unless you are intentionally doing
-scoped fallback triage.
+candidate GGUF artifact manifest, block reasons, and the chosen variant id.
+Cached artifacts that exist but fail the GGUF magic check are blocked as
+`invalid_model_artifact` or `invalid_mmproj_artifact`, so a corrupt Q4 file can
+still fall through to a valid Q8 fallback. Its standalone default keeps the same
+strict gate for both lanes unless you are intentionally doing scoped fallback
+triage.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it

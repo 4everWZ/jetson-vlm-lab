@@ -427,8 +427,11 @@ runtime-infra block for VLM rows until the image is replaced or rebuilt.
 For the Qwen3-VL 2B Instruct Q4/Q8 pair, use
 `scripts/jetson/select_qwen3_instruct_variant.sh` when you need an explicit
 selection decision rather than a manual variant choice. The selector emits JSON
-with the shared runtime probe, current preflight sample, per-candidate block
-reasons, and `selected_variant_id`. Keep the conservative gate the same for both
+with the shared runtime probe, current preflight sample, per-candidate GGUF
+artifact manifest, block reasons, and `selected_variant_id`. Corrupt cached
+GGUF files are blocked as `invalid_model_artifact` or
+`invalid_mmproj_artifact`, so a present-but-invalid Q4 artifact can still fall
+through to a valid Q8 fallback. Keep the conservative gate the same for both
 lanes by default; use `--fallback-min-lfb-blocks` only for scoped diagnostic
 fallback triage. `edge_vlm.jetson_sweep` also accepts
 `--selection-context-json <path>` so a wrapper can forward that selector JSON

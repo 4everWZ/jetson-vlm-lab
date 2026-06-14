@@ -158,6 +158,91 @@ class JetsonVariantSelectorContractsTest(unittest.TestCase):
         self.assertTrue(selection["candidates"][1]["usable"])
         self.assertTrue(selection["candidates"][1]["chosen"])
 
+    def test_selector_falls_back_to_q8_when_q4_artifact_fails_gguf_magic(self):
+        from edge_vlm.jetson_variant_selector import select_preferred_variant
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = _write_variant_catalog(tmp_path / "variants.jsonl", tmp_path / "models")
+            repo_dir = tmp_path / "models" / "Qwen" / "Qwen3-VL-2B-Instruct-GGUF"
+            repo_dir.mkdir(parents=True)
+            (repo_dir / "Qwen3VL-2B-Instruct-Q4_K_M.gguf").write_bytes(b"not-a-gguf")
+            (repo_dir / "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf").write_bytes(b"GGUF")
+            (repo_dir / "Qwen3VL-2B-Instruct-Q8_0.gguf").write_bytes(b"GGUF")
+
+            with patch(
+                "edge_vlm.jetson_variant_selector.capture_preflight_sample",
+                return_value=_preflight(180),
+            ):
+                with patch(
+                    "edge_vlm.jetson_variant_selector._runtime_metadata",
+                    return_value={
+                        "image": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                        "llama_server_probe_ok": True,
+                        "llama_server_found": True,
+                        "llama_server_help_ok": True,
+                        "llama_server_supports_mmproj": True,
+                        "llama_server_multimodal_markers": ["--mmproj", "mmproj"],
+                    },
+                ):
+                    selection = select_preferred_variant(
+                        variants_path=catalog,
+                        primary_variant_id="qwen3-vl-2b-instruct-q4-smoke",
+                        fallback_variant_id="qwen3-vl-2b-instruct-q8-smoke",
+                        min_lfb_blocks=150,
+                    )
+
+        self.assertEqual(selection["selected_variant_id"], "qwen3-vl-2b-instruct-q8-smoke")
+        self.assertEqual(selection["selected_reason"], "primary_blocked_selected_fallback")
+        self.assertIn("invalid_model_artifact", selection["candidates"][0]["block_reasons"])
+        self.assertEqual(
+            selection["candidates"][0]["artifact_manifest"]["artifacts"][0]["status"],
+            "invalid_magic",
+        )
+        self.assertTrue(selection["candidates"][1]["usable"])
+        self.assertTrue(selection["candidates"][1]["chosen"])
+
+    def test_selector_rejects_both_lanes_when_shared_mmproj_fails_gguf_magic(self):
+        from edge_vlm.jetson_variant_selector import select_preferred_variant
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = _write_variant_catalog(tmp_path / "variants.jsonl", tmp_path / "models")
+            repo_dir = tmp_path / "models" / "Qwen" / "Qwen3-VL-2B-Instruct-GGUF"
+            repo_dir.mkdir(parents=True)
+            (repo_dir / "Qwen3VL-2B-Instruct-Q4_K_M.gguf").write_bytes(b"GGUF")
+            (repo_dir / "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf").write_bytes(b"not-a-gguf")
+            (repo_dir / "Qwen3VL-2B-Instruct-Q8_0.gguf").write_bytes(b"GGUF")
+
+            with patch(
+                "edge_vlm.jetson_variant_selector.capture_preflight_sample",
+                return_value=_preflight(180),
+            ):
+                with patch(
+                    "edge_vlm.jetson_variant_selector._runtime_metadata",
+                    return_value={
+                        "image": "ghcr.io/4everwz/jetson-llama-cpp:test",
+                        "llama_server_probe_ok": True,
+                        "llama_server_found": True,
+                        "llama_server_help_ok": True,
+                        "llama_server_supports_mmproj": True,
+                        "llama_server_multimodal_markers": ["--mmproj", "mmproj"],
+                    },
+                ):
+                    selection = select_preferred_variant(
+                        variants_path=catalog,
+                        primary_variant_id="qwen3-vl-2b-instruct-q4-smoke",
+                        fallback_variant_id="qwen3-vl-2b-instruct-q8-smoke",
+                        min_lfb_blocks=150,
+                    )
+
+        self.assertIsNone(selection["selected_variant_id"])
+        self.assertEqual(selection["selected_reason"], "no_usable_variant")
+        self.assertIn("invalid_mmproj_artifact", selection["candidates"][0]["block_reasons"])
+        self.assertIn("invalid_mmproj_artifact", selection["candidates"][1]["block_reasons"])
+        self.assertFalse(selection["candidates"][0]["usable"])
+        self.assertFalse(selection["candidates"][1]["usable"])
+
     def test_selector_returns_no_selection_when_both_lanes_fail_strict_gate(self):
         from edge_vlm.jetson_variant_selector import select_preferred_variant
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .config import config_supports_images, load_model_config
+from .gguf_artifacts import inspect_gguf_artifacts
 from .jetson_sweep import (
     SERVER_ENV_PASSTHROUGH_KEYS,
     _preflight_block_reason,
@@ -118,7 +119,12 @@ def _artifact_paths(variant_env: dict[str, str], *, supports_images: bool) -> di
     }
 
 
-def _artifact_block_reasons(paths: dict[str, str | None], *, supports_images: bool) -> list[str]:
+def _artifact_block_reasons(
+    paths: dict[str, str | None],
+    *,
+    supports_images: bool,
+    artifact_manifest: dict[str, Any],
+) -> list[str]:
     reasons: list[str] = []
     model_path = paths.get("model_path_on_host")
     if not model_path:
@@ -131,7 +137,38 @@ def _artifact_block_reasons(paths: dict[str, str | None], *, supports_images: bo
             reasons.append("missing_mmproj_path_config")
         elif not Path(mmproj_path).is_file():
             reasons.append("missing_mmproj_artifact")
+    for artifact in artifact_manifest.get("artifacts", []):
+        if not isinstance(artifact, dict):
+            continue
+        status = artifact.get("status")
+        if status in ("ok", "missing"):
+            continue
+        role = artifact.get("role")
+        if role == "model":
+            reasons.append("invalid_model_artifact")
+        elif role == "mmproj":
+            reasons.append("invalid_mmproj_artifact")
     return reasons
+
+
+def _artifact_manifest(paths: dict[str, str | None], *, supports_images: bool) -> dict[str, Any]:
+    artifacts: list[tuple[str, str | Path]] = []
+    model_path = paths.get("model_path_on_host")
+    if model_path:
+        artifacts.append(("model", model_path))
+    mmproj_path = paths.get("mmproj_path_on_host")
+    if supports_images and mmproj_path:
+        artifacts.append(("mmproj", mmproj_path))
+    if not artifacts:
+        return {
+            "schema_version": 1,
+            "status": "unavailable",
+            "artifact_count": 0,
+            "failed_count": 0,
+            "reason": "no_artifact_paths_resolved",
+            "artifacts": [],
+        }
+    return inspect_gguf_artifacts(artifacts)
 
 
 def _evaluate_candidate(
@@ -142,7 +179,12 @@ def _evaluate_candidate(
     min_lfb_blocks: int | None,
 ) -> dict[str, Any]:
     artifact_paths = _artifact_paths(candidate["env"], supports_images=bool(candidate["supports_images"]))
-    block_reasons = _artifact_block_reasons(artifact_paths, supports_images=bool(candidate["supports_images"]))
+    artifact_manifest = _artifact_manifest(artifact_paths, supports_images=bool(candidate["supports_images"]))
+    block_reasons = _artifact_block_reasons(
+        artifact_paths,
+        supports_images=bool(candidate["supports_images"]),
+        artifact_manifest=artifact_manifest,
+    )
     runtime_reason = _runtime_block_reason(
         supports_images=bool(candidate["supports_images"]),
         runtime=runtime,
@@ -162,6 +204,7 @@ def _evaluate_candidate(
         "supports_images": bool(candidate["supports_images"]),
         "min_lfb_blocks": min_lfb_blocks,
         "artifact_paths": artifact_paths,
+        "artifact_manifest": artifact_manifest,
         "block_reasons": block_reasons,
         "usable": not block_reasons,
         "chosen": False,
