@@ -716,6 +716,18 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         for text in (protocol_doc, strategy_doc):
             self.assertIn("model and mmproj", text)
 
+    def test_docs_explain_gguf_artifact_preflight_manifest(self):
+        protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
+        strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(encoding="utf-8")
+        readme = Path("README.md").read_text(encoding="utf-8")
+        readme_zh = Path("README.zh-CN.md").read_text(encoding="utf-8")
+
+        for text in (protocol_doc, strategy_doc, readme, readme_zh):
+            self.assertIn("check_gguf_artifacts.sh", text)
+            self.assertIn("gguf-artifacts.json", text)
+        for text in (protocol_doc, strategy_doc):
+            self.assertIn("edge_vlm.gguf_artifacts", text)
+
     def test_compare_docs_explain_startup_precheck_cached_artifact_gate(self):
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
         strategy_doc = Path("docs/specs/next_phase_infra_and_model_strategy.md").read_text(encoding="utf-8")

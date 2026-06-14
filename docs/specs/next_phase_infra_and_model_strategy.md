@@ -240,6 +240,10 @@ Required per-run profile data:
 - Host-side GGUF model and mmproj artifacts validated with a GGUF magic-byte
   check before `llama-server` startup, so corrupt cached files fail as artifact
   problems instead of polluting runtime startup evidence.
+- No-start GGUF artifact preflight available through
+  `scripts/jetson/check_gguf_artifacts.sh check`, backed by
+  `edge_vlm.gguf_artifacts`, to write `gguf-artifacts.json` manifests before
+  expensive remote sweeps.
 - Warmup policy recorded from variant args. `--no-warmup` rows are marked
   disabled; warmup-on rows are marked as included in server startup until
   runtime logs or hooks can split the internal llama.cpp warmup duration.

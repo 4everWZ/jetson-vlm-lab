@@ -183,6 +183,17 @@ Jetson GGUF launchers validate host-side model and mmproj files by checking the
 GGUF magic bytes before starting `llama-server`. If a cached artifact fails this
 check, remove or restore that file and rerun the launcher so the HF path can
 download it again.
+For a no-start preflight manifest on Jetson, run:
+
+```bash
+scripts/jetson/check_gguf_artifacts.sh check \
+  --artifact model /mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf \
+  --artifact mmproj /mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf \
+  --output outputs/artifacts/gemma-q4.gguf-artifacts.json
+```
+
+The manifest records `missing`, `invalid_magic`, or `ok` per artifact and exits
+non-zero when any artifact is not ready.
 
 ## Run Gemma 4 E2B-it
 
