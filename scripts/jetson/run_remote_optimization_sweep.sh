@@ -139,6 +139,15 @@ derive_cma_experiment_plan_output() {
   fi
 }
 
+derive_boot_config_cma_plan_output() {
+  local selector_output="$1"
+  if [[ "${selector_output}" == *.json ]]; then
+    printf '%s.boot-config-cma-plan.json' "${selector_output%.json}"
+  else
+    printf '%s.boot-config-cma-plan.json' "${selector_output}"
+  fi
+}
+
 run_remote_sudo_memory_diagnostics() {
   local output="$1"
   printf '%s\n' "${sudo_password}" | "${remote_exec}" \
@@ -166,6 +175,16 @@ write_remote_cma_experiment_plan() {
     python3 -m edge_vlm.cma_experiment_plan \
     --selector-json "${selector_output}" \
     --output "${plan_output}"
+}
+
+write_remote_boot_config_cma_plan() {
+  local cma_plan_output="$1"
+  local boot_config_plan_output="$2"
+  "${remote_exec}" \
+    env "PYTHONPATH=${remote_pythonpath}" \
+    python3 -m edge_vlm.boot_config_cma_plan \
+    --cma-plan "${cma_plan_output}" \
+    --output "${boot_config_plan_output}"
 }
 
 if [[ "${prepare_max_clocks}" == "1" ]]; then
@@ -294,6 +313,9 @@ if [[ "${qwen3_selector}" == "1" ]]; then
     selector_cma_experiment_plan_output="$(derive_cma_experiment_plan_output "${qwen3_selector_output}")"
     selector_cma_experiment_plan_json="$(write_remote_cma_experiment_plan "${qwen3_selector_output}" "${selector_cma_experiment_plan_output}")"
     echo "Qwen3 selector CMA experiment plan output: ${selector_cma_experiment_plan_output}" >&2
+    selector_boot_config_cma_plan_output="$(derive_boot_config_cma_plan_output "${qwen3_selector_output}")"
+    selector_boot_config_cma_plan_json="$(write_remote_boot_config_cma_plan "${selector_cma_experiment_plan_output}" "${selector_boot_config_cma_plan_output}")"
+    echo "Qwen3 selector boot config CMA patch plan output: ${selector_boot_config_cma_plan_output}" >&2
   fi
   if [[ -n "${selected_variant_id}" ]]; then
     echo "Qwen3 selector chose ${selected_variant_id} (${selected_reason:-unknown_reason})." >&2

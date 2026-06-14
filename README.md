@@ -435,6 +435,19 @@ reservation deficit, exact per-variant minimum experiment sizes, and a
 64MiB-rounded max-required candidate. It sets `applies_boot_config=false`; any
 Jetson boot configuration change still needs a manual review and explicit
 approval.
+To derive manual-review extlinux patch candidates from that plan without
+touching `/boot`, run:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.boot_config_cma_plan \
+  --cma-plan outputs/jetson_inspect/qwen3-instruct-selector.cma-experiment-plan.json \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.boot-config-cma-plan.json
+```
+
+The patch plan converts the Q8/Q4/rounded CMA candidates into `cma=<MiB>M`
+`APPEND` line diffs and sets `applies_boot_config=false`. It is a review
+artifact only; manual backup, edit, reboot, and post-reboot diagnostics are
+still separate approved steps.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it
@@ -457,8 +470,9 @@ The remote Qwen selector also writes
 that read-only sidecar.
 When that selector chooses no variant and has a selector output path, the
 remote wrapper also writes `<selector-output>.cma-experiment-plan.json` by
-default. Set `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` only when you need to
-skip that read-only review artifact.
+default plus `<selector-output>.boot-config-cma-plan.json` with manual-review
+extlinux patch candidates. Set `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` only
+when you need to skip those read-only review artifacts.
 If the sidecar reports debugfs paths as unreadable and you need the actual
 nvmap/dma-buf/CMA debugfs previews, set
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` with

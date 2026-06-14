@@ -540,10 +540,22 @@ token evidence when present, per-candidate required LFB bytes and deficits,
 exact variant minimum experiment sizes, and a 64MiB-rounded max-required
 candidate. The artifact sets `applies_boot_config=false`; it is evidence for
 manual review, not an automatic boot configuration change.
+To derive manual-review extlinux patch candidates from that CMA plan, run:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.boot_config_cma_plan \
+  --cma-plan outputs/jetson_inspect/qwen3-instruct-selector.cma-experiment-plan.json \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.boot-config-cma-plan.json
+```
+
+The patch artifact converts the Q8/Q4/rounded CMA candidates into
+`cma=<MiB>M` `APPEND` line diffs. It remains read-only and sets
+`applies_boot_config=false`.
 The remote Qwen selector wrapper writes this artifact automatically when the
-selector chooses no variant and has a selector output path. Set
-`JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` only when the extra read-only artifact
-should be skipped for a scoped run.
+selector chooses no variant and has a selector output path. It also writes the
+boot-config patch plan next to it as `<selector-output>.boot-config-cma-plan.json`.
+Set `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` only when these extra read-only
+artifacts should be skipped for a scoped run.
 
 Build a comparison table from one or more sweep manifests with:
 

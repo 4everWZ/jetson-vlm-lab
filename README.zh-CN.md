@@ -422,6 +422,17 @@ PYTHONPATH=src python -m edge_vlm.cma_experiment_plan \
 精确 minimum 实验值，以及按 64MiB 向上取整后的最大 required 值。它会显式写入
 `applies_boot_config=false`；任何 Jetson boot configuration 修改仍然需要人工 review
 和明确批准。
+如果要基于这个 plan 生成只读的 extlinux patch candidate，可以运行：
+
+```bash
+PYTHONPATH=src python -m edge_vlm.boot_config_cma_plan \
+  --cma-plan outputs/jetson_inspect/qwen3-instruct-selector.cma-experiment-plan.json \
+  --output outputs/jetson_inspect/qwen3-instruct-selector.boot-config-cma-plan.json
+```
+
+这个 patch plan 会把 Q8/Q4/rounded CMA candidate 转成 `cma=<MiB>M` 的 `APPEND`
+line diff，并写入 `applies_boot_config=false`。它只是 review artifact；备份、手动
+编辑、reboot 和 reboot 后 diagnostics 仍然是单独批准的步骤。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是
@@ -442,7 +453,8 @@ remote Qwen selector 默认还会写
 `<selector-output>.memory-diagnostics.json`；只有明确想跳过这个只读 sidecar
 时，才设置 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0`。
 当这个 selector 没有选中任何 variant 且存在 selector output path 时，remote wrapper
-还会默认写 `<selector-output>.cma-experiment-plan.json`。只有明确想跳过这个只读
+还会默认写 `<selector-output>.cma-experiment-plan.json`，以及带 extlinux patch
+candidate 的 `<selector-output>.boot-config-cma-plan.json`。只有明确想跳过这些只读
 review artifact 时，才设置 `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0`。
 如果 sidecar 里 debugfs 路径显示为 unreadable，而你需要实际的
 nvmap/dma-buf/CMA debugfs preview，可以在 `.env.jetson` 里设置

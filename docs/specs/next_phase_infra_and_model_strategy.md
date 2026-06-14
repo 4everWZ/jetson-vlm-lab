@@ -115,9 +115,14 @@ deficits, exact variant minimum experiment sizes, and a 64MiB-rounded
 max-required candidate. The artifact explicitly sets `applies_boot_config=false`;
 it is for manual boot-memory review only and does not change selector gates or
 Jetson boot configuration.
+`edge_vlm.boot_config_cma_plan` now converts that CMA plan into a second
+read-only manual-review artifact with `cma=<MiB>M` extlinux `APPEND` line diffs
+for the Q8 minimum, Q4 minimum, and rounded max-required CMA candidates. It also
+sets `applies_boot_config=false`; applying any candidate remains a separate
+manual boot configuration change.
 The remote Qwen selector wrapper now writes that plan automatically for
-no-selection selector outputs, with `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0`
-as the opt-out for scoped runs.
+no-selection selector outputs and writes the boot-config patch plan next to it,
+with `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` as the opt-out for scoped runs.
 The comparison report now also shows that effective threshold in a `Required
 lfb` column, which makes relaxed fallback evidence mechanically distinguishable
 from strict-gate rows. When compare also receives

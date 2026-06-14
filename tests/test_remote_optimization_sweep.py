@@ -276,6 +276,9 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
                     "if printf '%s\\n' \"$@\" | grep -q 'edge_vlm.cma_experiment_plan'; then",
                     "  printf '%s\\n' '{\"output\":\"cma-plan.json\",\"status\":\"ready\",\"experiment_candidate_count\":3}'",
                     "fi",
+                    "if printf '%s\\n' \"$@\" | grep -q 'edge_vlm.boot_config_cma_plan'; then",
+                    "  printf '%s\\n' '{\"output\":\"boot-config-plan.json\",\"status\":\"ready\",\"patch_candidate_count\":3}'",
+                    "fi",
                 ],
             )
 
@@ -303,7 +306,7 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
 
-        self.assertEqual(log_text.count("CALL\n"), 3)
+        self.assertEqual(log_text.count("CALL\n"), 4)
         self.assertIn(
             "ARG=env\n"
             "ARG=PYTHONPATH=src\n"
@@ -319,6 +322,23 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
         self.assertIn(
             "Qwen3 selector CMA experiment plan output: "
             "outputs/optimization_sweeps/unit-selector-plan/unit-selector-plan.qwen3-selector.cma-experiment-plan.json",
+            result.stderr,
+        )
+        self.assertIn(
+            "ARG=env\n"
+            "ARG=PYTHONPATH=src\n"
+            "ARG=python3\n"
+            "ARG=-m\n"
+            "ARG=edge_vlm.boot_config_cma_plan\n"
+            "ARG=--cma-plan\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-plan/unit-selector-plan.qwen3-selector.cma-experiment-plan.json\n"
+            "ARG=--output\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-plan/unit-selector-plan.qwen3-selector.boot-config-cma-plan.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "Qwen3 selector boot config CMA patch plan output: "
+            "outputs/optimization_sweeps/unit-selector-plan/unit-selector-plan.qwen3-selector.boot-config-cma-plan.json",
             result.stderr,
         )
 
@@ -418,7 +438,7 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
 
-        self.assertEqual(log_text.count("CALL\n"), 5)
+        self.assertEqual(log_text.count("CALL\n"), 6)
         self.assertIn("STDIN_BYTES=2\n", log_text)
         self.assertIn(
             "ARG=sudo\n"
@@ -454,6 +474,14 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.json\n"
             "ARG=--output\n"
             "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.cma-experiment-plan.json\n",
+            log_text,
+        )
+        self.assertIn("ARG=edge_vlm.boot_config_cma_plan\n", log_text)
+        self.assertIn(
+            "ARG=--cma-plan\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.cma-experiment-plan.json\n"
+            "ARG=--output\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.boot-config-cma-plan.json\n",
             log_text,
         )
 
