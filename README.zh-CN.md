@@ -182,6 +182,17 @@ scripts/wsl/prepare_gemma4_e2b_q4.sh
 Jetson GGUF launcher 会在启动 `llama-server` 前检查本机 model 和 mmproj
 文件的 GGUF magic bytes。缓存文件如果没有通过这个检查，就删掉或恢复该文件后
 重新运行 launcher，让 HF 路径重新下载。
+如果只想先做不启动服务的 artifact preflight，可以在 Jetson 上运行：
+
+```bash
+scripts/jetson/check_gguf_artifacts.sh check \
+  --artifact model /mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.Q4_K_M.gguf \
+  --artifact mmproj /mnt/nvme/models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf \
+  --output outputs/artifacts/gemma-q4.gguf-artifacts.json
+```
+
+manifest 会逐个 artifact 记录 `missing`、`invalid_magic` 或 `ok`，只要有一个
+artifact 没准备好就返回非零。
 
 ## 运行 Gemma 4 E2B-it
 
