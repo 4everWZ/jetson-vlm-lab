@@ -1166,11 +1166,26 @@ class OptimizationReportContractsTest(unittest.TestCase):
                     "debugfs_nvmap_allocations_total_bytes": 0,
                     "tegrastats_lfb_free_blocks": 69,
                     "cma_free_kb": 221296,
+                    "boot_cmdline_cma_token": None,
+                    "reserved_memory_node_count": 7,
+                    "reserved_memory_names": [
+                        "camdbg_carveout",
+                        "linux,cma",
+                        "vpr-carveout",
+                    ],
                 },
                 "sudo_memory_blocker_assessment": {
                     "status": "lfb_gate_not_met",
                     "diagnostics_source": "sudo",
                     "lfb_free_block_deficit_max": 81,
+                    "boot_cmdline_cma_token": None,
+                    "reserved_memory_node_count": 7,
+                    "reserved_memory_names": [
+                        "camdbg_carveout",
+                        "linux,cma",
+                        "vpr-carveout",
+                    ],
+                    "linux_cma_reserved_memory_present": True,
                     "signals": [
                         "lfb_below_required",
                         "debugfs_tracked_allocations_zero",
@@ -1262,6 +1277,9 @@ class OptimizationReportContractsTest(unittest.TestCase):
         )
         self.assertEqual(rows[0].selection_memory_assessment["status"], "lfb_gate_not_met")
         self.assertEqual(rows[0].selection_memory_assessment["lfb_free_block_deficit_max"], 81)
+        self.assertEqual(rows[0].selection_memory_diagnostics["reserved_memory_node_count"], 7)
+        self.assertIn("linux,cma", rows[0].selection_memory_diagnostics["reserved_memory_names"])
+        self.assertTrue(rows[0].selection_memory_assessment["linux_cma_reserved_memory_present"])
         self.assertEqual(
             eligibility["rows"][0]["selection_memory_diagnostics"]["debugfs_nvmap_clients_total_bytes"],
             0,
@@ -1274,7 +1292,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertIn("Selection", report_text)
         self.assertIn("Selector memory", report_text)
         self.assertIn(
-            "sudo lfb=69 cma=216.1MiB debugfs=dma_buf:readable,nvmap:readable dma=0B nvmap=0B assessment=lfb_gate_not_met deficit=81 blocks",
+            "sudo lfb=69 cma=216.1MiB debugfs=dma_buf:readable,nvmap:readable dma=0B nvmap=0B cmdline_cma=none reserved_memory=7:linux,cma assessment=lfb_gate_not_met deficit=81 blocks",
             report_text,
         )
         self.assertIn("Required lfb", report_text)

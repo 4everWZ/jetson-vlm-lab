@@ -39,6 +39,13 @@ class LfbMemoryAssessmentContractsTest(unittest.TestCase):
             "debugfs_nvmap_allocations_total_bytes": 0,
             "tegrastats_lfb_free_blocks": 69,
             "tegrastats_lfb_block_mb": 4,
+            "boot_cmdline_cma_token": None,
+            "reserved_memory_node_count": 7,
+            "reserved_memory_names": [
+                "camdbg_carveout",
+                "linux,cma",
+                "vpr-carveout",
+            ],
         }
 
         assessment = assess_selection_memory(
@@ -57,6 +64,13 @@ class LfbMemoryAssessmentContractsTest(unittest.TestCase):
         self.assertEqual(assessment["observed_lfb_bytes"], 69 * 4 * 1024 * 1024)
         self.assertEqual(assessment["cma_free_kb"], 221296)
         self.assertEqual(assessment["debugfs_total_tracked_bytes"], 0)
+        self.assertIsNone(assessment["boot_cmdline_cma_token"])
+        self.assertEqual(assessment["reserved_memory_node_count"], 7)
+        self.assertEqual(
+            assessment["reserved_memory_names"],
+            ["camdbg_carveout", "linux,cma", "vpr-carveout"],
+        )
+        self.assertTrue(assessment["linux_cma_reserved_memory_present"])
         self.assertEqual(
             assessment["candidate_lfb_deficits"],
             {

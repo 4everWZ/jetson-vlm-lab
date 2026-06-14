@@ -629,6 +629,12 @@ def _format_selection(row: SweepComparisonRow) -> str:
     return row.selection_id
 
 
+def _has_linux_cma_reserved_memory(names: Any) -> bool:
+    if not isinstance(names, list):
+        return False
+    return any(isinstance(name, str) and (name == "linux,cma" or name.startswith("linux,cma@")) for name in names)
+
+
 def _format_selection_memory_diagnostics(row: SweepComparisonRow) -> str:
     diagnostics = row.selection_memory_diagnostics
     if not diagnostics:
@@ -675,6 +681,19 @@ def _format_selection_memory_diagnostics(row: SweepComparisonRow) -> str:
             )
         else:
             parts.append(f"nvmap={_fmt_bytes(nvmap_values[0])}")
+    if "boot_cmdline_cma_token" in diagnostics:
+        cma_token = diagnostics.get("boot_cmdline_cma_token")
+        if isinstance(cma_token, str) and cma_token.strip():
+            parts.append(f"cmdline_cma={cma_token.strip()}")
+        else:
+            parts.append("cmdline_cma=none")
+    reserved_memory_node_count = diagnostics.get("reserved_memory_node_count")
+    reserved_memory_names = diagnostics.get("reserved_memory_names")
+    if isinstance(reserved_memory_node_count, int):
+        reserved_text = f"reserved_memory={reserved_memory_node_count}"
+        if _has_linux_cma_reserved_memory(reserved_memory_names):
+            reserved_text += ":linux,cma"
+        parts.append(reserved_text)
     assessment = row.selection_memory_assessment
     status = assessment.get("status") if isinstance(assessment, dict) else None
     if isinstance(status, str) and status:

@@ -69,6 +69,16 @@ def _debugfs_readable(summary: dict[str, Any]) -> bool:
     return all(status == "readable" for status in required)
 
 
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _has_linux_cma_reserved_memory(names: list[str]) -> bool:
+    return any(name == "linux,cma" or name.startswith("linux,cma@") for name in names)
+
+
 def assess_selection_memory(
     *,
     selection: dict[str, Any],
@@ -102,6 +112,12 @@ def assess_selection_memory(
     debugfs_total_bytes = _debugfs_tracked_bytes(diagnostics_summary)
     cma_free_kb = _int_value(diagnostics_summary.get("cma_free_kb"))
     cma_total_kb = _int_value(diagnostics_summary.get("cma_total_kb"))
+    boot_cmdline_cma_token = diagnostics_summary.get("boot_cmdline_cma_token")
+    if not isinstance(boot_cmdline_cma_token, str):
+        boot_cmdline_cma_token = None
+    reserved_memory_names = _string_list(diagnostics_summary.get("reserved_memory_names"))
+    reserved_memory_node_count = _int_value(diagnostics_summary.get("reserved_memory_node_count"))
+    linux_cma_reserved_memory_present = _has_linux_cma_reserved_memory(reserved_memory_names)
     signals: list[str] = []
     if candidate_deficits:
         signals.append("lfb_below_required")
@@ -133,6 +149,10 @@ def assess_selection_memory(
         "cma_total_kb": cma_total_kb,
         "debugfs_total_tracked_bytes": debugfs_total_bytes,
         "debugfs_readable": _debugfs_readable(diagnostics_summary),
+        "boot_cmdline_cma_token": boot_cmdline_cma_token,
+        "reserved_memory_node_count": reserved_memory_node_count,
+        "reserved_memory_names": reserved_memory_names,
+        "linux_cma_reserved_memory_present": linux_cma_reserved_memory_present,
         "signals": signals,
         "note": "Evidence summary only; selector gates and ranking semantics are unchanged.",
     }

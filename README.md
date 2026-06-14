@@ -443,8 +443,9 @@ not relax the LFB gate or change model selection.
 The selector and sudo enrichment also add conservative
 `memory_blocker_assessment` / `sudo_memory_blocker_assessment` objects. These
 summarize observed-vs-required LFB blocks, CMA headroom, debugfs-tracked
-allocator bytes, and evidence signals such as `lfb_below_required`; they are
-evidence summaries only, not new gates or root-cause claims.
+allocator bytes, boot-time CMA configuration evidence such as `cmdline_cma` and
+`reserved_memory` summaries, and evidence signals such as `lfb_below_required`;
+they are evidence summaries only, not new gates or root-cause claims.
 The forwarded `selection_contexts` now preserve selector candidate summaries,
 including `block_reasons` and the GGUF `artifact_manifest`, so a Q8 row chosen
 as fallback keeps the Q4 blocker evidence in the sweep plan and compare
@@ -453,8 +454,10 @@ paths and compact summaries. Launcher environment blocks are intentionally not
 copied into that context.
 When diagnostics summaries are present, compare adds a `Selector memory` column
 and exports a flat `selection_memory_diagnostics` object so LFB/CMA and readable
-debugfs totals are visible without opening nested sidecars. The JSON export also
-keeps `selection_memory_assessment`, and the Markdown column appends the
+debugfs totals are visible without opening nested sidecars. When boot-time
+memory evidence is present, that column also shows `cmdline_cma=<token|none>`
+and a compact `reserved_memory=<count>[:linux,cma]` summary. The JSON export
+also keeps `selection_memory_assessment`, and the Markdown column appends the
 assessment status and largest LFB deficit when present. If the selector chooses
 no variant, compare still attaches that context to rows whose variant id appears
 in the selector's primary, fallback, or candidate list.
