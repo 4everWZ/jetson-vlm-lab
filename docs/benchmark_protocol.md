@@ -289,12 +289,22 @@ JETSON_REMOTE_DRY_RUN=1 scripts/jetson/remote_exec.sh \
   git status --short --branch
 ```
 
-Before starting a remote sweep, run the sanitized connectivity probe:
+Before starting a remote sweep, run the local TCP precheck and then the
+sanitized remote command probe:
 
 ```bash
+JETSON_REMOTE_ACCESS_DRY_RUN=1 scripts/jetson/check_remote_access.sh
+scripts/jetson/check_remote_access.sh
 JETSON_REMOTE_PROBE_DRY_RUN=1 scripts/jetson/remote_probe.sh
 scripts/jetson/remote_probe.sh
 ```
+
+`check_remote_access.sh` validates that `.env.jetson` provides a target and that
+the configured SSH TCP port is reachable from the current host before any SSH
+password helper or remote command is involved. It prints `tcp_probe=ok` on
+success, `tcp_probe=tcp_connect_failed` on TCP failure, and never prints
+`.env.jetson` secrets. Use it to separate local VPN/Tailscale/routing failures
+from SSH authentication or remote worktree failures.
 
 The probe prints `remote_probe=ok` only when SSH reaches the configured Jetson
 worktree and the remote command returns the expected marker. On failure, it
