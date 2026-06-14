@@ -405,7 +405,11 @@ and you need lower-level memory evidence. The selector records that sidecar path
 and a summary in its JSON; the full sidecar captures `/proc/meminfo` including
 CMA, `/proc/buddyinfo`, swap/zram, compaction vmstat counters, memory pressure,
 top RSS processes, debugfs availability, and any parseable nvmap/dma-buf totals
-without changing the LFB gate.
+without changing the LFB gate. It also records read-only boot-time memory
+configuration evidence: the `/proc/cmdline` `cma=` token when present and a
+summary of device-tree `reserved-memory` nodes. Device-tree string properties
+are preserved as strings, while binary properties such as `reg` or `size` stay
+as hex bytes rather than inferred addresses or sizes.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it

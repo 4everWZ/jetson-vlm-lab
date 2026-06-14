@@ -77,7 +77,10 @@ separate from selection semantics and captures lower-level LFB context such as
 CMA free memory, buddyinfo orders, swap/zram state, compaction vmstat counters,
 memory pressure, top RSS processes, debugfs availability, and parseable
 nvmap/dma-buf totals, so repeated LFB blocks can be debugged without rerunning a
-full model startup.
+full model startup. It also records boot-time memory configuration evidence:
+the `/proc/cmdline` `cma=` token and device-tree `reserved-memory` node names
+are lifted into the compact summary, while binary device-tree properties remain
+raw hex evidence rather than inferred address or size claims.
 For deeper read-only debugfs triage, the remote wrapper can opt in to
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` and write a second
 `<selector-output>.memory-diagnostics.sudo.json` sidecar through `sudo`. This

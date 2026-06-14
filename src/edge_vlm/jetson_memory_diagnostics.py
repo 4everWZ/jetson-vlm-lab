@@ -34,6 +34,11 @@ DEBUGFS_PATHS = {
     "dma_buf_bufinfo": "kernel/debug/dma_buf/bufinfo",
     "cma_debug": "kernel/debug/cma",
 }
+DEVICE_TREE_STRING_PROPERTIES = {
+    "compatible",
+    "status",
+    "name",
+}
 SIZE_TOKEN_MULTIPLIERS = {
     "": 1,
     "B": 1,
@@ -199,6 +204,120 @@ def _read_pressure(proc_root: Path) -> dict[str, Any]:
             continue
         pressure[name] = [parsed for line in text.splitlines() if (parsed := _parse_pressure_line(line))]
     return pressure
+
+
+def _read_boot_cmdline(proc_root: Path) -> dict[str, Any]:
+    path = proc_root / "cmdline"
+    text = _read_text(path, max_chars=8192)
+    if text is None:
+        return {"path": str(path), "available": False, "raw": None, "cma_token": None}
+    raw = " ".join(text.replace("\0", " ").split())
+    cma_token = next((token for token in raw.split() if token.startswith("cma=")), None)
+    return {"path": str(path), "available": True, "raw": raw, "cma_token": cma_token}
+
+
+def _looks_like_device_tree_string_list(raw: bytes) -> bool:
+    if not raw:
+        return False
+    values = [part for part in raw.rstrip(b"\0").split(b"\0") if part]
+    if not values:
+        return False
+    return all(all(32 <= byte < 127 for byte in value) for value in values)
+
+
+def _decode_device_tree_string_list(raw: bytes) -> list[str] | None:
+    if not _looks_like_device_tree_string_list(raw):
+        return None
+    return [part.decode("ascii", errors="strict") for part in raw.rstrip(b"\0").split(b"\0") if part]
+
+
+def _read_reserved_memory_property(path: Path) -> tuple[str, Any]:
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        return (f"{path.name}_error", str(exc))
+    if raw == b"":
+        return (path.name, True)
+    if path.name in DEVICE_TREE_STRING_PROPERTIES:
+        decoded = _decode_device_tree_string_list(raw)
+        if decoded is not None:
+            return (path.name, decoded)
+    return (f"{path.name}_hex", raw.hex())
+
+
+def _read_reserved_memory_node(path: Path) -> dict[str, Any]:
+    properties: dict[str, Any] = {}
+    try:
+        entries = sorted(path.iterdir(), key=lambda entry: entry.name)
+    except OSError as exc:
+        return {"name": path.name, "status": "unreadable", "error": str(exc), "properties": properties}
+    for entry in entries:
+        if entry.is_dir():
+            continue
+        key, value = _read_reserved_memory_property(entry)
+        properties[key] = value
+    return {"name": path.name, "status": "readable", "properties": properties}
+
+
+def _read_reserved_memory(proc_root: Path, sys_root: Path) -> dict[str, Any]:
+    candidates = [
+        sys_root / "firmware" / "devicetree" / "base" / "reserved-memory",
+        proc_root / "device-tree" / "reserved-memory",
+    ]
+    selected_path = candidates[0]
+    for candidate in candidates:
+        try:
+            if candidate.exists():
+                selected_path = candidate
+                break
+        except OSError:
+            selected_path = candidate
+            break
+    try:
+        exists = selected_path.exists()
+    except OSError as exc:
+        return {
+            "path": str(selected_path),
+            "available": False,
+            "status": "unreadable",
+            "error": str(exc),
+            "nodes": [],
+            "node_count": 0,
+        }
+    if not exists:
+        return {
+            "path": str(selected_path),
+            "available": False,
+            "status": "missing",
+            "nodes": [],
+            "node_count": 0,
+        }
+    try:
+        entries = sorted(selected_path.iterdir(), key=lambda entry: entry.name)
+    except OSError as exc:
+        return {
+            "path": str(selected_path),
+            "available": False,
+            "status": "unreadable",
+            "error": str(exc),
+            "nodes": [],
+            "node_count": 0,
+        }
+    nodes = [_read_reserved_memory_node(entry) for entry in entries if entry.is_dir()]
+    return {
+        "path": str(selected_path),
+        "available": True,
+        "status": "readable",
+        "nodes": nodes,
+        "node_count": len(nodes),
+    }
+
+
+def _read_boot_memory(proc_root: Path, sys_root: Path) -> dict[str, Any]:
+    return {
+        "cmdline": _read_boot_cmdline(proc_root),
+        "reserved_memory": _read_reserved_memory(proc_root, sys_root),
+    }
 
 
 def _read_cmdline(path: Path) -> str:
@@ -412,6 +531,12 @@ def _summary(diagnostics: dict[str, Any]) -> dict[str, Any]:
         if isinstance(debugfs_summary.get("nvmap_iovmm_allocations"), dict)
         else {}
     )
+    boot_memory = diagnostics.get("boot_memory") if isinstance(diagnostics.get("boot_memory"), dict) else {}
+    cmdline = boot_memory.get("cmdline") if isinstance(boot_memory.get("cmdline"), dict) else {}
+    reserved_memory = (
+        boot_memory.get("reserved_memory") if isinstance(boot_memory.get("reserved_memory"), dict) else {}
+    )
+    reserved_nodes = reserved_memory.get("nodes") if isinstance(reserved_memory.get("nodes"), list) else []
     return {
         "mem_available_kb": meminfo.get("MemAvailable"),
         "mem_free_kb": meminfo.get("MemFree"),
@@ -429,6 +554,9 @@ def _summary(diagnostics: dict[str, Any]) -> dict[str, Any]:
         "debugfs_dma_buf_total_bytes": dma_buf_summary.get("total_bytes"),
         "debugfs_nvmap_clients_total_bytes": nvmap_clients_summary.get("total_bytes"),
         "debugfs_nvmap_allocations_total_bytes": nvmap_allocations_summary.get("total_bytes"),
+        "boot_cmdline_cma_token": cmdline.get("cma_token"),
+        "reserved_memory_node_count": reserved_memory.get("node_count", 0),
+        "reserved_memory_names": [node.get("name") for node in reserved_nodes if isinstance(node, dict)],
     }
 
 
@@ -453,6 +581,7 @@ def capture_memory_diagnostics(
         "zram": _read_zram(sys),
         "vmstat": _read_vmstat(proc),
         "pressure": _read_pressure(proc),
+        "boot_memory": _read_boot_memory(proc, sys),
         "top_rss_processes": _read_processes(proc, limit=top_process_limit),
         "debugfs": debugfs,
         "debugfs_summary": _summarize_debugfs(debugfs),

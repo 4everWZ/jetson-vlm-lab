@@ -398,6 +398,9 @@ fallback 使用同一个严格 gate，除非明确在做 scoped fallback triage�
 和摘要；完整 sidecar 会只读采集 `/proc/meminfo` 里的 CMA、`/proc/buddyinfo`、
 swap/zram、compaction vmstat counter、memory pressure、RSS 最大的进程以及
 debugfs 可用性，并在能稳定解析时记录 nvmap/dma-buf total，不会改变 LFB gate。
+它还会记录启动时内存配置证据：`/proc/cmdline` 里的 `cma=` token，以及
+device-tree `reserved-memory` 节点摘要。device-tree 的字符串属性会保留为字符串；
+`reg`、`size` 这类二进制属性只保留 hex bytes，不推断地址或 size 语义。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是

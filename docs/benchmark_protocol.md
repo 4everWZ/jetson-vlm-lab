@@ -494,7 +494,11 @@ lower-level `/proc/meminfo` CMA fields, `/proc/buddyinfo`, swap/zram state,
 compaction vmstat counters, PSI memory pressure, top RSS processes, and debugfs
 availability. When debugfs previews contain stable `total` lines, the compact
 summary also records parsed nvmap/dma-buf totals; missing or unfamiliar formats
-stay null rather than inferred. Set
+stay null rather than inferred. The sidecar also captures boot-time memory
+configuration evidence from `/proc/cmdline` and device-tree `reserved-memory`:
+the summary records the raw `cma=` token and reserved-memory node names, while
+binary device-tree properties remain hex bytes instead of inferred physical
+addresses or sizes. Set
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0` to skip that sidecar for a
 scoped rerun; it does not affect model selection semantics or the LFB gate.
 When debugfs paths are present but unreadable in the regular sidecar, set
