@@ -518,9 +518,10 @@ plans, compare rows, and eligibility artifacts can carry the readable debugfs
 evidence instead of relying on wrapper stderr. Selector diagnostics also include
 `memory_blocker_assessment` / `sudo_memory_blocker_assessment`, which summarize
 observed-vs-required LFB, CMA headroom, debugfs-tracked allocation bytes, and
-boot-time CMA configuration evidence from `cmdline_cma` and `reserved_memory`,
-plus evidence signals. These assessment objects are evidence only; they do not
-alter selection semantics, ranking, or promotion gates.
+boot-time CMA configuration evidence from `cmdline_cma`, read-only boot config
+candidate path scans, and `reserved_memory`, plus evidence signals. These
+assessment objects are evidence only; they do not alter selection semantics,
+ranking, or promotion gates.
 When decoded `linux,cma` reservation bytes are below a blocked candidate's
 required LFB byte budget, the selector also appends a
 `preboot_linux_cma_reserved_bytes ... < required_lfb_bytes ...` explanation to
@@ -534,11 +535,11 @@ PYTHONPATH=src python -m edge_vlm.cma_experiment_plan \
   --output outputs/jetson_inspect/qwen3-instruct-selector.cma-experiment-plan.json
 ```
 
-The output records the decoded `linux,cma` reservation, per-candidate required
-LFB bytes and deficits, exact variant minimum experiment sizes, and a
-64MiB-rounded max-required candidate. The artifact sets
-`applies_boot_config=false`; it is evidence for manual review, not an automatic
-boot configuration change.
+The output records the decoded `linux,cma` reservation, boot config `cma=`
+token evidence when present, per-candidate required LFB bytes and deficits,
+exact variant minimum experiment sizes, and a 64MiB-rounded max-required
+candidate. The artifact sets `applies_boot_config=false`; it is evidence for
+manual review, not an automatic boot configuration change.
 The remote Qwen selector wrapper writes this artifact automatically when the
 selector chooses no variant and has a selector output path. Set
 `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` only when the extra read-only artifact

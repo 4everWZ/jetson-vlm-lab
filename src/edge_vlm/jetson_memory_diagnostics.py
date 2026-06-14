@@ -16,6 +16,7 @@ from typing import Any
 BUDDYINFO_RE = re.compile(r"^Node\s+(?P<node>\d+),\s+zone\s+(?P<zone>\S+)\s+(?P<counts>.+)$")
 LFB_RE = re.compile(r"\blfb\s+(?P<free_blocks>\d+)x(?P<block_mb>\d+)MB\b")
 DMA_BUF_TOTAL_RE = re.compile(r"^\s*Total\s+(?P<object_count>\d+)\s+objects?,\s+(?P<total_bytes>\d+)\s+bytes\b")
+BOOT_CONFIG_CMA_RE = re.compile(r"(?<!\S)cma=[^\s]+")
 VMSTAT_KEYS = {
     "compact_success",
     "compact_fail",
@@ -216,6 +217,107 @@ def _read_boot_cmdline(proc_root: Path) -> dict[str, Any]:
     return {"path": str(path), "available": True, "raw": raw, "cma_token": cma_token}
 
 
+def _boot_config_candidate_paths(boot_root: Path) -> list[Path]:
+    return [
+        boot_root / "boot" / "extlinux" / "extlinux.conf",
+        boot_root / "boot" / "firmware" / "extlinux" / "extlinux.conf",
+        boot_root / "boot" / "efi" / "EFI" / "BOOT" / "extlinux.conf",
+    ]
+
+
+def _read_boot_config_path(path: Path) -> dict[str, Any]:
+    try:
+        exists = path.exists()
+    except OSError as exc:
+        return {
+            "path": str(path),
+            "available": False,
+            "status": "unreadable",
+            "error": str(exc),
+            "append_line_count": 0,
+            "append_line_numbers": [],
+            "default_labels": [],
+            "labels": [],
+            "cma_tokens": [],
+        }
+    if not exists:
+        return {
+            "path": str(path),
+            "available": False,
+            "status": "missing",
+            "append_line_count": 0,
+            "append_line_numbers": [],
+            "default_labels": [],
+            "labels": [],
+            "cma_tokens": [],
+        }
+    text = _read_text(path, max_chars=65536)
+    if text is None:
+        return {
+            "path": str(path),
+            "available": False,
+            "status": "unreadable",
+            "append_line_count": 0,
+            "append_line_numbers": [],
+            "default_labels": [],
+            "labels": [],
+            "cma_tokens": [],
+        }
+
+    append_line_numbers: list[int] = []
+    default_labels: list[str] = []
+    labels: list[str] = []
+    cma_tokens: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if not parts:
+            continue
+        key = parts[0].upper()
+        if key == "APPEND":
+            append_line_numbers.append(line_number)
+            cma_tokens.extend(BOOT_CONFIG_CMA_RE.findall(stripped))
+        elif key == "DEFAULT" and len(parts) > 1:
+            default_labels.append(parts[1])
+        elif key == "LABEL" and len(parts) > 1:
+            labels.append(parts[1])
+    return {
+        "path": str(path),
+        "available": True,
+        "status": "readable",
+        "append_line_count": len(append_line_numbers),
+        "append_line_numbers": append_line_numbers,
+        "default_labels": default_labels,
+        "labels": labels,
+        "cma_tokens": cma_tokens,
+    }
+
+
+def _read_boot_config(boot_root: Path) -> dict[str, Any]:
+    paths = [_read_boot_config_path(path) for path in _boot_config_candidate_paths(boot_root)]
+    readable_paths = [path for path in paths if path.get("status") == "readable"]
+    cma_tokens = [
+        token
+        for path in paths
+        for token in (path.get("cma_tokens") if isinstance(path.get("cma_tokens"), list) else [])
+        if isinstance(token, str)
+    ]
+    return {
+        "available": bool(readable_paths),
+        "paths": paths,
+        "readable_paths": [str(path["path"]) for path in readable_paths if isinstance(path.get("path"), str)],
+        "cma_tokens": cma_tokens,
+        "has_cma_token": bool(cma_tokens),
+        "append_line_count": sum(
+            value
+            for path in paths
+            if isinstance((value := path.get("append_line_count")), int) and not isinstance(value, bool)
+        ),
+    }
+
+
 def _looks_like_device_tree_string_list(raw: bytes) -> bool:
     if not raw:
         return False
@@ -383,9 +485,10 @@ def _read_reserved_memory(proc_root: Path, sys_root: Path) -> dict[str, Any]:
     }
 
 
-def _read_boot_memory(proc_root: Path, sys_root: Path) -> dict[str, Any]:
+def _read_boot_memory(proc_root: Path, sys_root: Path, boot_root: Path) -> dict[str, Any]:
     return {
         "cmdline": _read_boot_cmdline(proc_root),
+        "boot_config": _read_boot_config(boot_root),
         "reserved_memory": _read_reserved_memory(proc_root, sys_root),
     }
 
@@ -625,6 +728,7 @@ def _summary(diagnostics: dict[str, Any]) -> dict[str, Any]:
     reserved_memory = (
         boot_memory.get("reserved_memory") if isinstance(boot_memory.get("reserved_memory"), dict) else {}
     )
+    boot_config = boot_memory.get("boot_config") if isinstance(boot_memory.get("boot_config"), dict) else {}
     reserved_nodes = reserved_memory.get("nodes") if isinstance(reserved_memory.get("nodes"), list) else []
     return {
         "mem_available_kb": meminfo.get("MemAvailable"),
@@ -644,6 +748,10 @@ def _summary(diagnostics: dict[str, Any]) -> dict[str, Any]:
         "debugfs_nvmap_clients_total_bytes": nvmap_clients_summary.get("total_bytes"),
         "debugfs_nvmap_allocations_total_bytes": nvmap_allocations_summary.get("total_bytes"),
         "boot_cmdline_cma_token": cmdline.get("cma_token"),
+        "boot_config_readable_paths": boot_config.get("readable_paths", []),
+        "boot_config_cma_tokens": boot_config.get("cma_tokens", []),
+        "boot_config_has_cma_token": boot_config.get("has_cma_token", False),
+        "boot_config_append_line_count": boot_config.get("append_line_count", 0),
         "reserved_memory_node_count": reserved_memory.get("node_count", 0),
         "reserved_memory_names": [node.get("name") for node in reserved_nodes if isinstance(node, dict)],
         "linux_cma_reserved_size_bytes": _linux_cma_reserved_size_bytes(reserved_nodes),
@@ -655,11 +763,13 @@ def capture_memory_diagnostics(
     *,
     proc_root: str | Path = "/proc",
     sys_root: str | Path = "/sys",
+    boot_root: str | Path = "/",
     top_process_limit: int = 10,
     sample_tegrastats: bool = True,
 ) -> dict[str, Any]:
     proc = Path(proc_root)
     sys = Path(sys_root)
+    boot = Path(boot_root)
     debugfs = _debugfs_status(sys)
     diagnostics: dict[str, Any] = {
         "schema_version": 1,
@@ -671,7 +781,7 @@ def capture_memory_diagnostics(
         "zram": _read_zram(sys),
         "vmstat": _read_vmstat(proc),
         "pressure": _read_pressure(proc),
-        "boot_memory": _read_boot_memory(proc, sys),
+        "boot_memory": _read_boot_memory(proc, sys, boot),
         "top_rss_processes": _read_processes(proc, limit=top_process_limit),
         "debugfs": debugfs,
         "debugfs_summary": _summarize_debugfs(debugfs),
@@ -689,6 +799,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", required=True, help="JSON output path")
     parser.add_argument("--top-process-limit", type=int, default=10)
     parser.add_argument("--skip-tegrastats", action="store_true")
+    parser.add_argument(
+        "--boot-root",
+        default="/",
+        help="Root directory for read-only boot config path inspection",
+    )
     return parser
 
 
@@ -696,6 +811,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     diagnostics = capture_memory_diagnostics(
         args.output,
+        boot_root=args.boot_root,
         top_process_limit=args.top_process_limit,
         sample_tegrastats=not args.skip_tegrastats,
     )

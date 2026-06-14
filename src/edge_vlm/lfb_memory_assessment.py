@@ -115,6 +115,10 @@ def assess_selection_memory(
     boot_cmdline_cma_token = diagnostics_summary.get("boot_cmdline_cma_token")
     if not isinstance(boot_cmdline_cma_token, str):
         boot_cmdline_cma_token = None
+    boot_config_readable_paths = _string_list(diagnostics_summary.get("boot_config_readable_paths"))
+    boot_config_cma_tokens = _string_list(diagnostics_summary.get("boot_config_cma_tokens"))
+    boot_config_has_cma_token = bool(boot_config_cma_tokens)
+    boot_config_append_line_count = _int_value(diagnostics_summary.get("boot_config_append_line_count"))
     reserved_memory_names = _string_list(diagnostics_summary.get("reserved_memory_names"))
     reserved_memory_node_count = _int_value(diagnostics_summary.get("reserved_memory_node_count"))
     linux_cma_reserved_memory_present = _has_linux_cma_reserved_memory(reserved_memory_names)
@@ -166,6 +170,10 @@ def assess_selection_memory(
         "debugfs_total_tracked_bytes": debugfs_total_bytes,
         "debugfs_readable": _debugfs_readable(diagnostics_summary),
         "boot_cmdline_cma_token": boot_cmdline_cma_token,
+        "boot_config_readable_paths": boot_config_readable_paths,
+        "boot_config_cma_tokens": boot_config_cma_tokens,
+        "boot_config_has_cma_token": boot_config_has_cma_token,
+        "boot_config_append_line_count": boot_config_append_line_count,
         "reserved_memory_node_count": reserved_memory_node_count,
         "reserved_memory_names": reserved_memory_names,
         "linux_cma_reserved_memory_present": linux_cma_reserved_memory_present,

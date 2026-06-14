@@ -407,9 +407,13 @@ CMA, `/proc/buddyinfo`, swap/zram, compaction vmstat counters, memory pressure,
 top RSS processes, debugfs availability, and any parseable nvmap/dma-buf totals
 without changing the LFB gate. It also records read-only boot-time memory
 configuration evidence: the `/proc/cmdline` `cma=` token when present and a
-summary of device-tree `reserved-memory` nodes. Device-tree string properties
-are preserved as strings, while binary properties such as `reg` or `size` are
-preserved as hex bytes. When the parent `reserved-memory` node exposes
+summary of device-tree `reserved-memory` nodes. It also inspects common Jetson
+boot config candidate paths such as `/boot/extlinux/extlinux.conf` and records
+only path status, `APPEND` line counts, labels, and any `cma=` tokens found;
+it does not rewrite bootloader configuration or claim which entry is active.
+Device-tree string properties are preserved as strings, while binary properties
+such as `reg` or `size` are preserved as hex bytes. When the parent
+`reserved-memory` node exposes
 unambiguous `#address-cells` / `#size-cells` metadata, the sidecar also decodes
 the `linux,cma` reservation size into bytes; otherwise it leaves the binary
 properties as hex-only evidence. When the decoded preboot reservation is below
@@ -425,11 +429,12 @@ PYTHONPATH=src python -m edge_vlm.cma_experiment_plan \
   --output outputs/jetson_inspect/qwen3-instruct-selector.cma-experiment-plan.json
 ```
 
-The plan records the current decoded `linux,cma` reservation, each candidate's
-required LFB bytes and reservation deficit, exact per-variant minimum
-experiment sizes, and a 64MiB-rounded max-required candidate. It sets
-`applies_boot_config=false`; any Jetson boot configuration change still needs a
-manual review and explicit approval.
+The plan records the current decoded `linux,cma` reservation, boot config
+`cma=` token evidence when present, each candidate's required LFB bytes and
+reservation deficit, exact per-variant minimum experiment sizes, and a
+64MiB-rounded max-required candidate. It sets `applies_boot_config=false`; any
+Jetson boot configuration change still needs a manual review and explicit
+approval.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it

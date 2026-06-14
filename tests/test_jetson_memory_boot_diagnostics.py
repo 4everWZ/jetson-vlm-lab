@@ -14,12 +14,29 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
             tmp_path = Path(tmp)
             proc_root = tmp_path / "proc"
             sys_root = tmp_path / "sys"
+            boot_root = tmp_path
             reserved_root = sys_root / "firmware" / "devicetree" / "base" / "reserved-memory"
             cma_node = reserved_root / "linux,cma"
             ramoops_node = reserved_root / "ramoops@90000000"
             cma_node.mkdir(parents=True)
             ramoops_node.mkdir()
             proc_root.mkdir()
+            extlinux = boot_root / "boot" / "extlinux" / "extlinux.conf"
+            extlinux.parent.mkdir(parents=True)
+            extlinux.write_text(
+                "\n".join(
+                    [
+                        "TIMEOUT 30",
+                        "DEFAULT primary",
+                        "LABEL primary",
+                        "      MENU LABEL primary kernel",
+                        "      LINUX /boot/Image",
+                        "      APPEND root=/dev/mmcblk0p1 rw cma=768M quiet",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             (reserved_root / "#address-cells").write_bytes(bytes.fromhex("00000002"))
             (reserved_root / "#size-cells").write_bytes(bytes.fromhex("00000002"))
             (proc_root / "cmdline").write_text(
@@ -39,6 +56,7 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
                 output,
                 proc_root=proc_root,
                 sys_root=sys_root,
+                boot_root=boot_root,
                 sample_tegrastats=False,
             )
             written = json.loads(output.read_text(encoding="utf-8"))
@@ -77,6 +95,15 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
             "0000000000100000",
         )
         self.assertEqual(diagnostics["summary"]["boot_cmdline_cma_token"], "cma=256M@0-4G")
+        self.assertEqual(boot_memory["boot_config"]["paths"][0]["status"], "readable")
+        self.assertEqual(boot_memory["boot_config"]["paths"][0]["append_line_count"], 1)
+        self.assertEqual(boot_memory["boot_config"]["paths"][0]["default_labels"], ["primary"])
+        self.assertEqual(boot_memory["boot_config"]["paths"][0]["labels"], ["primary"])
+        self.assertEqual(boot_memory["boot_config"]["paths"][0]["cma_tokens"], ["cma=768M"])
+        self.assertEqual(diagnostics["summary"]["boot_config_readable_paths"], [str(extlinux)])
+        self.assertEqual(diagnostics["summary"]["boot_config_cma_tokens"], ["cma=768M"])
+        self.assertTrue(diagnostics["summary"]["boot_config_has_cma_token"])
+        self.assertEqual(diagnostics["summary"]["boot_config_append_line_count"], 1)
         self.assertEqual(diagnostics["summary"]["reserved_memory_node_count"], 2)
         self.assertEqual(
             diagnostics["summary"]["reserved_memory_names"],
@@ -91,6 +118,7 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
             tmp_path = Path(tmp)
             proc_root = tmp_path / "proc"
             sys_root = tmp_path / "sys"
+            boot_root = tmp_path
             proc_root.mkdir()
             sys_root.mkdir()
 
@@ -99,6 +127,7 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
                 output,
                 proc_root=proc_root,
                 sys_root=sys_root,
+                boot_root=boot_root,
                 sample_tegrastats=False,
             )
 
@@ -106,7 +135,13 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
         self.assertIsNone(diagnostics["boot_memory"]["cmdline"]["cma_token"])
         self.assertFalse(diagnostics["boot_memory"]["reserved_memory"]["available"])
         self.assertEqual(diagnostics["boot_memory"]["reserved_memory"]["nodes"], [])
+        self.assertFalse(diagnostics["boot_memory"]["boot_config"]["available"])
+        self.assertEqual(diagnostics["boot_memory"]["boot_config"]["paths"][0]["status"], "missing")
         self.assertIsNone(diagnostics["summary"]["boot_cmdline_cma_token"])
+        self.assertEqual(diagnostics["summary"]["boot_config_readable_paths"], [])
+        self.assertEqual(diagnostics["summary"]["boot_config_cma_tokens"], [])
+        self.assertFalse(diagnostics["summary"]["boot_config_has_cma_token"])
+        self.assertEqual(diagnostics["summary"]["boot_config_append_line_count"], 0)
         self.assertEqual(diagnostics["summary"]["reserved_memory_node_count"], 0)
 
 

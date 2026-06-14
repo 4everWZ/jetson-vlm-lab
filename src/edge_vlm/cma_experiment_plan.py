@@ -82,6 +82,17 @@ def _linux_cma_reserved_size_bytes(selection: dict[str, Any], assessment: dict[s
     return None
 
 
+def _evidence_string_list(selection: dict[str, Any], assessment: dict[str, Any], key: str) -> list[str]:
+    values = _string_list(assessment.get(key))
+    if values:
+        return values
+    for summary in _diagnostics_summaries(selection):
+        values = _string_list(summary.get(key))
+        if values:
+            return values
+    return []
+
+
 def _round_up_to_mib_step(value: int, step_mib: int) -> int:
     step_bytes = step_mib * MIB
     return ((value + step_bytes - 1) // step_bytes) * step_bytes
@@ -166,6 +177,8 @@ def build_cma_experiment_plan(
     assessment = _memory_assessment(selection)
     observed_lfb_block_mb = _observed_lfb_block_mb(selection, assessment)
     linux_cma_reserved_size_bytes = _linux_cma_reserved_size_bytes(selection, assessment)
+    boot_config_readable_paths = _evidence_string_list(selection, assessment, "boot_config_readable_paths")
+    boot_config_cma_tokens = _evidence_string_list(selection, assessment, "boot_config_cma_tokens")
     candidate_requirements = _candidate_requirements(
         selection,
         observed_lfb_block_mb=observed_lfb_block_mb,
@@ -201,6 +214,9 @@ def build_cma_experiment_plan(
         "selected_variant_id": selection.get("selected_variant_id"),
         "selected_reason": selection.get("selected_reason"),
         "preboot_capacity_status": assessment.get("preboot_capacity_status", "unknown"),
+        "boot_config_readable_paths": boot_config_readable_paths,
+        "boot_config_cma_tokens": boot_config_cma_tokens,
+        "boot_config_has_cma_token": bool(boot_config_cma_tokens),
         "observed_lfb_block_mb": observed_lfb_block_mb,
         "linux_cma_reserved_size_bytes": linux_cma_reserved_size_bytes,
         "required_lfb_bytes_max": required_lfb_bytes_max,

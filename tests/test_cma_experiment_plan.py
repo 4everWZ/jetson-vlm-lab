@@ -22,6 +22,9 @@ def _selector_fixture() -> dict:
             "tegrastats_lfb_block_mb": 4,
             "reserved_memory_node_count": 7,
             "reserved_memory_names": ["camdbg_carveout", "linux,cma", "vpr-carveout"],
+            "boot_config_readable_paths": ["/boot/extlinux/extlinux.conf"],
+            "boot_config_cma_tokens": ["cma=256M"],
+            "boot_config_has_cma_token": True,
             "linux_cma_reserved_size_bytes": 256 * MiB,
         },
         "memory_blocker_assessment": {
@@ -29,6 +32,9 @@ def _selector_fixture() -> dict:
             "preboot_capacity_status": "linux_cma_reserved_below_required_lfb",
             "observed_lfb_block_mb": 4,
             "required_lfb_bytes_max": 150 * 4 * MiB,
+            "boot_config_readable_paths": ["/boot/extlinux/extlinux.conf"],
+            "boot_config_cma_tokens": ["cma=256M"],
+            "boot_config_has_cma_token": True,
             "linux_cma_reserved_size_bytes": 256 * MiB,
             "linux_cma_reserved_deficit_bytes": (150 - 64) * 4 * MiB,
         },
@@ -74,6 +80,9 @@ class CmaExperimentPlanContractsTest(unittest.TestCase):
         self.assertIsNone(plan["selected_variant_id"])
         self.assertEqual(plan["selected_reason"], "no_usable_variant")
         self.assertEqual(plan["preboot_capacity_status"], "linux_cma_reserved_below_required_lfb")
+        self.assertEqual(plan["boot_config_readable_paths"], ["/boot/extlinux/extlinux.conf"])
+        self.assertEqual(plan["boot_config_cma_tokens"], ["cma=256M"])
+        self.assertTrue(plan["boot_config_has_cma_token"])
         self.assertEqual(plan["linux_cma_reserved_size_bytes"], 256 * MiB)
         self.assertEqual(plan["required_lfb_bytes_max"], 150 * 4 * MiB)
         self.assertEqual(plan["linux_cma_reserved_deficit_bytes"], (150 - 64) * 4 * MiB)

@@ -1167,6 +1167,10 @@ class OptimizationReportContractsTest(unittest.TestCase):
                     "tegrastats_lfb_free_blocks": 69,
                     "cma_free_kb": 221296,
                     "boot_cmdline_cma_token": None,
+                    "boot_config_readable_paths": ["/boot/extlinux/extlinux.conf"],
+                    "boot_config_cma_tokens": ["cma=256M"],
+                    "boot_config_has_cma_token": True,
+                    "boot_config_append_line_count": 1,
                     "reserved_memory_node_count": 7,
                     "reserved_memory_names": [
                         "camdbg_carveout",
@@ -1180,6 +1184,10 @@ class OptimizationReportContractsTest(unittest.TestCase):
                     "diagnostics_source": "sudo",
                     "lfb_free_block_deficit_max": 81,
                     "boot_cmdline_cma_token": None,
+                    "boot_config_readable_paths": ["/boot/extlinux/extlinux.conf"],
+                    "boot_config_cma_tokens": ["cma=256M"],
+                    "boot_config_has_cma_token": True,
+                    "boot_config_append_line_count": 1,
                     "reserved_memory_node_count": 7,
                     "reserved_memory_names": [
                         "camdbg_carveout",
@@ -1282,6 +1290,8 @@ class OptimizationReportContractsTest(unittest.TestCase):
         )
         self.assertEqual(rows[0].selection_memory_assessment["status"], "lfb_gate_not_met")
         self.assertEqual(rows[0].selection_memory_assessment["lfb_free_block_deficit_max"], 81)
+        self.assertEqual(rows[0].selection_memory_diagnostics["boot_config_cma_tokens"], ["cma=256M"])
+        self.assertTrue(rows[0].selection_memory_assessment["boot_config_has_cma_token"])
         self.assertEqual(rows[0].selection_memory_diagnostics["reserved_memory_node_count"], 7)
         self.assertIn("linux,cma", rows[0].selection_memory_diagnostics["reserved_memory_names"])
         self.assertTrue(rows[0].selection_memory_assessment["linux_cma_reserved_memory_present"])
@@ -1309,7 +1319,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertIn("Selection", report_text)
         self.assertIn("Selector memory", report_text)
         self.assertIn(
-            "sudo lfb=69 cma=216.1MiB debugfs=dma_buf:readable,nvmap:readable dma=0B nvmap=0B cmdline_cma=none reserved_memory=7:linux,cma linux_cma=256.0MiB linux_cma_deficit=344.0MiB assessment=lfb_gate_not_met deficit=81 blocks",
+            "sudo lfb=69 cma=216.1MiB debugfs=dma_buf:readable,nvmap:readable dma=0B nvmap=0B cmdline_cma=none boot_config_cma=cma=256M reserved_memory=7:linux,cma linux_cma=256.0MiB linux_cma_deficit=344.0MiB assessment=lfb_gate_not_met deficit=81 blocks",
             report_text,
         )
         self.assertIn("Required lfb", report_text)

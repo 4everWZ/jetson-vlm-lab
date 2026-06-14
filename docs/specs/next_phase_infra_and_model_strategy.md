@@ -97,9 +97,12 @@ column and flat `selection_memory_diagnostics` export field. Selector and sudo
 diagnostics also carry conservative `memory_blocker_assessment` summaries that
 record observed-vs-required LFB deficits, CMA headroom, debugfs-tracked bytes,
 boot-time CMA configuration evidence, and evidence signals without changing gate
-semantics or asserting a single root cause. The report also shows compact
-`cmdline_cma`, `reserved_memory`, and decoded `linux_cma` size evidence in the
-`Selector memory` cell when available. If the decoded `linux_cma` reservation is
+semantics or asserting a single root cause. Boot config evidence is read-only:
+diagnostics inspect candidate paths such as `/boot/extlinux/extlinux.conf` and
+record path status plus discovered `cma=` tokens without rewriting bootloader
+configuration. The report also shows compact `cmdline_cma`, `boot_config_cma`,
+`reserved_memory`, and decoded `linux_cma` size evidence in the `Selector memory`
+cell when available. If the decoded `linux_cma` reservation is
 below the largest required LFB byte budget, assessment exports
 `preboot_capacity_status` and the report displays `linux_cma_deficit` without
 changing gate semantics. Blocked no-selection contexts are matched back to their
@@ -107,10 +110,11 @@ primary/fallback/candidate rows instead of disappearing from Q4/Q8 blocker
 reports.
 `edge_vlm.cma_experiment_plan` now converts a blocked selector JSON into a
 read-only CMA reservation experiment artifact that records current `linux,cma`
-bytes, per-candidate required LFB bytes and deficits, exact variant minimum
-experiment sizes, and a 64MiB-rounded max-required candidate. The artifact
-explicitly sets `applies_boot_config=false`; it is for manual boot-memory
-review only and does not change selector gates or Jetson boot configuration.
+bytes, boot config `cma=` token evidence, per-candidate required LFB bytes and
+deficits, exact variant minimum experiment sizes, and a 64MiB-rounded
+max-required candidate. The artifact explicitly sets `applies_boot_config=false`;
+it is for manual boot-memory review only and does not change selector gates or
+Jetson boot configuration.
 The remote Qwen selector wrapper now writes that plan automatically for
 no-selection selector outputs, with `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0`
 as the opt-out for scoped runs.

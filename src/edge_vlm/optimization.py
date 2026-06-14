@@ -687,6 +687,15 @@ def _format_selection_memory_diagnostics(row: SweepComparisonRow) -> str:
             parts.append(f"cmdline_cma={cma_token.strip()}")
         else:
             parts.append("cmdline_cma=none")
+    boot_config_tokens = diagnostics.get("boot_config_cma_tokens")
+    if not isinstance(boot_config_tokens, list) and isinstance(row.selection_memory_assessment, dict):
+        boot_config_tokens = row.selection_memory_assessment.get("boot_config_cma_tokens")
+    if isinstance(boot_config_tokens, list):
+        token_texts = [token.strip() for token in boot_config_tokens if isinstance(token, str) and token.strip()]
+        if token_texts:
+            parts.append("boot_config_cma=" + ",".join(token_texts))
+        else:
+            parts.append("boot_config_cma=none")
     reserved_memory_node_count = diagnostics.get("reserved_memory_node_count")
     reserved_memory_names = diagnostics.get("reserved_memory_names")
     if isinstance(reserved_memory_node_count, int):
