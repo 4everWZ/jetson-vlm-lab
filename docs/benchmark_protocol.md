@@ -301,10 +301,13 @@ scripts/jetson/remote_probe.sh
 
 `check_remote_access.sh` validates that `.env.jetson` provides a target and that
 the configured SSH TCP port is reachable from the current host before any SSH
-password helper or remote command is involved. It prints `tcp_probe=ok` on
-success, `tcp_probe=tcp_connect_failed` on TCP failure, and never prints
-`.env.jetson` secrets. Use it to separate local VPN/Tailscale/routing failures
-from SSH authentication or remote worktree failures.
+password helper or remote command is involved. It also prints an advisory
+`icmp_probe=...` field so ICMP reachability can be separated from SSH port
+reachability; ICMP failure does not fail the gate when TCP succeeds. It prints
+`tcp_probe=ok` on TCP success, `tcp_probe=tcp_connect_failed` on TCP failure,
+and never prints `.env.jetson` secrets. Use it to separate local
+VPN/Tailscale/routing failures from SSH authentication or remote worktree
+failures.
 Set `JETSON_REMOTE_ACCESS_PREFLIGHT=1` on
 `scripts/jetson/run_remote_optimization_sweep.sh` when the wrapper itself
 should run this TCP precheck before `git fetch`, max-clocks setup, selector
