@@ -1,4 +1,4 @@
-"""remote_exec.sh and remote_probe.sh contract tests."""
+"""remote_exec.sh, remote_probe.sh, and SSH precheck contract tests."""
 
 import os
 import subprocess
@@ -10,6 +10,137 @@ from tests._remote_execution_helpers import write_executable
 
 
 class RemoteExecProbeContractsTest(unittest.TestCase):
+    def test_jetson_remote_access_precheck_dry_run_sources_env_without_exposing_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / ".env.jetson"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=100.95.31.18",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_SSH_PORT=2222",
+                        "JETSON_REPO_DIR=~/code/jetson-vlm-lab-bench",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/check_remote_access.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "JETSON_REMOTE_ACCESS_DRY_RUN": "1",
+                },
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ssh_target=weizheng@100.95.31.18", result.stdout)
+        self.assertIn("ssh_port=2222", result.stdout)
+        self.assertIn("repo_dir=~/code/jetson-vlm-lab-bench", result.stdout)
+        self.assertIn("tcp_probe=skipped_dry_run", result.stdout)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+
+    def test_jetson_remote_access_precheck_classifies_tcp_failure_without_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            env_file = tmp_path / ".env.jetson"
+            fake_bin = tmp_path / "bin"
+            fake_bin.mkdir()
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=100.95.31.18",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_SSH_PASSWORD=secret-password",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            write_executable(
+                fake_bin / "nc",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'ARGS=%s\\n' \"$*\" > \"${FAKE_NC_LOG:?}\"",
+                    "printf 'nc: connect to 100.95.31.18 port 22 timed out\\n' >&2",
+                    "exit 1",
+                ],
+            )
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/check_remote_access.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "FAKE_NC_LOG": str(tmp_path / "nc.log"),
+                },
+            )
+            nc_log = (tmp_path / "nc.log").read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("tcp_probe=tcp_connect_failed", result.stderr)
+        self.assertIn("ssh_target=weizheng@100.95.31.18", result.stdout)
+        self.assertIn("ARGS=-vz -w 5 100.95.31.18 22", nc_log)
+        self.assertNotIn("secret-password", result.stdout)
+        self.assertNotIn("secret-password", result.stderr)
+        self.assertNotIn("secret-password", nc_log)
+
+    def test_jetson_remote_access_precheck_reports_tcp_ok(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            env_file = tmp_path / ".env.jetson"
+            fake_bin = tmp_path / "bin"
+            fake_bin.mkdir()
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "JETSON_SSH_HOST=100.95.31.18",
+                        "JETSON_SSH_USER=weizheng",
+                        "JETSON_SSH_PORT=22",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            write_executable(
+                fake_bin / "nc",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'ARGS=%s\\n' \"$*\" > \"${FAKE_NC_LOG:?}\"",
+                ],
+            )
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/check_remote_access.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={
+                    **os.environ,
+                    "JETSON_ENV_FILE": str(env_file),
+                    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "FAKE_NC_LOG": str(tmp_path / "nc.log"),
+                },
+            )
+            nc_log = (tmp_path / "nc.log").read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("tcp_probe=ok", result.stdout)
+        self.assertIn("ARGS=-vz -w 5 100.95.31.18 22", nc_log)
+
     def test_jetson_remote_exec_dry_run_sources_ignored_env_without_exposing_password(self):
         with tempfile.TemporaryDirectory() as tmp:
             env_file = Path(tmp) / ".env.jetson"
