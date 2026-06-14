@@ -498,7 +498,10 @@ stay null rather than inferred. The sidecar also captures boot-time memory
 configuration evidence from `/proc/cmdline` and device-tree `reserved-memory`:
 the summary records the raw `cma=` token and reserved-memory node names, while
 binary device-tree properties remain hex bytes instead of inferred physical
-addresses or sizes. Set
+addresses or sizes. When `reserved-memory` exposes unambiguous
+`#address-cells` / `#size-cells` metadata, the sidecar also decodes the
+`linux,cma` reservation size into bytes; otherwise it keeps that evidence as
+hex-only. Set
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0` to skip that sidecar for a
 scoped rerun; it does not affect model selection semantics or the LFB gate.
 When debugfs paths are present but unreadable in the regular sidecar, set
@@ -549,7 +552,8 @@ summaries, the report also adds `Selector memory` and the JSON export includes
 `selection_memory_diagnostics`, preferring sudo summaries over regular sidecars.
 When available, the Markdown cell includes `cmdline_cma=<token|none>` and
 `reserved_memory=<count>[:linux,cma]` so boot-time CMA configuration evidence is
-visible next to LFB/CMA/debugfs totals.
+visible next to LFB/CMA/debugfs totals. If the `linux,cma` reservation size was
+decoded from device-tree cells, the cell also includes `linux_cma=<size>`.
 The export also includes `selection_memory_assessment`, and the Markdown cell
 adds the assessment status plus largest LFB deficit when available.
 When a selector chooses no variant, compare can still attach the context to rows

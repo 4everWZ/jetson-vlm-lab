@@ -20,6 +20,8 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
             cma_node.mkdir(parents=True)
             ramoops_node.mkdir()
             proc_root.mkdir()
+            (reserved_root / "#address-cells").write_bytes(bytes.fromhex("00000002"))
+            (reserved_root / "#size-cells").write_bytes(bytes.fromhex("00000002"))
             (proc_root / "cmdline").write_text(
                 "root=/dev/mmcblk0p1 rw quiet cma=256M@0-4G coherent_pool=4M\n",
                 encoding="utf-8",
@@ -28,6 +30,7 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
             (cma_node / "status").write_bytes(b"okay\x00")
             (cma_node / "reusable").write_bytes(b"")
             (cma_node / "reg").write_bytes(bytes.fromhex("00000000900000000000000010000000"))
+            (cma_node / "size").write_bytes(bytes.fromhex("0000000010000000"))
             (ramoops_node / "compatible").write_bytes(b"ramoops\x00")
             (ramoops_node / "size").write_bytes(bytes.fromhex("0000000000100000"))
 
@@ -47,6 +50,8 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
             "root=/dev/mmcblk0p1 rw quiet cma=256M@0-4G coherent_pool=4M",
         )
         self.assertTrue(boot_memory["reserved_memory"]["available"])
+        self.assertEqual(boot_memory["reserved_memory"]["address_cells"], 2)
+        self.assertEqual(boot_memory["reserved_memory"]["size_cells"], 2)
         self.assertEqual(boot_memory["reserved_memory"]["node_count"], 2)
         self.assertEqual(
             [node["name"] for node in boot_memory["reserved_memory"]["nodes"]],
@@ -62,6 +67,11 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
             boot_memory["reserved_memory"]["nodes"][0]["properties"]["reg_hex"],
             "00000000900000000000000010000000",
         )
+        self.assertEqual(boot_memory["reserved_memory"]["nodes"][0]["properties"]["size_bytes"], 256 * 1024 * 1024)
+        self.assertEqual(
+            boot_memory["reserved_memory"]["nodes"][0]["properties"]["reg_regions"],
+            [{"address_bytes": 0x90000000, "size_bytes": 256 * 1024 * 1024}],
+        )
         self.assertEqual(
             boot_memory["reserved_memory"]["nodes"][1]["properties"]["size_hex"],
             "0000000000100000",
@@ -72,6 +82,7 @@ class JetsonMemoryBootDiagnosticsTest(unittest.TestCase):
             diagnostics["summary"]["reserved_memory_names"],
             ["linux,cma", "ramoops@90000000"],
         )
+        self.assertEqual(diagnostics["summary"]["linux_cma_reserved_size_bytes"], 256 * 1024 * 1024)
 
     def test_memory_diagnostics_marks_missing_boot_memory_sources_unavailable(self):
         from edge_vlm.jetson_memory_diagnostics import capture_memory_diagnostics

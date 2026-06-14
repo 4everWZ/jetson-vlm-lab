@@ -46,6 +46,7 @@ class LfbMemoryAssessmentContractsTest(unittest.TestCase):
                 "linux,cma",
                 "vpr-carveout",
             ],
+            "linux_cma_reserved_size_bytes": 256 * 1024 * 1024,
         }
 
         assessment = assess_selection_memory(
@@ -71,6 +72,7 @@ class LfbMemoryAssessmentContractsTest(unittest.TestCase):
             ["camdbg_carveout", "linux,cma", "vpr-carveout"],
         )
         self.assertTrue(assessment["linux_cma_reserved_memory_present"])
+        self.assertEqual(assessment["linux_cma_reserved_size_bytes"], 256 * 1024 * 1024)
         self.assertEqual(
             assessment["candidate_lfb_deficits"],
             {
@@ -81,6 +83,7 @@ class LfbMemoryAssessmentContractsTest(unittest.TestCase):
         self.assertIn("lfb_below_required", assessment["signals"])
         self.assertIn("debugfs_tracked_allocations_zero", assessment["signals"])
         self.assertIn("cma_free_below_required_lfb_bytes", assessment["signals"])
+        self.assertIn("linux_cma_reserved_below_required_lfb_bytes", assessment["signals"])
         self.assertEqual(assessment["selection_implication"], "no_candidate_meets_lfb_gate")
 
 

@@ -408,8 +408,11 @@ top RSS processes, debugfs availability, and any parseable nvmap/dma-buf totals
 without changing the LFB gate. It also records read-only boot-time memory
 configuration evidence: the `/proc/cmdline` `cma=` token when present and a
 summary of device-tree `reserved-memory` nodes. Device-tree string properties
-are preserved as strings, while binary properties such as `reg` or `size` stay
-as hex bytes rather than inferred addresses or sizes.
+are preserved as strings, while binary properties such as `reg` or `size` are
+preserved as hex bytes. When the parent `reserved-memory` node exposes
+unambiguous `#address-cells` / `#size-cells` metadata, the sidecar also decodes
+the `linux,cma` reservation size into bytes; otherwise it leaves the binary
+properties as hex-only evidence.
 
 The remote lightweight suite now uses this selector automatically instead of
 pinning `qwen3-vl-2b-instruct-q4-smoke` in the candidate list. By default it
@@ -456,11 +459,12 @@ When diagnostics summaries are present, compare adds a `Selector memory` column
 and exports a flat `selection_memory_diagnostics` object so LFB/CMA and readable
 debugfs totals are visible without opening nested sidecars. When boot-time
 memory evidence is present, that column also shows `cmdline_cma=<token|none>`
-and a compact `reserved_memory=<count>[:linux,cma]` summary. The JSON export
-also keeps `selection_memory_assessment`, and the Markdown column appends the
-assessment status and largest LFB deficit when present. If the selector chooses
-no variant, compare still attaches that context to rows whose variant id appears
-in the selector's primary, fallback, or candidate list.
+and a compact `reserved_memory=<count>[:linux,cma]` summary. If `linux,cma`
+size was decoded from device-tree cells, it also shows `linux_cma=<size>`.
+The JSON export also keeps `selection_memory_assessment`, and the Markdown
+column appends the assessment status and largest LFB deficit when present. If
+the selector chooses no variant, compare still attaches that context to rows
+whose variant id appears in the selector's primary, fallback, or candidate list.
 When you also pass `--ranking-min-lfb-blocks <strict-gate>`, the report adds a
 `Ranking precheck` column so relaxed fallback rows remain visible without being
 mistaken for promotable strict-gate evidence.

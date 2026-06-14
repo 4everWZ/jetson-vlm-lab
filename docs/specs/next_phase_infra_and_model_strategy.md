@@ -79,8 +79,9 @@ memory pressure, top RSS processes, debugfs availability, and parseable
 nvmap/dma-buf totals, so repeated LFB blocks can be debugged without rerunning a
 full model startup. It also records boot-time memory configuration evidence:
 the `/proc/cmdline` `cma=` token and device-tree `reserved-memory` node names
-are lifted into the compact summary, while binary device-tree properties remain
-raw hex evidence rather than inferred address or size claims.
+are lifted into the compact summary. Binary device-tree properties remain raw
+hex evidence unless the parent `reserved-memory` cell metadata unambiguously
+allows decoding the `linux,cma` reservation size into bytes.
 For deeper read-only debugfs triage, the remote wrapper can opt in to
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` and write a second
 `<selector-output>.memory-diagnostics.sudo.json` sidecar through `sudo`. This
@@ -97,8 +98,9 @@ diagnostics also carry conservative `memory_blocker_assessment` summaries that
 record observed-vs-required LFB deficits, CMA headroom, debugfs-tracked bytes,
 boot-time CMA configuration evidence, and evidence signals without changing gate
 semantics or asserting a single root cause. The report also shows compact
-`cmdline_cma` and `reserved_memory` evidence in the `Selector memory` cell when
-available. Blocked no-selection contexts are matched back to their
+`cmdline_cma`, `reserved_memory`, and decoded `linux_cma` size evidence in the
+`Selector memory` cell when available. Blocked no-selection contexts are matched
+back to their
 primary/fallback/candidate rows instead of disappearing from Q4/Q8 blocker
 reports.
 The comparison report now also shows that effective threshold in a `Required

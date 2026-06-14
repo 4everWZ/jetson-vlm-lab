@@ -118,6 +118,7 @@ def assess_selection_memory(
     reserved_memory_names = _string_list(diagnostics_summary.get("reserved_memory_names"))
     reserved_memory_node_count = _int_value(diagnostics_summary.get("reserved_memory_node_count"))
     linux_cma_reserved_memory_present = _has_linux_cma_reserved_memory(reserved_memory_names)
+    linux_cma_reserved_size_bytes = _int_value(diagnostics_summary.get("linux_cma_reserved_size_bytes"))
     signals: list[str] = []
     if candidate_deficits:
         signals.append("lfb_below_required")
@@ -127,6 +128,12 @@ def assess_selection_memory(
         signals.append("cma_free_below_required_lfb_bytes")
     if cma_total_kb is not None and required_lfb_bytes_max is not None and cma_total_kb * 1024 < required_lfb_bytes_max:
         signals.append("cma_total_below_required_lfb_bytes")
+    if (
+        linux_cma_reserved_size_bytes is not None
+        and required_lfb_bytes_max is not None
+        and linux_cma_reserved_size_bytes < required_lfb_bytes_max
+    ):
+        signals.append("linux_cma_reserved_below_required_lfb_bytes")
 
     status = "lfb_gate_not_met" if candidate_deficits else "no_lfb_gate_deficit_detected"
     selected_variant_id = selection.get("selected_variant_id")
@@ -153,6 +160,7 @@ def assess_selection_memory(
         "reserved_memory_node_count": reserved_memory_node_count,
         "reserved_memory_names": reserved_memory_names,
         "linux_cma_reserved_memory_present": linux_cma_reserved_memory_present,
+        "linux_cma_reserved_size_bytes": linux_cma_reserved_size_bytes,
         "signals": signals,
         "note": "Evidence summary only; selector gates and ranking semantics are unchanged.",
     }

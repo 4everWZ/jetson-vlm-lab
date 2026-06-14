@@ -400,7 +400,9 @@ swap/zram、compaction vmstat counter、memory pressure、RSS 最大的进程以
 debugfs 可用性，并在能稳定解析时记录 nvmap/dma-buf total，不会改变 LFB gate。
 它还会记录启动时内存配置证据：`/proc/cmdline` 里的 `cma=` token，以及
 device-tree `reserved-memory` 节点摘要。device-tree 的字符串属性会保留为字符串；
-`reg`、`size` 这类二进制属性只保留 hex bytes，不推断地址或 size 语义。
+`reg`、`size` 这类二进制属性会保留 hex bytes。当父级 `reserved-memory` 节点
+提供明确的 `#address-cells` / `#size-cells` 元数据时，sidecar 还会把
+`linux,cma` reservation size 解码成 bytes；否则仍只保留 hex 证据。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是
@@ -443,6 +445,7 @@ sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住
 扁平的 `selection_memory_diagnostics` 对象，这样不用打开嵌套 sidecar 也能看到
 LFB/CMA 和可读 debugfs total。如果存在启动时内存证据，这一列还会显示
 `cmdline_cma=<token|none>` 和简洁的 `reserved_memory=<count>[:linux,cma]` 摘要。
+如果能从 device-tree cells 解码 `linux,cma` size，还会显示 `linux_cma=<size>`。
 JSON export 也会保留 `selection_memory_assessment`，Markdown 列会在存在时追加
 assessment status 和最大 LFB deficit。如果 selector 没有选中任何 variant，compare
 仍会把这个 context 挂到 primary、fallback 或 candidate 列表里的对应 row 上。

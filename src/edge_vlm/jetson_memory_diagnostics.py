@@ -231,21 +231,84 @@ def _decode_device_tree_string_list(raw: bytes) -> list[str] | None:
     return [part.decode("ascii", errors="strict") for part in raw.rstrip(b"\0").split(b"\0") if part]
 
 
-def _read_reserved_memory_property(path: Path) -> tuple[str, Any]:
+def _decode_device_tree_u32(raw: bytes) -> int | None:
+    if len(raw) != 4:
+        return None
+    return int.from_bytes(raw, byteorder="big", signed=False)
+
+
+def _read_device_tree_u32(path: Path) -> int | None:
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    return _decode_device_tree_u32(raw)
+
+
+def _decode_device_tree_cells(raw: bytes, cell_count: int | None) -> int | None:
+    if cell_count is None or cell_count <= 0:
+        return None
+    if len(raw) != cell_count * 4:
+        return None
+    value = 0
+    for offset in range(0, len(raw), 4):
+        value = (value << 32) | int.from_bytes(raw[offset : offset + 4], byteorder="big", signed=False)
+    return value
+
+
+def _decode_reg_regions(raw: bytes, *, address_cells: int | None, size_cells: int | None) -> list[dict[str, int]] | None:
+    if address_cells is None or size_cells is None or address_cells <= 0 or size_cells <= 0:
+        return None
+    region_cell_count = address_cells + size_cells
+    region_bytes = region_cell_count * 4
+    if region_bytes <= 0 or len(raw) == 0 or len(raw) % region_bytes != 0:
+        return None
+    regions: list[dict[str, int]] = []
+    for offset in range(0, len(raw), region_bytes):
+        address_raw = raw[offset : offset + address_cells * 4]
+        size_raw = raw[offset + address_cells * 4 : offset + region_bytes]
+        address_bytes = _decode_device_tree_cells(address_raw, address_cells)
+        size_bytes = _decode_device_tree_cells(size_raw, size_cells)
+        if address_bytes is None or size_bytes is None:
+            return None
+        regions.append({"address_bytes": address_bytes, "size_bytes": size_bytes})
+    return regions
+
+
+def _read_reserved_memory_property(
+    path: Path,
+    *,
+    address_cells: int | None,
+    size_cells: int | None,
+) -> dict[str, Any]:
     try:
         raw = path.read_bytes()
     except OSError as exc:
-        return (f"{path.name}_error", str(exc))
+        return {f"{path.name}_error": str(exc)}
     if raw == b"":
-        return (path.name, True)
+        return {path.name: True}
     if path.name in DEVICE_TREE_STRING_PROPERTIES:
         decoded = _decode_device_tree_string_list(raw)
         if decoded is not None:
-            return (path.name, decoded)
-    return (f"{path.name}_hex", raw.hex())
+            return {path.name: decoded}
+    properties: dict[str, Any] = {f"{path.name}_hex": raw.hex()}
+    if path.name == "size":
+        size_bytes = _decode_device_tree_cells(raw, size_cells)
+        if size_bytes is not None:
+            properties["size_bytes"] = size_bytes
+    if path.name == "reg":
+        regions = _decode_reg_regions(raw, address_cells=address_cells, size_cells=size_cells)
+        if regions is not None:
+            properties["reg_regions"] = regions
+    return properties
 
 
-def _read_reserved_memory_node(path: Path) -> dict[str, Any]:
+def _read_reserved_memory_node(
+    path: Path,
+    *,
+    address_cells: int | None,
+    size_cells: int | None,
+) -> dict[str, Any]:
     properties: dict[str, Any] = {}
     try:
         entries = sorted(path.iterdir(), key=lambda entry: entry.name)
@@ -254,8 +317,7 @@ def _read_reserved_memory_node(path: Path) -> dict[str, Any]:
     for entry in entries:
         if entry.is_dir():
             continue
-        key, value = _read_reserved_memory_property(entry)
-        properties[key] = value
+        properties.update(_read_reserved_memory_property(entry, address_cells=address_cells, size_cells=size_cells))
     return {"name": path.name, "status": "readable", "properties": properties}
 
 
@@ -303,11 +365,19 @@ def _read_reserved_memory(proc_root: Path, sys_root: Path) -> dict[str, Any]:
             "nodes": [],
             "node_count": 0,
         }
-    nodes = [_read_reserved_memory_node(entry) for entry in entries if entry.is_dir()]
+    address_cells = _read_device_tree_u32(selected_path / "#address-cells")
+    size_cells = _read_device_tree_u32(selected_path / "#size-cells")
+    nodes = [
+        _read_reserved_memory_node(entry, address_cells=address_cells, size_cells=size_cells)
+        for entry in entries
+        if entry.is_dir()
+    ]
     return {
         "path": str(selected_path),
         "available": True,
         "status": "readable",
+        "address_cells": address_cells,
+        "size_cells": size_cells,
         "nodes": nodes,
         "node_count": len(nodes),
     }
@@ -318,6 +388,25 @@ def _read_boot_memory(proc_root: Path, sys_root: Path) -> dict[str, Any]:
         "cmdline": _read_boot_cmdline(proc_root),
         "reserved_memory": _read_reserved_memory(proc_root, sys_root),
     }
+
+
+def _linux_cma_reserved_size_bytes(nodes: list[Any]) -> int | None:
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        name = node.get("name")
+        if not isinstance(name, str) or (name != "linux,cma" and not name.startswith("linux,cma@")):
+            continue
+        properties = node.get("properties") if isinstance(node.get("properties"), dict) else {}
+        size_bytes = properties.get("size_bytes")
+        if isinstance(size_bytes, int) and not isinstance(size_bytes, bool):
+            return size_bytes
+        regions = properties.get("reg_regions")
+        if isinstance(regions, list) and len(regions) == 1 and isinstance(regions[0], dict):
+            region_size = regions[0].get("size_bytes")
+            if isinstance(region_size, int) and not isinstance(region_size, bool):
+                return region_size
+    return None
 
 
 def _read_cmdline(path: Path) -> str:
@@ -557,6 +646,7 @@ def _summary(diagnostics: dict[str, Any]) -> dict[str, Any]:
         "boot_cmdline_cma_token": cmdline.get("cma_token"),
         "reserved_memory_node_count": reserved_memory.get("node_count", 0),
         "reserved_memory_names": [node.get("name") for node in reserved_nodes if isinstance(node, dict)],
+        "linux_cma_reserved_size_bytes": _linux_cma_reserved_size_bytes(reserved_nodes),
     }
 
 
