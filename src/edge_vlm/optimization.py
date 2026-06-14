@@ -49,6 +49,7 @@ class SweepComparisonRow:
     variant_id: str
     selection_id: str
     selection_reason: str
+    selection_context: dict[str, Any]
     model: str
     comparison_group: str
     model_family: str
@@ -888,6 +889,7 @@ def summarize_sweep_manifest(
                     if isinstance(selection_context.get("selected_reason"), str)
                     else ""
                 ),
+                selection_context=dict(selection_context),
                 model=summary.model if summary is not None else str(entry.get("model") or "unknown"),
                 comparison_group=_comparison_group(
                     variant_plan,
@@ -1324,6 +1326,7 @@ def _comparison_row_artifact(row: SweepComparisonRow) -> dict[str, Any]:
             "id": row.selection_id,
             "reason": row.selection_reason,
         },
+        "selection_context": row.selection_context,
         "model": row.model,
         "comparison_group": row.comparison_group,
         "model_config": {

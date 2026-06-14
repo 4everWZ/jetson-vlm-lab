@@ -214,7 +214,10 @@ baseline variant. When variant metadata provides a shared `comparison_group`,
 the delta columns use that group instead of raw model id so Q4/Q8 fallback
 lanes can share one baseline. When the sweep manifest carries normalized
 `selection_contexts`, the comparison table also adds a `Selection` column so an
-auto-selected fallback row stays tied to its selector decision. The sweep plan
+auto-selected fallback row stays tied to its selector decision. Those contexts
+also preserve per-candidate selector summaries such as `block_reasons` and GGUF
+`artifact_manifest`, so the row artifact can show why a fallback was selected
+without copying launcher environment settings. The sweep plan
 also carries `variant_min_lfb_blocks` so a fallback-selected row can keep its
 relaxed per-variant gate during execution instead of being re-blocked by the
 suite-wide `--min-lfb-blocks`. The comparison table exposes that effective gate

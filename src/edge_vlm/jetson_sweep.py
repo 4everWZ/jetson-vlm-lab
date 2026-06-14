@@ -330,6 +330,38 @@ def _selector_selection_id(
     return None
 
 
+def _selection_candidate_summary(candidate: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    for key in (
+        "variant_id",
+        "model",
+        "config",
+        "launcher",
+        "supports_images",
+        "min_lfb_blocks",
+        "usable",
+        "chosen",
+    ):
+        if key not in candidate:
+            continue
+        value = candidate.get(key)
+        if isinstance(value, (str, int, bool)) or value is None:
+            summary[key] = value
+    block_reasons = candidate.get("block_reasons")
+    if isinstance(block_reasons, list):
+        summary["block_reasons"] = [str(reason) for reason in block_reasons]
+    artifact_paths = candidate.get("artifact_paths")
+    if isinstance(artifact_paths, dict):
+        summary["artifact_paths"] = {
+            str(key): str(value) if value is not None else None
+            for key, value in artifact_paths.items()
+        }
+    artifact_manifest = candidate.get("artifact_manifest")
+    if isinstance(artifact_manifest, dict):
+        summary["artifact_manifest"] = artifact_manifest
+    return summary
+
+
 def _normalize_selection_context(
     record: dict[str, Any],
     *,
@@ -366,6 +398,15 @@ def _normalize_selection_context(
         normalized["primary_variant_id"] = primary_variant_id
     if fallback_variant_id:
         normalized["fallback_variant_id"] = fallback_variant_id
+    candidates = record.get("candidates")
+    if isinstance(candidates, list):
+        normalized_candidates = [
+            _selection_candidate_summary(candidate)
+            for candidate in candidates
+            if isinstance(candidate, dict)
+        ]
+        if normalized_candidates:
+            normalized["candidates"] = normalized_candidates
     return normalized
 
 

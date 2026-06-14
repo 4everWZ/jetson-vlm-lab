@@ -184,6 +184,23 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
                         "comparison_group": "qwen3-vl-2b-instruct",
                         "selected_variant_id": "qwen3-vl-2b-instruct-q4-smoke",
                         "selected_reason": "primary_usable",
+                        "primary_variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                        "fallback_variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                        "candidates": [
+                            {
+                                "variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                                "usable": True,
+                                "chosen": True,
+                                "block_reasons": [],
+                                "artifact_manifest": {"status": "ok", "failed_count": 0},
+                            },
+                            {
+                                "variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                                "usable": False,
+                                "chosen": False,
+                                "block_reasons": ["primary_usable_not_needed"],
+                            },
+                        ],
                     }
                 )
                 + "\n",
@@ -233,6 +250,23 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
                     "comparison_group": "qwen3-vl-2b-instruct",
                     "selected_variant_id": "qwen3-vl-2b-instruct-q4-smoke",
                     "selected_reason": "primary_usable",
+                    "primary_variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                    "fallback_variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                    "candidates": [
+                        {
+                            "variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                            "usable": True,
+                            "chosen": True,
+                            "block_reasons": [],
+                            "artifact_manifest": {"status": "ok", "failed_count": 0},
+                        },
+                        {
+                            "variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                            "usable": False,
+                            "chosen": False,
+                            "block_reasons": ["primary_usable_not_needed"],
+                        },
+                    ],
                 }
             ],
         )
