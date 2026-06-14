@@ -272,7 +272,7 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
                     "if [[ \"${1:-}\" == \"sudo\" ]]; then",
                     "  IFS= read -r password_from_stdin || true",
                     "  printf 'STDIN_BYTES=%s\\n' \"${#password_from_stdin}\" >> \"${FAKE_REMOTE_LOG}\"",
-                    "  printf '%s\\n' '{\"output\":\"sudo-sidecar.json\",\"summary\":{\"debugfs\":\"readable\"}}'",
+                    "  printf '%s\\n' '{\"output\":\"sudo-sidecar.json\",\"summary\":{\"debugfs_statuses\":{\"dma_buf_bufinfo\":\"readable\"},\"debugfs_dma_buf_total_bytes\":0}}'",
                     "fi",
                     "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
                     "if printf '%s\\n' \"$@\" | grep -q 'select_qwen3_instruct_variant.sh'; then",
@@ -307,7 +307,7 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
 
-        self.assertEqual(log_text.count("CALL\n"), 3)
+        self.assertEqual(log_text.count("CALL\n"), 4)
         self.assertIn("STDIN_BYTES=2\n", log_text)
         self.assertIn(
             "ARG=sudo\n"
@@ -329,6 +329,14 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             result.stderr,
         )
         self.assertNotIn("sudo-sidecar.json", result.stdout)
+        self.assertIn("ARG=edge_vlm.selection_context_diagnostics\n", log_text)
+        self.assertIn(
+            "ARG=--selector-output\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.json\n"
+            "ARG=--sudo-memory-diagnostics-output\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.memory-diagnostics.sudo.json\n",
+            log_text,
+        )
 
     def test_remote_optimization_sweep_requires_password_for_sudo_memory_diagnostics(self):
         with tempfile.TemporaryDirectory() as tmp:

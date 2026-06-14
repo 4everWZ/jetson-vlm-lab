@@ -412,6 +412,14 @@ def _normalize_selection_context(
         normalized["primary_variant_id"] = primary_variant_id
     if fallback_variant_id:
         normalized["fallback_variant_id"] = fallback_variant_id
+    for key in ("memory_diagnostics_path", "sudo_memory_diagnostics_path"):
+        value = record.get(key)
+        if isinstance(value, str) and value.strip():
+            normalized[key] = value.strip()
+    for key in ("memory_diagnostics_summary", "sudo_memory_diagnostics_summary"):
+        value = record.get(key)
+        if isinstance(value, dict):
+            normalized[key] = value
     candidates = record.get("candidates")
     if isinstance(candidates, list):
         normalized_candidates = [

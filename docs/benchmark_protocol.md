@@ -504,7 +504,11 @@ then runs the same diagnostics module through `sudo` after selector inspection
 and writes `<selector-output>.memory-diagnostics.sudo.json`. This is a
 read-only evidence artifact for nvmap/dma-buf/CMA triage; its summary carries
 the same debugfs status and parseable-total fields and does not affect
-selection semantics or LFB thresholds.
+selection semantics or LFB thresholds. The wrapper also writes
+`sudo_memory_diagnostics_path` and `sudo_memory_diagnostics_summary` back into
+the selector JSON before forwarding it as `--selection-context-json`, so sweep
+plans, compare rows, and eligibility artifacts can carry the readable debugfs
+evidence instead of relying on wrapper stderr.
 
 Build a comparison table from one or more sweep manifests with:
 

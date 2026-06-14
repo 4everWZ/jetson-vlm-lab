@@ -422,12 +422,14 @@ nvmap/dma-buf/CMA debugfs preview，可以在 `.env.jetson` 里设置
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` 和
 `JETSON_REMOTE_SUDO_PASSWORD`。wrapper 会在 selector 运行后额外写一个只读
 sidecar：`<selector-output>.memory-diagnostics.sudo.json`。它的 compact summary
-会记录 debugfs 状态，以及可解析的 nvmap/dma-buf total；它不会放宽 LFB gate，
-也不会改变模型选择。
+会记录 debugfs 状态，以及可解析的 nvmap/dma-buf total；wrapper 还会把它写回
+selector JSON 的 `sudo_memory_diagnostics_summary`，让后续 `selection_contexts`
+能带上这份可读 debugfs 证据。它不会放宽 LFB gate，也不会改变模型选择。
 转发后的 `selection_contexts` 现在会保留 selector 的候选摘要，包括
 `block_reasons` 和 GGUF `artifact_manifest`，所以 Q8 作为 fallback 被选中时，
-sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住。launcher
-环境块不会被复制进这个 context，避免把环境配置或潜在 secret 混进下游 artifact。
+sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住。它也会
+保留常规和 sudo memory diagnostics 的路径与 compact summary。launcher 环境块
+不会被复制进这个 context，避免把环境配置或潜在 secret 混进下游 artifact。
 再配合
 `--ranking-min-lfb-blocks <strict-gate>` 时，report 还会增加
 `Ranking precheck` 列，这样 relaxed fallback row 会保留在报告里，但不会被误读成

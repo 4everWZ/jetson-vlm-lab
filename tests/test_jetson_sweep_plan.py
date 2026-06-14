@@ -186,6 +186,17 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
                         "selected_reason": "primary_usable",
                         "primary_variant_id": "qwen3-vl-2b-instruct-q4-smoke",
                         "fallback_variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                        "memory_diagnostics_path": "outputs/unit/qwen3-selector.memory-diagnostics.json",
+                        "memory_diagnostics_summary": {
+                            "debugfs_statuses": {"dma_buf_bufinfo": "unreadable"},
+                            "debugfs_dma_buf_total_bytes": None,
+                        },
+                        "sudo_memory_diagnostics_path": "outputs/unit/qwen3-selector.memory-diagnostics.sudo.json",
+                        "sudo_memory_diagnostics_summary": {
+                            "debugfs_statuses": {"dma_buf_bufinfo": "readable"},
+                            "debugfs_dma_buf_total_bytes": 0,
+                            "debugfs_nvmap_clients_total_bytes": 0,
+                        },
                         "candidates": [
                             {
                                 "variant_id": "qwen3-vl-2b-instruct-q4-smoke",
@@ -252,6 +263,17 @@ class JetsonSweepPlanContractsTest(unittest.TestCase):
                     "selected_reason": "primary_usable",
                     "primary_variant_id": "qwen3-vl-2b-instruct-q4-smoke",
                     "fallback_variant_id": "qwen3-vl-2b-instruct-q8-smoke",
+                    "memory_diagnostics_path": "outputs/unit/qwen3-selector.memory-diagnostics.json",
+                    "memory_diagnostics_summary": {
+                        "debugfs_statuses": {"dma_buf_bufinfo": "unreadable"},
+                        "debugfs_dma_buf_total_bytes": None,
+                    },
+                    "sudo_memory_diagnostics_path": "outputs/unit/qwen3-selector.memory-diagnostics.sudo.json",
+                    "sudo_memory_diagnostics_summary": {
+                        "debugfs_statuses": {"dma_buf_bufinfo": "readable"},
+                        "debugfs_dma_buf_total_bytes": 0,
+                        "debugfs_nvmap_clients_total_bytes": 0,
+                    },
                     "candidates": [
                         {
                             "variant_id": "qwen3-vl-2b-instruct-q4-smoke",

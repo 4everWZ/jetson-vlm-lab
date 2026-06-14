@@ -138,6 +138,16 @@ run_remote_sudo_memory_diagnostics() {
     --output "${output}"
 }
 
+enrich_remote_selector_with_sudo_diagnostics() {
+  local selector_output="$1"
+  local sudo_output="$2"
+  "${remote_exec}" \
+    env "PYTHONPATH=${remote_pythonpath}" \
+    python3 -m edge_vlm.selection_context_diagnostics \
+    --selector-output "${selector_output}" \
+    --sudo-memory-diagnostics-output "${sudo_output}"
+}
+
 if [[ "${prepare_max_clocks}" == "1" ]]; then
   sudo_password="$(sudo_password_from_env)"
   if [[ -z "${sudo_password}" ]]; then
@@ -253,6 +263,7 @@ if [[ "${qwen3_selector}" == "1" ]]; then
   if [[ "${qwen3_memory_diagnostics_sudo}" == "1" ]]; then
     sudo_memory_diagnostics_output="$(derive_sudo_memory_diagnostics_output "${selector_memory_diagnostics_output}")"
     sudo_memory_diagnostics_json="$(run_remote_sudo_memory_diagnostics "${sudo_memory_diagnostics_output}")"
+    sudo_memory_diagnostics_context_json="$(enrich_remote_selector_with_sudo_diagnostics "${qwen3_selector_output}" "${sudo_memory_diagnostics_output}")"
     echo "Qwen3 selector sudo memory diagnostics output: ${sudo_memory_diagnostics_output}" >&2
   fi
   if [[ -n "${selected_variant_id}" ]]; then

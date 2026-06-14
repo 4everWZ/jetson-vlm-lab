@@ -433,12 +433,15 @@ nvmap/dma-buf/CMA debugfs previews, set
 read-only sidecar named `<selector-output>.memory-diagnostics.sudo.json` after
 the selector run. Its compact summary records debugfs status plus parseable
 nvmap/dma-buf totals when those debugfs files expose stable `total` lines; it
-does not relax the LFB gate or change model selection.
+is also written back to the selector JSON as `sudo_memory_diagnostics_summary`
+so downstream `selection_contexts` carry the readable debugfs evidence. It does
+not relax the LFB gate or change model selection.
 The forwarded `selection_contexts` now preserve selector candidate summaries,
 including `block_reasons` and the GGUF `artifact_manifest`, so a Q8 row chosen
 as fallback keeps the Q4 blocker evidence in the sweep plan and compare
-eligibility JSON. Launcher environment blocks are intentionally not copied into
-that context.
+eligibility JSON. They also preserve the regular and sudo memory diagnostics
+paths and compact summaries. Launcher environment blocks are intentionally not
+copied into that context.
 When you also pass `--ranking-min-lfb-blocks <strict-gate>`, the report adds a
 `Ranking precheck` column so relaxed fallback rows remain visible without being
 mistaken for promotable strict-gate evidence.

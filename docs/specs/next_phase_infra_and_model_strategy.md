@@ -85,7 +85,10 @@ keeps nvmap/dma-buf/CMA debugfs previews out of the default path while allowing
 permission-limited LFB investigations to gather the missing lower-level
 evidence without changing selection semantics or LFB gates. The parser only
 promotes stable total lines into the compact summary; unknown debugfs formats
-remain raw preview evidence.
+remain raw preview evidence. The remote wrapper writes the sudo diagnostics
+path and compact summary back into the selector JSON before it becomes a sweep
+`selection_context`, so reports can retain readable debugfs evidence alongside
+candidate block reasons.
 The comparison report now also shows that effective threshold in a `Required
 lfb` column, which makes relaxed fallback evidence mechanically distinguishable
 from strict-gate rows. When compare also receives
