@@ -211,9 +211,9 @@ EDGE_VLM_DEVICE=jetson-orin PYTHONPATH=src python -m edge_vlm.benchmark \
 - Selector returned no usable variant: inspect the JSON from
   `scripts/jetson/select_qwen3_instruct_variant.sh` to see whether the block was
   strict `lfb`, missing artifacts, or runtime multimodal support.
-- `llama-server not found in container`: set `LLAMA_SERVER_CMD` to the server
-  binary path inside that image, or switch to a tag that includes the installed
-  llama.cpp server binary.
+- `runtime_missing_llama_server` or `llama-server not found in container`: set
+  `LLAMA_SERVER_CMD` to the server binary path inside that image, or switch to a
+  tag that includes the installed llama.cpp server binary.
 - `Model GGUF not found`: model files are missing or paths do not match `MODEL_DIR`.
 - Server starts but image cases fail: mmproj may be missing, incompatible, or not loaded. Check `/v1/models` capabilities and server logs.
 - Out-of-memory or process killed: lower `CTX_SIZE`, reduce parallelism, close other processes, or use externally prepared lower-bit quantization. Do not run BF16-to-Q4 conversion on a memory-constrained Jetson.

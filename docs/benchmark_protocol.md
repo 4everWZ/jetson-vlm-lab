@@ -400,6 +400,10 @@ The direct VLM Docker launchers use the same lower-level check before real
 startup and before artifact checks or downloads. `JETSON_DRY_RUN=1` remains a
 command preview only; set `LLAMA_CPP_RUNTIME_PROBE_OUTPUT=...` to choose the
 launcher probe JSON path for a reproducible artifact.
+The generic text-only HF GGUF launcher uses the same probe before artifact
+checks too, but only requires a resolvable `llama-server` whose `--help`
+executes. It does not require `--mmproj`, so text/router candidates are not
+incorrectly blocked by a missing multimodal flag.
 This exact-flag check matters in practice: on June 9, 2026, the Jetson probe
 found `/usr/local/bin/llama-server` inside
 `dustynv/llama_cpp:b5283-r36.4-cu128-24.04`, but the real Qwen3-VL 2B Instruct
