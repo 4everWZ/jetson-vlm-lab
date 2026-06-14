@@ -446,6 +446,9 @@ sweep plan 和 compare eligibility JSON 里仍然能看到 Q4 为什么被挡住
 LFB/CMA 和可读 debugfs total。如果存在启动时内存证据，这一列还会显示
 `cmdline_cma=<token|none>` 和简洁的 `reserved_memory=<count>[:linux,cma]` 摘要。
 如果能从 device-tree cells 解码 `linux,cma` size，还会显示 `linux_cma=<size>`。
+当这个 reservation 小于 selector 最大 required LFB bytes 时，assessment 会记录
+`preboot_capacity_status`，Markdown 列也会追加 `linux_cma_deficit=<size>` 作为
+preboot capacity 证据。
 JSON export 也会保留 `selection_memory_assessment`，Markdown 列会在存在时追加
 assessment status 和最大 LFB deficit。如果 selector 没有选中任何 variant，compare
 仍会把这个 context 挂到 primary、fallback 或 candidate 列表里的对应 row 上。

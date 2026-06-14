@@ -99,8 +99,10 @@ record observed-vs-required LFB deficits, CMA headroom, debugfs-tracked bytes,
 boot-time CMA configuration evidence, and evidence signals without changing gate
 semantics or asserting a single root cause. The report also shows compact
 `cmdline_cma`, `reserved_memory`, and decoded `linux_cma` size evidence in the
-`Selector memory` cell when available. Blocked no-selection contexts are matched
-back to their
+`Selector memory` cell when available. If the decoded `linux_cma` reservation is
+below the largest required LFB byte budget, assessment exports
+`preboot_capacity_status` and the report displays `linux_cma_deficit` without
+changing gate semantics. Blocked no-selection contexts are matched back to their
 primary/fallback/candidate rows instead of disappearing from Q4/Q8 blocker
 reports.
 The comparison report now also shows that effective threshold in a `Required

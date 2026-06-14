@@ -554,6 +554,10 @@ When available, the Markdown cell includes `cmdline_cma=<token|none>` and
 `reserved_memory=<count>[:linux,cma]` so boot-time CMA configuration evidence is
 visible next to LFB/CMA/debugfs totals. If the `linux,cma` reservation size was
 decoded from device-tree cells, the cell also includes `linux_cma=<size>`.
+If that reservation is below the largest required LFB byte budget, the
+assessment records `preboot_capacity_status` and the Markdown cell includes
+`linux_cma_deficit=<size>`; this remains evidence only and does not change
+selector semantics.
 The export also includes `selection_memory_assessment`, and the Markdown cell
 adds the assessment status plus largest LFB deficit when available.
 When a selector chooses no variant, compare can still attach the context to rows

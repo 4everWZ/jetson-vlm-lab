@@ -461,6 +461,9 @@ debugfs totals are visible without opening nested sidecars. When boot-time
 memory evidence is present, that column also shows `cmdline_cma=<token|none>`
 and a compact `reserved_memory=<count>[:linux,cma]` summary. If `linux,cma`
 size was decoded from device-tree cells, it also shows `linux_cma=<size>`.
+When that reservation is smaller than the selector's largest required LFB byte
+budget, the assessment records `preboot_capacity_status` and the Markdown cell
+adds `linux_cma_deficit=<size>` as preboot capacity evidence.
 The JSON export also keeps `selection_memory_assessment`, and the Markdown
 column appends the assessment status and largest LFB deficit when present. If
 the selector chooses no variant, compare still attaches that context to rows

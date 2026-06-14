@@ -1188,6 +1188,8 @@ class OptimizationReportContractsTest(unittest.TestCase):
                     ],
                     "linux_cma_reserved_memory_present": True,
                     "linux_cma_reserved_size_bytes": 256 * 1024 * 1024,
+                    "preboot_capacity_status": "linux_cma_reserved_below_required_lfb",
+                    "linux_cma_reserved_deficit_bytes": (150 - 64) * 4 * 1024 * 1024,
                     "signals": [
                         "lfb_below_required",
                         "debugfs_tracked_allocations_zero",
@@ -1288,6 +1290,14 @@ class OptimizationReportContractsTest(unittest.TestCase):
             256 * 1024 * 1024,
         )
         self.assertEqual(
+            rows[0].selection_memory_assessment["preboot_capacity_status"],
+            "linux_cma_reserved_below_required_lfb",
+        )
+        self.assertEqual(
+            rows[0].selection_memory_assessment["linux_cma_reserved_deficit_bytes"],
+            (150 - 64) * 4 * 1024 * 1024,
+        )
+        self.assertEqual(
             eligibility["rows"][0]["selection_memory_diagnostics"]["debugfs_nvmap_clients_total_bytes"],
             0,
         )
@@ -1299,7 +1309,7 @@ class OptimizationReportContractsTest(unittest.TestCase):
         self.assertIn("Selection", report_text)
         self.assertIn("Selector memory", report_text)
         self.assertIn(
-            "sudo lfb=69 cma=216.1MiB debugfs=dma_buf:readable,nvmap:readable dma=0B nvmap=0B cmdline_cma=none reserved_memory=7:linux,cma linux_cma=256.0MiB assessment=lfb_gate_not_met deficit=81 blocks",
+            "sudo lfb=69 cma=216.1MiB debugfs=dma_buf:readable,nvmap:readable dma=0B nvmap=0B cmdline_cma=none reserved_memory=7:linux,cma linux_cma=256.0MiB linux_cma_deficit=344.0MiB assessment=lfb_gate_not_met deficit=81 blocks",
             report_text,
         )
         self.assertIn("Required lfb", report_text)

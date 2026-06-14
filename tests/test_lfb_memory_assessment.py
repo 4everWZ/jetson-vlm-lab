@@ -73,6 +73,8 @@ class LfbMemoryAssessmentContractsTest(unittest.TestCase):
         )
         self.assertTrue(assessment["linux_cma_reserved_memory_present"])
         self.assertEqual(assessment["linux_cma_reserved_size_bytes"], 256 * 1024 * 1024)
+        self.assertEqual(assessment["preboot_capacity_status"], "linux_cma_reserved_below_required_lfb")
+        self.assertEqual(assessment["linux_cma_reserved_deficit_bytes"], (150 - 64) * 4 * 1024 * 1024)
         self.assertEqual(
             assessment["candidate_lfb_deficits"],
             {

@@ -698,6 +698,9 @@ def _format_selection_memory_diagnostics(row: SweepComparisonRow) -> str:
     if isinstance(linux_cma_size_bytes, int):
         parts.append(f"linux_cma={_fmt_bytes(linux_cma_size_bytes)}")
     assessment = row.selection_memory_assessment
+    linux_cma_deficit_bytes = assessment.get("linux_cma_reserved_deficit_bytes") if isinstance(assessment, dict) else None
+    if isinstance(linux_cma_deficit_bytes, int) and linux_cma_deficit_bytes > 0:
+        parts.append(f"linux_cma_deficit={_fmt_bytes(linux_cma_deficit_bytes)}")
     status = assessment.get("status") if isinstance(assessment, dict) else None
     if isinstance(status, str) and status:
         assessment_text = f"assessment={status}"
