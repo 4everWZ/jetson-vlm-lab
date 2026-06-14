@@ -539,6 +539,10 @@ LFB bytes and deficits, exact variant minimum experiment sizes, and a
 64MiB-rounded max-required candidate. The artifact sets
 `applies_boot_config=false`; it is evidence for manual review, not an automatic
 boot configuration change.
+The remote Qwen selector wrapper writes this artifact automatically when the
+selector chooses no variant and has a selector output path. Set
+`JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` only when the extra read-only artifact
+should be skipped for a scoped run.
 
 Build a comparison table from one or more sweep manifests with:
 

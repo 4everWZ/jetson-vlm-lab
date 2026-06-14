@@ -258,6 +258,117 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
         self.assertIn("ARG=--variant\nARG=smolvlm2-256m-q8-smoke\n", log_text)
         self.assertIn("ARG=--variant\nARG=qwen3-vl-2b-instruct-q8-smoke\n", log_text)
 
+    def test_remote_optimization_sweep_writes_cma_experiment_plan_after_qwen3_selector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_executable(
+                fake_remote,
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                    "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    "if printf '%s\\n' \"$@\" | grep -q 'select_qwen3_instruct_variant.sh'; then",
+                    "  printf '%s\\n' '{\"selected_variant_id\":\"\",\"selected_reason\":\"no_usable_variant\"}'",
+                    "fi",
+                    "if printf '%s\\n' \"$@\" | grep -q 'edge_vlm.cma_experiment_plan'; then",
+                    "  printf '%s\\n' '{\"output\":\"cma-plan.json\",\"status\":\"ready\",\"experiment_candidate_count\":3}'",
+                    "fi",
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--run-prefix",
+                    "unit-selector-plan",
+                    "--variant",
+                    "smolvlm2-256m-q8-smoke",
+                    "--min-lfb-blocks",
+                    "150",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR="1",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 3)
+        self.assertIn(
+            "ARG=env\n"
+            "ARG=PYTHONPATH=src\n"
+            "ARG=python3\n"
+            "ARG=-m\n"
+            "ARG=edge_vlm.cma_experiment_plan\n"
+            "ARG=--selector-json\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-plan/unit-selector-plan.qwen3-selector.json\n"
+            "ARG=--output\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-plan/unit-selector-plan.qwen3-selector.cma-experiment-plan.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "Qwen3 selector CMA experiment plan output: "
+            "outputs/optimization_sweeps/unit-selector-plan/unit-selector-plan.qwen3-selector.cma-experiment-plan.json",
+            result.stderr,
+        )
+
+    def test_remote_optimization_sweep_can_skip_cma_experiment_plan_after_qwen3_selector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_executable(
+                fake_remote,
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                    "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    "if printf '%s\\n' \"$@\" | grep -q 'select_qwen3_instruct_variant.sh'; then",
+                    "  printf '%s\\n' '{\"selected_variant_id\":\"\",\"selected_reason\":\"no_usable_variant\"}'",
+                    "fi",
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--run-prefix",
+                    "unit-selector-plan-skip",
+                    "--variant",
+                    "smolvlm2-256m-q8-smoke",
+                    "--min-lfb-blocks",
+                    "150",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR="1",
+                    JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN="0",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 2)
+        self.assertNotIn("edge_vlm.cma_experiment_plan", log_text)
+        self.assertNotIn("CMA experiment plan output", result.stderr)
+
     def test_remote_optimization_sweep_can_capture_sudo_memory_diagnostics_after_qwen3_selector(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -307,7 +418,7 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             log_text = log_file.read_text(encoding="utf-8")
 
-        self.assertEqual(log_text.count("CALL\n"), 4)
+        self.assertEqual(log_text.count("CALL\n"), 5)
         self.assertIn("STDIN_BYTES=2\n", log_text)
         self.assertIn(
             "ARG=sudo\n"
@@ -335,6 +446,14 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
             "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.json\n"
             "ARG=--sudo-memory-diagnostics-output\n"
             "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.memory-diagnostics.sudo.json\n",
+            log_text,
+        )
+        self.assertIn("ARG=edge_vlm.cma_experiment_plan\n", log_text)
+        self.assertIn(
+            "ARG=--selector-json\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.json\n"
+            "ARG=--output\n"
+            "ARG=outputs/optimization_sweeps/unit-selector-sudo/unit-selector-sudo.qwen3-selector.cma-experiment-plan.json\n",
             log_text,
         )
 

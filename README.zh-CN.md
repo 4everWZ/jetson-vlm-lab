@@ -437,6 +437,9 @@ comparison 表还会同时显示 `Required lfb`，把实际生效的 preflight g
 remote Qwen selector 默认还会写
 `<selector-output>.memory-diagnostics.json`；只有明确想跳过这个只读 sidecar
 时，才设置 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0`。
+当这个 selector 没有选中任何 variant 且存在 selector output path 时，remote wrapper
+还会默认写 `<selector-output>.cma-experiment-plan.json`。只有明确想跳过这个只读
+review artifact 时，才设置 `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0`。
 如果 sidecar 里 debugfs 路径显示为 unreadable，而你需要实际的
 nvmap/dma-buf/CMA debugfs preview，可以在 `.env.jetson` 里设置
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` 和

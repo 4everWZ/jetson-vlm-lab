@@ -450,6 +450,10 @@ The remote Qwen selector also writes
 `<selector-output>.memory-diagnostics.json` by default; set
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS=0` only when you need to skip
 that read-only sidecar.
+When that selector chooses no variant and has a selector output path, the
+remote wrapper also writes `<selector-output>.cma-experiment-plan.json` by
+default. Set `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` only when you need to
+skip that read-only review artifact.
 If the sidecar reports debugfs paths as unreadable and you need the actual
 nvmap/dma-buf/CMA debugfs previews, set
 `JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO=1` with

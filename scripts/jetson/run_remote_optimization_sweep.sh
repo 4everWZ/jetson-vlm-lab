@@ -22,6 +22,7 @@ qwen3_fallback_min_lfb_blocks="${JETSON_REMOTE_QWEN3_INSTRUCT_FALLBACK_MIN_LFB_B
 qwen3_selector_output="${JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR_OUTPUT:-}"
 qwen3_memory_diagnostics="${JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS:-1}"
 qwen3_memory_diagnostics_sudo="${JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO:-0}"
+qwen3_cma_experiment_plan="${JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN:-1}"
 gguf_preflight="${JETSON_REMOTE_GGUF_PREFLIGHT:-0}"
 gguf_preflight_fail="${JETSON_REMOTE_GGUF_PREFLIGHT_FAIL:-0}"
 
@@ -129,6 +130,15 @@ derive_sudo_memory_diagnostics_output() {
   fi
 }
 
+derive_cma_experiment_plan_output() {
+  local selector_output="$1"
+  if [[ "${selector_output}" == *.json ]]; then
+    printf '%s.cma-experiment-plan.json' "${selector_output%.json}"
+  else
+    printf '%s.cma-experiment-plan.json' "${selector_output}"
+  fi
+}
+
 run_remote_sudo_memory_diagnostics() {
   local output="$1"
   printf '%s\n' "${sudo_password}" | "${remote_exec}" \
@@ -146,6 +156,16 @@ enrich_remote_selector_with_sudo_diagnostics() {
     python3 -m edge_vlm.selection_context_diagnostics \
     --selector-output "${selector_output}" \
     --sudo-memory-diagnostics-output "${sudo_output}"
+}
+
+write_remote_cma_experiment_plan() {
+  local selector_output="$1"
+  local plan_output="$2"
+  "${remote_exec}" \
+    env "PYTHONPATH=${remote_pythonpath}" \
+    python3 -m edge_vlm.cma_experiment_plan \
+    --selector-json "${selector_output}" \
+    --output "${plan_output}"
 }
 
 if [[ "${prepare_max_clocks}" == "1" ]]; then
@@ -197,6 +217,10 @@ if [[ "${qwen3_selector}" == "1" ]]; then
   fi
   if [[ "${qwen3_memory_diagnostics_sudo}" != "0" && "${qwen3_memory_diagnostics_sudo}" != "1" ]]; then
     echo "JETSON_REMOTE_QWEN3_INSTRUCT_MEMORY_DIAGNOSTICS_SUDO must be 0 or 1." >&2
+    exit 2
+  fi
+  if [[ "${qwen3_cma_experiment_plan}" != "0" && "${qwen3_cma_experiment_plan}" != "1" ]]; then
+    echo "JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN must be 0 or 1." >&2
     exit 2
   fi
   selector_min_lfb_blocks="$(extract_arg_value --min-lfb-blocks "${sweep_args[@]}" || true)"
@@ -265,6 +289,11 @@ if [[ "${qwen3_selector}" == "1" ]]; then
     sudo_memory_diagnostics_json="$(run_remote_sudo_memory_diagnostics "${sudo_memory_diagnostics_output}")"
     sudo_memory_diagnostics_context_json="$(enrich_remote_selector_with_sudo_diagnostics "${qwen3_selector_output}" "${sudo_memory_diagnostics_output}")"
     echo "Qwen3 selector sudo memory diagnostics output: ${sudo_memory_diagnostics_output}" >&2
+  fi
+  if [[ "${qwen3_cma_experiment_plan}" == "1" && -z "${selected_variant_id}" && -n "${qwen3_selector_output}" ]]; then
+    selector_cma_experiment_plan_output="$(derive_cma_experiment_plan_output "${qwen3_selector_output}")"
+    selector_cma_experiment_plan_json="$(write_remote_cma_experiment_plan "${qwen3_selector_output}" "${selector_cma_experiment_plan_output}")"
+    echo "Qwen3 selector CMA experiment plan output: ${selector_cma_experiment_plan_output}" >&2
   fi
   if [[ -n "${selected_variant_id}" ]]; then
     echo "Qwen3 selector chose ${selected_variant_id} (${selected_reason:-unknown_reason})." >&2
