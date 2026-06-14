@@ -135,7 +135,10 @@ current-default baselines or the VLM lane.
 into one `leq2b.candidate_bundle.json`; the remote helper
 `scripts/jetson/build_remote_leq2b_candidate_bundle.sh` builds the same bundle
 from `JETSON_LEQ2B_VLM_SELECTION_DIR` and `JETSON_LEQ2B_TEXT_SELECTION_DIR` on
-the Jetson worktree.
+the Jetson worktree, then exports `leq2b.routes.json` by default. Set
+`JETSON_LEQ2B_BUILD_ROUTES=0` to keep the helper bundle-only, or override
+`JETSON_LEQ2B_ROUTE_GATE` / `JETSON_LEQ2B_ROUTES_OUTPUT` for a scoped route
+artifact.
 `edge_vlm.optimization export-routes` consumes that bundle and writes
 `leq2b.routes.json` as the router-facing artifact: candidates are grouped by
 lane, then the `q4_first_q8_fallback` policy is applied within each

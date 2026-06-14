@@ -455,7 +455,10 @@ Use `python -m edge_vlm.optimization bundle-selections` to merge those lane
 artifacts into one `leq2b.candidate_bundle.json`; on Jetson,
 `scripts/jetson/build_remote_leq2b_candidate_bundle.sh` accepts
 `JETSON_LEQ2B_VLM_SELECTION_DIR` and `JETSON_LEQ2B_TEXT_SELECTION_DIR` and
-writes the same unified bundle remotely.
+writes the same unified bundle remotely. It also exports `leq2b.routes.json`
+from that bundle by default; set `JETSON_LEQ2B_BUILD_ROUTES=0` to build only
+the bundle, or override `JETSON_LEQ2B_ROUTE_GATE` /
+`JETSON_LEQ2B_ROUTES_OUTPUT` for a scoped route artifact.
 Use `python -m edge_vlm.optimization export-routes --input
 .../leq2b.candidate_bundle.json --gate promotion --output
 .../leq2b.routes.json` when a downstream router needs lane-grouped primary and

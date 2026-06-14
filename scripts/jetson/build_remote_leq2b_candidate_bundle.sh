@@ -10,6 +10,24 @@ selection_inputs_text="${JETSON_LEQ2B_BUNDLE_SELECTIONS:-}"
 vlm_selection_dir="${JETSON_LEQ2B_VLM_SELECTION_DIR:-}"
 text_selection_dir="${JETSON_LEQ2B_TEXT_SELECTION_DIR:-}"
 bundle_output="${JETSON_LEQ2B_BUNDLE_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/leq2b.candidate_bundle.json}"
+build_routes="${JETSON_LEQ2B_BUILD_ROUTES:-1}"
+route_gate="${JETSON_LEQ2B_ROUTE_GATE:-promotion}"
+routes_output="${JETSON_LEQ2B_ROUTES_OUTPUT:-outputs/optimization_sweeps/${run_prefix}/leq2b.routes.json}"
+
+if [[ "${build_routes}" != "0" && "${build_routes}" != "1" ]]; then
+  echo "JETSON_LEQ2B_BUILD_ROUTES must be 0 or 1." >&2
+  exit 2
+fi
+
+if [[ "${build_routes}" == "1" ]]; then
+  case "${route_gate}" in
+    startup | ranking | promotion) ;;
+    *)
+      echo "JETSON_LEQ2B_ROUTE_GATE must be startup, ranking, or promotion." >&2
+      exit 2
+      ;;
+  esac
+fi
 
 selection_inputs=()
 if [[ -n "${selection_inputs_text}" ]]; then
@@ -54,3 +72,20 @@ done
 bundle_args+=(--output "${bundle_output}")
 
 "${remote_exec}" "${bundle_args[@]}"
+
+if [[ "${build_routes}" == "1" ]]; then
+  route_args=(
+    "PYTHONPATH=${remote_pythonpath}"
+    python3
+    -m
+    edge_vlm.optimization
+    export-routes
+    --input
+    "${bundle_output}"
+    --gate
+    "${route_gate}"
+    --output
+    "${routes_output}"
+  )
+  "${remote_exec}" "${route_args[@]}"
+fi

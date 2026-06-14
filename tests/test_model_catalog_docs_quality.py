@@ -759,6 +759,7 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
             self.assertIn("export-routes", text)
             self.assertIn("leq2b.routes.json", text)
             self.assertIn("q4_first_q8_fallback", text)
+            self.assertIn("JETSON_LEQ2B_BUILD_ROUTES", text)
 
     def test_compare_docs_explain_promotion_precheck_stage(self):
         protocol_doc = Path("docs/benchmark_protocol.md").read_text(encoding="utf-8")
