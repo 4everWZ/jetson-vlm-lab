@@ -179,6 +179,9 @@ scripts/wsl/prepare_gemma4_e2b_q4.sh
 - `models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf`
 
 这些脚本下载现成 GGUF，不运行 `llama-quantize`。
+Jetson GGUF launcher 会在启动 `llama-server` 前检查本机 model 和 mmproj
+文件的 GGUF magic bytes。缓存文件如果没有通过这个检查，就删掉或恢复该文件后
+重新运行 launcher，让 HF 路径重新下载。
 
 ## 运行 Gemma 4 E2B-it
 

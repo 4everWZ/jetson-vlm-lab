@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+hf_artifacts_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=gguf_artifacts.sh
+source "${hf_artifacts_dir}/gguf_artifacts.sh"
+
 download_hf_file() {
   local repo_id="$1"
   local filename="$2"
@@ -20,7 +24,7 @@ download_hf_file() {
   if [[ "${curl_status}" -ne 0 ]]; then
     if [[ "${curl_status}" -eq 22 && -f "${partial}" ]] \
       && grep -q "416" "${curl_log}" \
-      && [[ "$(head -c 4 "${partial}" 2>/dev/null || true)" == "GGUF" ]]; then
+      && gguf_artifact_has_magic "${partial}"; then
       echo "HTTP 416 while resuming ${destination}; accepting existing GGUF partial as complete." >&2
     else
       rm -f "${curl_log}"
@@ -29,4 +33,13 @@ download_hf_file() {
   fi
   rm -f "${curl_log}"
   mv "${partial}" "${destination}"
+}
+
+download_hf_gguf_file() {
+  local repo_id="$1"
+  local filename="$2"
+  local destination="$3"
+  local role="${4:-artifact}"
+  download_hf_file "${repo_id}" "${filename}" "${destination}"
+  require_gguf_artifact "${destination}" "${role}"
 }

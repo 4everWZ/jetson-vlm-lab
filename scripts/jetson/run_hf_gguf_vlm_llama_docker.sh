@@ -83,8 +83,8 @@ artifact_status="cached"
 if [[ ! -f "${host_model_path}" || ! -f "${host_mmproj_path}" ]]; then
   artifact_status="downloaded_or_checked"
 fi
-download_hf_file "${repo_id}" "${model_file}" "${host_model_path}"
-download_hf_file "${repo_id}" "${mmproj_file}" "${host_mmproj_path}"
+download_hf_gguf_file "${repo_id}" "${model_file}" "${host_model_path}" "model"
+download_hf_gguf_file "${repo_id}" "${mmproj_file}" "${host_mmproj_path}" "mmproj"
 write_launch_phase "artifact_check_or_download" "$(phase_duration_s "${artifact_phase_start_ns}" "$(phase_now_ns)")" "${artifact_status}"
 
 if ! command -v docker >/dev/null 2>&1; then

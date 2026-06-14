@@ -456,6 +456,10 @@ When profile phase timings include `artifact_check_or_download`, compare also
 adds `Artifact phase` and `Artifact s` columns so first-download rows can be
 separated from cached-start rows without opening lifecycle or profile-summary
 sidecars by hand.
+Host-side GGUF launchers also validate model and mmproj artifacts with a GGUF
+magic-byte check before `llama-server` startup. A corrupt cached artifact must
+be removed or restored and rerun; direct local-artifact launchers record
+`invalid_model` or `invalid_mmproj` in the artifact phase before exiting.
 When startup time itself is under review, add
 `--startup-require-cached-artifacts`. Compare then adds a `Startup precheck`
 column and only marks rows as startup-comparable when
@@ -622,6 +626,9 @@ of left as generic `not_recorded`: variants with `--no-warmup` record
 the internal llama.cpp warmup duration. Gemma `-hf` runtime downloads that
 happen inside `llama-server` are labeled as not separated rather than guessed
 as launcher time.
+Host-side GGUF artifact checks include a GGUF magic-byte validation step before
+server startup, so corrupt model or mmproj files fail as artifact problems
+instead of surfacing later as runtime startup failures.
 
 The `input_payload` bottleneck label is emitted only when average payload
 preparation is non-trivial and accounts for a material share of estimated

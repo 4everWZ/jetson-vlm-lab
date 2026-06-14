@@ -179,6 +179,10 @@ Downloads:
 - `models/gemma-4-E2B-it-GGUF/gemma-4-E2B-it.mmproj-Q8_0.gguf`
 
 These scripts download existing GGUF artifacts. They do not run `llama-quantize`.
+Jetson GGUF launchers validate host-side model and mmproj files by checking the
+GGUF magic bytes before starting `llama-server`. If a cached artifact fails this
+check, remove or restore that file and rerun the launcher so the HF path can
+download it again.
 
 ## Run Gemma 4 E2B-it
 
