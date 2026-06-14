@@ -12,6 +12,8 @@ repo_dir="${JETSON_REPO_DIR:-~/code/jetson-vlm-lab}"
 port="${JETSON_SSH_PORT:-22}"
 dry_run="${JETSON_REMOTE_ACCESS_DRY_RUN:-0}"
 tcp_timeout="${JETSON_REMOTE_ACCESS_TCP_TIMEOUT:-5}"
+icmp_probe="${JETSON_REMOTE_ACCESS_ICMP_PROBE:-1}"
+icmp_timeout="${JETSON_REMOTE_ACCESS_ICMP_TIMEOUT:-3}"
 
 if [[ -z "${host}" || -z "${user}" ]]; then
   echo "JETSON_SSH_HOST and JETSON_SSH_USER are required." >&2
@@ -23,13 +25,29 @@ if [[ "${dry_run}" != "0" && "${dry_run}" != "1" ]]; then
   exit 2
 fi
 
+if [[ "${icmp_probe}" != "0" && "${icmp_probe}" != "1" ]]; then
+  echo "JETSON_REMOTE_ACCESS_ICMP_PROBE must be 0 or 1." >&2
+  exit 2
+fi
+
 printf 'ssh_target=%s@%s\n' "${user}" "${host}"
 printf 'ssh_port=%s\n' "${port}"
 printf 'repo_dir=%s\n' "${repo_dir}"
 
 if [[ "${dry_run}" == "1" ]]; then
+  printf 'icmp_probe=skipped_dry_run\n'
   printf 'tcp_probe=skipped_dry_run\n'
   exit 0
+fi
+
+if [[ "${icmp_probe}" == "0" ]]; then
+  printf 'icmp_probe=disabled\n'
+elif ! command -v ping >/dev/null 2>&1; then
+  printf 'icmp_probe=ping_missing\n'
+elif ping -c 1 -W "${icmp_timeout}" "${host}" >/dev/null 2>&1; then
+  printf 'icmp_probe=ok\n'
+else
+  printf 'icmp_probe=failed\n'
 fi
 
 if ! command -v nc >/dev/null 2>&1; then

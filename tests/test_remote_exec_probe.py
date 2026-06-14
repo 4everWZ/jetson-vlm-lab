@@ -9,6 +9,10 @@ from pathlib import Path
 from tests._remote_execution_helpers import write_executable
 
 
+def _read_text_if_exists(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
 class RemoteExecProbeContractsTest(unittest.TestCase):
     def test_jetson_remote_access_precheck_dry_run_sources_env_without_exposing_password(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -43,6 +47,7 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
         self.assertIn("ssh_target=weizheng@100.95.31.18", result.stdout)
         self.assertIn("ssh_port=2222", result.stdout)
         self.assertIn("repo_dir=~/code/jetson-vlm-lab-bench", result.stdout)
+        self.assertIn("icmp_probe=skipped_dry_run", result.stdout)
         self.assertIn("tcp_probe=skipped_dry_run", result.stdout)
         self.assertNotIn("secret-password", result.stdout)
         self.assertNotIn("secret-password", result.stderr)
@@ -65,6 +70,14 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
                 encoding="utf-8",
             )
             write_executable(
+                fake_bin / "ping",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'PING_ARGS=%s\\n' \"$*\" > \"${FAKE_PING_LOG:?}\"",
+                ],
+            )
+            write_executable(
                 fake_bin / "nc",
                 [
                     "#!/usr/bin/env bash",
@@ -85,19 +98,24 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
                     "JETSON_ENV_FILE": str(env_file),
                     "PATH": f"{fake_bin}:{os.environ['PATH']}",
                     "FAKE_NC_LOG": str(tmp_path / "nc.log"),
+                    "FAKE_PING_LOG": str(tmp_path / "ping.log"),
                 },
             )
-            nc_log = (tmp_path / "nc.log").read_text(encoding="utf-8")
+            nc_log = _read_text_if_exists(tmp_path / "nc.log")
+            ping_log = _read_text_if_exists(tmp_path / "ping.log")
 
         self.assertEqual(result.returncode, 1)
+        self.assertIn("icmp_probe=ok", result.stdout)
         self.assertIn("tcp_probe=tcp_connect_failed", result.stderr)
         self.assertIn("ssh_target=weizheng@100.95.31.18", result.stdout)
+        self.assertIn("PING_ARGS=-c 1 -W 3 100.95.31.18", ping_log)
         self.assertIn("ARGS=-vz -w 5 100.95.31.18 22", nc_log)
         self.assertNotIn("secret-password", result.stdout)
         self.assertNotIn("secret-password", result.stderr)
         self.assertNotIn("secret-password", nc_log)
+        self.assertNotIn("secret-password", ping_log)
 
-    def test_jetson_remote_access_precheck_reports_tcp_ok(self):
+    def test_jetson_remote_access_precheck_reports_tcp_ok_even_when_icmp_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             env_file = tmp_path / ".env.jetson"
@@ -113,6 +131,15 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
                 )
                 + "\n",
                 encoding="utf-8",
+            )
+            write_executable(
+                fake_bin / "ping",
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'PING_ARGS=%s\\n' \"$*\" > \"${FAKE_PING_LOG:?}\"",
+                    "exit 1",
+                ],
             )
             write_executable(
                 fake_bin / "nc",
@@ -133,12 +160,16 @@ class RemoteExecProbeContractsTest(unittest.TestCase):
                     "JETSON_ENV_FILE": str(env_file),
                     "PATH": f"{fake_bin}:{os.environ['PATH']}",
                     "FAKE_NC_LOG": str(tmp_path / "nc.log"),
+                    "FAKE_PING_LOG": str(tmp_path / "ping.log"),
                 },
             )
-            nc_log = (tmp_path / "nc.log").read_text(encoding="utf-8")
+            nc_log = _read_text_if_exists(tmp_path / "nc.log")
+            ping_log = _read_text_if_exists(tmp_path / "ping.log")
 
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("icmp_probe=failed", result.stdout)
         self.assertIn("tcp_probe=ok", result.stdout)
+        self.assertIn("PING_ARGS=-c 1 -W 3 100.95.31.18", ping_log)
         self.assertIn("ARGS=-vz -w 5 100.95.31.18 22", nc_log)
 
     def test_jetson_remote_exec_dry_run_sources_ignored_env_without_exposing_password(self):
