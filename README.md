@@ -435,6 +435,11 @@ suite now uses those filters to emit `ranking.leq2b-vlm.selection.json` and
 `ranking.leq2b-text.selection.json` and
 `promotion.leq2b-text.selection.json`, next to the unfiltered
 `ranking.selection.json` and `promotion.selection.json`.
+Use `python -m edge_vlm.optimization bundle-selections` to merge those lane
+artifacts into one `leq2b.candidate_bundle.json`; on Jetson,
+`scripts/jetson/build_remote_leq2b_candidate_bundle.sh` accepts
+`JETSON_LEQ2B_VLM_SELECTION_DIR` and `JETSON_LEQ2B_TEXT_SELECTION_DIR` and
+writes the same unified bundle remotely.
 When the selector chooses the Q8 fallback under a relaxed fallback gate, the
 wrapper also forwards `--variant-min-lfb-blocks
 qwen3-vl-2b-instruct-q8-smoke=...`, and the sweep plan records that under

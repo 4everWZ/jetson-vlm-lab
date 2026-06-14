@@ -504,6 +504,21 @@ PYTHONPATH=src python -m edge_vlm.optimization select-eligible \
 Switch `--candidate-lane` to `text` and write
 `ranking.leq2b-text.selection.json` or `promotion.leq2b-text.selection.json`
 when the consumer wants only the `<=2B` text/router candidate rows.
+When a consumer needs both lanes in one artifact, merge the scoped selection
+files with `bundle-selections`:
+
+```bash
+PYTHONPATH=src python -m edge_vlm.optimization bundle-selections \
+  --input outputs/optimization_sweeps/<vlm-prefix>/ranking.leq2b-vlm.selection.json \
+  --input outputs/optimization_sweeps/<vlm-prefix>/promotion.leq2b-vlm.selection.json \
+  --input outputs/optimization_sweeps/<text-prefix>/ranking.leq2b-text.selection.json \
+  --input outputs/optimization_sweeps/<text-prefix>/promotion.leq2b-text.selection.json \
+  --output outputs/optimization_sweeps/<bundle-prefix>/leq2b.candidate_bundle.json
+```
+
+For a remote Jetson bundle, set `JETSON_LEQ2B_VLM_SELECTION_DIR` and
+`JETSON_LEQ2B_TEXT_SELECTION_DIR`, then run
+`scripts/jetson/build_remote_leq2b_candidate_bundle.sh`.
 
 For route-specific output review, run the benchmark JSONL through the quality
 review policy before promoting a candidate beyond smoke/repeat evidence:
@@ -793,6 +808,9 @@ next to the compare outputs. It also emits scoped `<=2B` text artifacts,
 `ranking.leq2b-text.selection.json` and
 `promotion.leq2b-text.selection.json`, by calling `select-eligible` with
 `--require-leq2b-candidate --candidate-lane text`.
+Use `scripts/jetson/build_remote_leq2b_candidate_bundle.sh` after the
+lightweight and Tencent text suites when both scoped lane outputs should be
+published as one `leq2b.candidate_bundle.json`.
 `JETSON_TENCENT_TEXT_FAIL_ON_PROMOTION_PRECHECK=1` when the wrapper should
 return non-zero if any row fails that promotion gate; the default remains `0`
 so diagnostic text ladders can still emit comparison evidence. Set

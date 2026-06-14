@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from .config import config_candidate_scope, config_supports_images, load_model_config
-from .eligibility_selection import build_eligibility_selection_artifact
+from .eligibility_selection import build_eligibility_selection_artifact, build_selection_bundle_artifact
 from .jetson_profile import summarize_tegrastats_log as summarize_jetson_profile_log
 
 
@@ -1575,6 +1575,12 @@ def main(argv: list[str] | None = None) -> int:
     selection_parser.add_argument("--require-leq2b-candidate", action="store_true")
     selection_parser.add_argument("--candidate-lane", help="Optional candidate scope lane filter, for example vlm or text")
     selection_parser.add_argument("--output", required=True, help="Filtered selection JSON output path")
+    bundle_parser = subparsers.add_parser(
+        "bundle-selections",
+        help="Merge multiple selection JSON artifacts into a single candidate bundle",
+    )
+    bundle_parser.add_argument("--input", action="append", required=True, help="Selection JSON path; repeatable")
+    bundle_parser.add_argument("--output", required=True, help="Candidate bundle JSON output path")
     args = parser.parse_args(argv)
 
     if args.command == "compare":
@@ -1630,6 +1636,13 @@ def main(argv: list[str] | None = None) -> int:
             candidate_lane=args.candidate_lane,
         )
         print(json.dumps({"gate": args.gate, "selected": artifact["selected_count"], "output": args.output}, ensure_ascii=False))
+        return 0
+    if args.command == "bundle-selections":
+        artifact = build_selection_bundle_artifact(
+            input_paths=args.input,
+            output_path=args.output,
+        )
+        print(json.dumps({"inputs": len(artifact["input_paths"]), "output": args.output}, ensure_ascii=False))
         return 0
     if args.command != "report":
         parser.print_help()

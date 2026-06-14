@@ -176,3 +176,130 @@ class OptimizationSelectionExportContractsTest(unittest.TestCase):
         self.assertEqual(artifact["selected_count"], 1)
         self.assertEqual(artifact["selected_ids"], [{"run_id": "run-vlm-2b", "variant_id": "qwen3-vl-2b-instruct-q4-smoke"}])
         self.assertEqual(artifact["selected"][0]["candidate_scope"], {"leq2b_candidate": True, "lane": "vlm"})
+
+    def test_bundle_selections_cli_merges_scoped_vlm_and_text_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            ranking_vlm = tmp_path / "ranking.leq2b-vlm.selection.json"
+            promotion_vlm = tmp_path / "promotion.leq2b-vlm.selection.json"
+            ranking_text = tmp_path / "ranking.leq2b-text.selection.json"
+            promotion_text = tmp_path / "promotion.leq2b-text.selection.json"
+            bundle_output = tmp_path / "leq2b.candidate_bundle.json"
+
+            ranking_vlm.write_text(
+                json.dumps(
+                    {
+                        "gate": "ranking",
+                        "input_paths": ["vlm/comparison.eligibility.json"],
+                        "filters": {"require_leq2b_candidate": True, "candidate_lane": "vlm"},
+                        "selected_count": 1,
+                        "selected_ids": [{"run_id": "run-vlm-ranking", "variant_id": "qwen3-vl-2b-instruct-q4-smoke"}],
+                        "selected": [
+                            {
+                                "run_id": "run-vlm-ranking",
+                                "variant_id": "qwen3-vl-2b-instruct-q4-smoke",
+                                "model": "qwen3-vl-2b-instruct-q4",
+                                "candidate_scope": {"leq2b_candidate": True, "lane": "vlm"},
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            promotion_vlm.write_text(
+                json.dumps(
+                    {
+                        "gate": "promotion",
+                        "input_paths": ["vlm/comparison.eligibility.json"],
+                        "filters": {"require_leq2b_candidate": True, "candidate_lane": "vlm"},
+                        "selected_count": 0,
+                        "selected_ids": [],
+                        "selected": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            ranking_text.write_text(
+                json.dumps(
+                    {
+                        "gate": "ranking",
+                        "input_paths": ["text/comparison.eligibility.json"],
+                        "filters": {"require_leq2b_candidate": True, "candidate_lane": "text"},
+                        "selected_count": 1,
+                        "selected_ids": [{"run_id": "run-text-ranking", "variant_id": "tencent-youtu-llm-2b-q8-text-smoke"}],
+                        "selected": [
+                            {
+                                "run_id": "run-text-ranking",
+                                "variant_id": "tencent-youtu-llm-2b-q8-text-smoke",
+                                "model": "tencent-youtu-llm-2b-q8",
+                                "candidate_scope": {"leq2b_candidate": True, "lane": "text"},
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            promotion_text.write_text(
+                json.dumps(
+                    {
+                        "gate": "promotion",
+                        "input_paths": ["text/comparison.eligibility.json"],
+                        "filters": {"require_leq2b_candidate": True, "candidate_lane": "text"},
+                        "selected_count": 1,
+                        "selected_ids": [{"run_id": "run-text-promotion", "variant_id": "tencent-youtu-llm-2b-q8-text-smoke"}],
+                        "selected": [
+                            {
+                                "run_id": "run-text-promotion",
+                                "variant_id": "tencent-youtu-llm-2b-q8-text-smoke",
+                                "model": "tencent-youtu-llm-2b-q8",
+                                "candidate_scope": {"leq2b_candidate": True, "lane": "text"},
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    "-m",
+                    "edge_vlm.optimization",
+                    "bundle-selections",
+                    "--input",
+                    str(ranking_vlm),
+                    "--input",
+                    str(promotion_vlm),
+                    "--input",
+                    str(ranking_text),
+                    "--input",
+                    str(promotion_text),
+                    "--output",
+                    str(bundle_output),
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env={**os.environ, "PYTHONPATH": "src"},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            stdout = json.loads(result.stdout)
+            artifact = json.loads(bundle_output.read_text(encoding="utf-8"))
+
+        self.assertEqual(stdout, {"inputs": 4, "output": str(bundle_output)})
+        self.assertEqual(artifact["kind"], "candidate_selection_bundle")
+        self.assertEqual(artifact["input_paths"], [str(ranking_vlm), str(promotion_vlm), str(ranking_text), str(promotion_text)])
+        self.assertEqual(artifact["filters"], {"require_leq2b_candidate": True, "candidate_lanes": ["text", "vlm"]})
+        self.assertEqual(artifact["gates"]["ranking"]["selected_count"], 2)
+        self.assertEqual(artifact["gates"]["ranking"]["lanes"]["vlm"]["selected_ids"], [{"run_id": "run-vlm-ranking", "variant_id": "qwen3-vl-2b-instruct-q4-smoke"}])
+        self.assertEqual(artifact["gates"]["ranking"]["lanes"]["text"]["selected_ids"], [{"run_id": "run-text-ranking", "variant_id": "tencent-youtu-llm-2b-q8-text-smoke"}])
+        self.assertEqual(artifact["gates"]["promotion"]["selected_count"], 1)
+        self.assertEqual(artifact["gates"]["promotion"]["lanes"]["vlm"]["selected_count"], 0)
+        self.assertEqual(artifact["gates"]["promotion"]["lanes"]["text"]["selected_ids"], [{"run_id": "run-text-promotion", "variant_id": "tencent-youtu-llm-2b-q8-text-smoke"}])
+        self.assertEqual(artifact["selected"]["ranking"][0]["source_selection_path"], str(ranking_vlm))
+        self.assertEqual(artifact["selected"]["ranking"][0]["candidate_lane"], "vlm")

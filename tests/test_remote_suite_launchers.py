@@ -5,10 +5,56 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._remote_execution_helpers import isolated_remote_env, write_fake_suite_scripts
+from tests._remote_execution_helpers import isolated_remote_env, write_fake_suite_scripts, write_remote_arg_logger
 
 
 class RemoteSuiteLauncherContractsTest(unittest.TestCase):
+    def test_remote_leq2b_candidate_bundle_helper_builds_bundle_from_lane_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_remote_arg_logger(fake_remote)
+
+            result = subprocess.run(
+                ["bash", "scripts/jetson/build_remote_leq2b_candidate_bundle.sh"],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    FAKE_REMOTE_LOG=str(log_file),
+                    JETSON_LEQ2B_BUNDLE_RUN_PREFIX="leq2b-bundle-unit",
+                    JETSON_LEQ2B_VLM_SELECTION_DIR="outputs/optimization_sweeps/light-unit",
+                    JETSON_LEQ2B_TEXT_SELECTION_DIR="outputs/optimization_sweeps/text-unit",
+                ),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertIn("ARG=PYTHONPATH=src\nARG=python3\nARG=-m\nARG=edge_vlm.optimization\nARG=bundle-selections\n", log_text)
+        self.assertIn(
+            "ARG=--input\nARG=outputs/optimization_sweeps/light-unit/ranking.leq2b-vlm.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "ARG=--input\nARG=outputs/optimization_sweeps/light-unit/promotion.leq2b-vlm.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "ARG=--input\nARG=outputs/optimization_sweeps/text-unit/ranking.leq2b-text.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "ARG=--input\nARG=outputs/optimization_sweeps/text-unit/promotion.leq2b-text.selection.json\n",
+            log_text,
+        )
+        self.assertIn(
+            "ARG=--output\nARG=outputs/optimization_sweeps/leq2b-bundle-unit/leq2b.candidate_bundle.json\n",
+            log_text,
+        )
+
     def test_remote_current_defaults_suite_runs_locked_sweep_then_compare(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
