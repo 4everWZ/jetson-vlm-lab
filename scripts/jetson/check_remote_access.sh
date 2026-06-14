@@ -30,6 +30,35 @@ if [[ "${icmp_probe}" != "0" && "${icmp_probe}" != "1" ]]; then
   exit 2
 fi
 
+host_is_tailscale_cgnat_ipv4() {
+  local candidate="$1"
+  local octet1 octet2 octet3 octet4 octet
+  [[ "${candidate}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+  IFS=. read -r octet1 octet2 octet3 octet4 <<<"${candidate}"
+  for octet in "${octet1}" "${octet2}" "${octet3}" "${octet4}"; do
+    [[ "${octet}" =~ ^[0-9]+$ ]] || return 1
+    ((octet >= 0 && octet <= 255)) || return 1
+  done
+  [[ "${octet1}" == "100" ]] || return 1
+  ((octet2 >= 64 && octet2 <= 127))
+}
+
+emit_tailnet_probe() {
+  local candidate="$1"
+  if ! host_is_tailscale_cgnat_ipv4 "${candidate}"; then
+    return 0
+  fi
+  if ! command -v tailscale >/dev/null 2>&1; then
+    printf 'tailnet_probe=tailscale_cli_missing\n'
+    return 0
+  fi
+  if tailscale status >/dev/null 2>&1; then
+    printf 'tailnet_probe=tailscale_status_ok\n'
+  else
+    printf 'tailnet_probe=tailscale_status_failed\n'
+  fi
+}
+
 printf 'ssh_target=%s@%s\n' "${user}" "${host}"
 printf 'ssh_port=%s\n' "${port}"
 printf 'repo_dir=%s\n' "${repo_dir}"
@@ -49,6 +78,8 @@ elif ping -c 1 -W "${icmp_timeout}" "${host}" >/dev/null 2>&1; then
 else
   printf 'icmp_probe=failed\n'
 fi
+
+emit_tailnet_probe "${host}"
 
 if ! command -v nc >/dev/null 2>&1; then
   echo "tcp_probe=nc_missing" >&2

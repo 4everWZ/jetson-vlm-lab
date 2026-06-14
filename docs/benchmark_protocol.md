@@ -305,7 +305,11 @@ password helper or remote command is involved. It also prints an advisory
 `icmp_probe=...` field so ICMP reachability can be separated from SSH port
 reachability; ICMP failure does not fail the gate when TCP succeeds. It prints
 `tcp_probe=ok` on TCP success, `tcp_probe=tcp_connect_failed` on TCP failure,
-and never prints `.env.jetson` secrets. Use it to separate local
+and never prints `.env.jetson` secrets. When the host is in the Tailscale
+CGNAT range `100.64.0.0/10`, it also prints advisory
+`tailnet_probe=tailscale_cli_missing`, `tailnet_probe=tailscale_status_ok`, or
+`tailnet_probe=tailscale_status_failed` so a host-side tailnet problem can be
+separated from Jetson SSH authentication. Use it to separate local
 VPN/Tailscale/routing failures from SSH authentication or remote worktree
 failures.
 Set `JETSON_REMOTE_ACCESS_PREFLIGHT=1` on
