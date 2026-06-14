@@ -305,6 +305,10 @@ password helper or remote command is involved. It prints `tcp_probe=ok` on
 success, `tcp_probe=tcp_connect_failed` on TCP failure, and never prints
 `.env.jetson` secrets. Use it to separate local VPN/Tailscale/routing failures
 from SSH authentication or remote worktree failures.
+Set `JETSON_REMOTE_ACCESS_PREFLIGHT=1` on
+`scripts/jetson/run_remote_optimization_sweep.sh` when the wrapper itself
+should run this TCP precheck before `git fetch`, max-clocks setup, selector
+execution, artifact preflight, or any other remote SSH command.
 
 The probe prints `remote_probe=ok` only when SSH reaches the configured Jetson
 worktree and the remote command returns the expected marker. On failure, it

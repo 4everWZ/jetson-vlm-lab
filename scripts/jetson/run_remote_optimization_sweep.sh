@@ -11,6 +11,7 @@ remote_sync="${JETSON_REMOTE_SYNC:-1}"
 remote_branch="${JETSON_REMOTE_BRANCH:-main}"
 remote_pythonpath="${JETSON_REMOTE_PYTHONPATH:-src}"
 llama_cpp_image="${JETSON_REMOTE_LLAMA_CPP_IMAGE:-ghcr.io/4everwz/jetson-llama-cpp:r36.4-cu128-u24.04-sm87}"
+access_preflight="${JETSON_REMOTE_ACCESS_PREFLIGHT:-0}"
 prepare_max_clocks="${JETSON_REMOTE_PREPARE_MAX_CLOCKS:-0}"
 drop_caches_before_variant="${JETSON_REMOTE_DROP_CACHES_BEFORE_VARIANT:-0}"
 qwen3_selector="${JETSON_REMOTE_QWEN3_INSTRUCT_SELECTOR:-0}"
@@ -23,6 +24,13 @@ gguf_preflight_fail="${JETSON_REMOTE_GGUF_PREFLIGHT_FAIL:-0}"
 
 if [[ $# -eq 0 ]]; then
   echo "Usage: $0 <edge_vlm.jetson_sweep args...>" >&2
+  exit 2
+fi
+
+if [[ "${access_preflight}" == "1" ]]; then
+  JETSON_ENV_FILE="${env_file}" "${repo_root}/scripts/jetson/check_remote_access.sh"
+elif [[ "${access_preflight}" != "0" ]]; then
+  echo "JETSON_REMOTE_ACCESS_PREFLIGHT must be 0 or 1." >&2
   exit 2
 fi
 
