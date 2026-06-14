@@ -725,6 +725,8 @@ class ModelCatalogDocsQualityContractsTest(unittest.TestCase):
         for text in (protocol_doc, strategy_doc, readme, readme_zh):
             self.assertIn("check_gguf_artifacts.sh", text)
             self.assertIn("gguf-artifacts.json", text)
+            self.assertIn("JETSON_REMOTE_GGUF_PREFLIGHT", text)
+            self.assertIn("JETSON_REMOTE_GGUF_PREFLIGHT_FAIL", text)
         for text in (protocol_doc, strategy_doc):
             self.assertIn("edge_vlm.gguf_artifacts", text)
 

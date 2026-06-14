@@ -194,6 +194,11 @@ scripts/jetson/check_gguf_artifacts.sh check \
 
 The manifest records `missing`, `invalid_magic`, or `ok` per artifact and exits
 non-zero when any artifact is not ready.
+Remote suite wrappers also enable advisory
+`JETSON_REMOTE_GGUF_PREFLIGHT=1` by default, writing
+`outputs/optimization_sweeps/<run-prefix>/<run-prefix>.gguf-artifacts.json`
+before server startup. Set `JETSON_REMOTE_GGUF_PREFLIGHT_FAIL=1` to abort on
+missing or invalid cached artifacts.
 
 ## Run Gemma 4 E2B-it
 

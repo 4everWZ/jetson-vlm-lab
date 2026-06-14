@@ -244,6 +244,9 @@ Required per-run profile data:
   `scripts/jetson/check_gguf_artifacts.sh check`, backed by
   `edge_vlm.gguf_artifacts`, to write `gguf-artifacts.json` manifests before
   expensive remote sweeps.
+- Remote suite wrappers enable advisory `JETSON_REMOTE_GGUF_PREFLIGHT=1` by
+  default and can be promoted to fail-fast artifact gating with
+  `JETSON_REMOTE_GGUF_PREFLIGHT_FAIL=1`.
 - Warmup policy recorded from variant args. `--no-warmup` rows are marked
   disabled; warmup-on rows are marked as included in server startup until
   runtime logs or hooks can split the internal llama.cpp warmup duration.

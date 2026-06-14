@@ -127,6 +127,7 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertIn("ENV_PREPARE=1\n", log_text)
         self.assertIn("ENV_DROP=1\n", log_text)
         self.assertIn("ENV_SYNC=0\n", log_text)
+        self.assertIn("ENV_GGUF_PREFLIGHT=1\n", log_text)
         self.assertIn("SWEEP_ARG=--run-prefix\nSWEEP_ARG=defaults-unit\n", log_text)
         self.assertIn("SWEEP_ARG=--variant\nSWEEP_ARG=minicpm-q4-baseline-b128-u32-kvq8\n", log_text)
         self.assertIn("SWEEP_ARG=--variant\nSWEEP_ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
@@ -217,6 +218,7 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertIn("ENV_PREPARE=1\n", log_text)
         self.assertIn("ENV_DROP=1\n", log_text)
         self.assertIn("ENV_SYNC=0\n", log_text)
+        self.assertIn("ENV_GGUF_PREFLIGHT=1\n", log_text)
         self.assertIn("ENV_QWEN3_SELECTOR=1\n", log_text)
         self.assertIn("ENV_QWEN3_FALLBACK_MIN_LFB=100\n", log_text)
         self.assertIn("SWEEP_ARG=--run-prefix\nSWEEP_ARG=light-unit\n", log_text)
@@ -484,6 +486,7 @@ class RemoteSuiteLauncherContractsTest(unittest.TestCase):
         self.assertIn("ENV_PREPARE=1\n", log_text)
         self.assertIn("ENV_DROP=1\n", log_text)
         self.assertIn("ENV_SYNC=0\n", log_text)
+        self.assertIn("ENV_GGUF_PREFLIGHT=1\n", log_text)
         self.assertIn("SWEEP_ARG=--run-prefix\nSWEEP_ARG=tencent-text-unit\n", log_text)
         for variant_id in (
             "tencent-hy-mt1p5-1p8b-1p25bit-text-smoke",

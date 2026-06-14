@@ -181,6 +181,101 @@ class RemoteOptimizationSweepContractsTest(unittest.TestCase):
         self.assertIn("ARG=--dry-run\n", log_text)
         self.assertIn("ARG=gemma-q4-baseline-gpu12-b512-u512-kvq8\n", log_text)
 
+    def test_remote_optimization_sweep_can_write_advisory_gguf_preflight_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_executable(
+                fake_remote,
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                    "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    "if printf '%s\\n' \"$@\" | grep -q 'check-plan'; then",
+                    "  exit 2",
+                    "fi",
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--run-prefix",
+                    "unit-preflight",
+                    "--variant",
+                    "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_GGUF_PREFLIGHT="1",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 3)
+        self.assertIn("ARG=edge_vlm.jetson_sweep\n", log_text)
+        self.assertIn("ARG=--dry-run\nARG=--plan-output\nARG=outputs/optimization_sweeps/unit-preflight/unit-preflight.preflight-plan.json\n", log_text)
+        self.assertIn("ARG=edge_vlm.gguf_artifacts\nARG=check-plan\n", log_text)
+        self.assertIn("ARG=--plan\nARG=outputs/optimization_sweeps/unit-preflight/unit-preflight.preflight-plan.json\n", log_text)
+        self.assertIn("ARG=--output\nARG=outputs/optimization_sweeps/unit-preflight/unit-preflight.gguf-artifacts.json\n", log_text)
+        self.assertIn("ARG=bash\nARG=scripts/jetson/run_optimization_sweep.sh\n", log_text)
+        self.assertIn("GGUF artifact preflight failed; continuing because JETSON_REMOTE_GGUF_PREFLIGHT_FAIL=0", result.stderr)
+
+    def test_remote_optimization_sweep_can_fail_on_gguf_preflight_when_enabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            log_file = tmp_path / "remote.log"
+            fake_remote = tmp_path / "remote_exec.sh"
+            write_executable(
+                fake_remote,
+                [
+                    "#!/usr/bin/env bash",
+                    "set -Eeuo pipefail",
+                    "printf 'CALL\\n' >> \"${FAKE_REMOTE_LOG:?}\"",
+                    "for arg in \"$@\"; do printf 'ARG=%s\\n' \"$arg\" >> \"${FAKE_REMOTE_LOG}\"; done",
+                    "if printf '%s\\n' \"$@\" | grep -q 'check-plan'; then",
+                    "  exit 2",
+                    "fi",
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/jetson/run_remote_optimization_sweep.sh",
+                    "--run-prefix",
+                    "unit-preflight-fail",
+                    "--variant",
+                    "gemma-q4-baseline-gpu12-b512-u512-kvq8",
+                ],
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=isolated_remote_env(
+                    JETSON_REMOTE_EXEC=str(fake_remote),
+                    JETSON_REMOTE_SYNC="0",
+                    JETSON_REMOTE_GGUF_PREFLIGHT="1",
+                    JETSON_REMOTE_GGUF_PREFLIGHT_FAIL="1",
+                    FAKE_REMOTE_LOG=str(log_file),
+                ),
+            )
+            self.assertEqual(result.returncode, 2)
+            log_text = log_file.read_text(encoding="utf-8")
+
+        self.assertEqual(log_text.count("CALL\n"), 2)
+        self.assertIn("ARG=edge_vlm.gguf_artifacts\nARG=check-plan\n", log_text)
+        self.assertNotIn("ARG=bash\nARG=scripts/jetson/run_optimization_sweep.sh\n", log_text)
+        self.assertIn("GGUF artifact preflight failed", result.stderr)
+
     def test_remote_optimization_sweep_can_prepare_max_clocks_without_logging_password(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
