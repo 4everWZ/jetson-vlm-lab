@@ -118,8 +118,9 @@ Jetson boot configuration.
 `edge_vlm.boot_config_cma_plan` now converts that CMA plan into a second
 read-only manual-review artifact with `cma=<MiB>M` extlinux `APPEND` line diffs
 for the Q8 minimum, Q4 minimum, and rounded max-required CMA candidates. It also
-sets `applies_boot_config=false`; applying any candidate remains a separate
-manual boot configuration change.
+sets `applies_boot_config=false` and records current/proposed SHA256 values for
+stale-plan protection; applying any candidate remains a separate manual boot
+configuration change.
 The remote Qwen selector wrapper now writes that plan automatically for
 no-selection selector outputs and writes the boot-config patch plan next to it,
 with `JETSON_REMOTE_QWEN3_INSTRUCT_CMA_PLAN=0` as the opt-out for scoped runs.

@@ -1,6 +1,7 @@
 """Boot config CMA patch planning contract tests."""
 
 import json
+import hashlib
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -9,6 +10,10 @@ from pathlib import Path
 
 
 MiB = 1024 * 1024
+
+
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _cma_plan_fixture() -> dict:
@@ -54,7 +59,7 @@ class BootConfigCmaPlanContractsTest(unittest.TestCase):
             boot_root = tmp_path
             extlinux = boot_root / "boot" / "extlinux" / "extlinux.conf"
             extlinux.parent.mkdir(parents=True)
-            extlinux.write_text(
+            original_text = (
                 "\n".join(
                     [
                         "TIMEOUT 30",
@@ -63,9 +68,9 @@ class BootConfigCmaPlanContractsTest(unittest.TestCase):
                         "      APPEND root=/dev/mmcblk0p1 rw quiet",
                     ]
                 )
-                + "\n",
-                encoding="utf-8",
+                + "\n"
             )
+            extlinux.write_text(original_text, encoding="utf-8")
 
             plan = build_boot_config_cma_plan(_cma_plan_fixture(), boot_root=boot_root)
             after_text = extlinux.read_text(encoding="utf-8")
@@ -79,6 +84,8 @@ class BootConfigCmaPlanContractsTest(unittest.TestCase):
         self.assertEqual(plan["source_cma_plan"], None)
         self.assertEqual(plan["target_boot_config_path"], "/boot/extlinux/extlinux.conf")
         self.assertEqual(plan["resolved_boot_config_path"], str(extlinux))
+        self.assertEqual(plan["target_file_sha256"], _sha256(original_text))
+        self.assertEqual(plan["target_file_size_bytes"], len(original_text.encode("utf-8")))
         self.assertEqual(plan["target_append_line_number"], 4)
         self.assertEqual(plan["current_cma_tokens"], [])
         self.assertEqual(plan["current_append_line"], "      APPEND root=/dev/mmcblk0p1 rw quiet")
@@ -116,6 +123,13 @@ class BootConfigCmaPlanContractsTest(unittest.TestCase):
         )
         self.assertIn("-      APPEND root=/dev/mmcblk0p1 rw quiet", plan["patch_candidates"][2]["unified_diff"])
         self.assertIn("+      APPEND root=/dev/mmcblk0p1 rw quiet cma=640M", plan["patch_candidates"][2]["unified_diff"])
+        rounded_text = original_text.replace(
+            "      APPEND root=/dev/mmcblk0p1 rw quiet",
+            "      APPEND root=/dev/mmcblk0p1 rw quiet cma=640M",
+        )
+        self.assertEqual(plan["patch_candidates"][2]["candidate_id"], "max-required-lfb-rounded-64mib")
+        self.assertEqual(plan["patch_candidates"][2]["expected_current_sha256"], _sha256(original_text))
+        self.assertEqual(plan["patch_candidates"][2]["proposed_file_sha256"], _sha256(rounded_text))
 
     def test_plan_replaces_existing_cma_token_for_review(self):
         from edge_vlm.boot_config_cma_plan import build_boot_config_cma_plan
@@ -134,6 +148,23 @@ class BootConfigCmaPlanContractsTest(unittest.TestCase):
             plan["patch_candidates"][0]["proposed_append_line"],
             "APPEND root=/dev/mmcblk0p1 rw cma=400M quiet",
         )
+
+    def test_candidate_file_hash_preserves_missing_trailing_newline(self):
+        from edge_vlm.boot_config_cma_plan import build_boot_config_cma_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            extlinux = tmp_path / "boot" / "extlinux" / "extlinux.conf"
+            extlinux.parent.mkdir(parents=True)
+            original_text = "APPEND root=/dev/mmcblk0p1 rw quiet"
+            extlinux.write_text(original_text, encoding="utf-8")
+
+            plan = build_boot_config_cma_plan(_cma_plan_fixture(), boot_root=tmp_path)
+
+        proposed_text = "APPEND root=/dev/mmcblk0p1 rw quiet cma=400M"
+        self.assertEqual(plan["target_file_sha256"], _sha256(original_text))
+        self.assertEqual(plan["target_file_size_bytes"], len(original_text.encode("utf-8")))
+        self.assertEqual(plan["patch_candidates"][0]["proposed_file_sha256"], _sha256(proposed_text))
 
     def test_cli_writes_patch_plan_json(self):
         from edge_vlm.boot_config_cma_plan import main

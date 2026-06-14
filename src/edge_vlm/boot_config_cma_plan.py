@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import hashlib
 import json
 import re
 import sys
@@ -34,6 +35,14 @@ def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
 def _resolve_boot_path(boot_root: Path, path_text: str) -> Path:
@@ -100,13 +109,27 @@ def _unified_diff(
     )
 
 
+def _proposed_text(*, current_text: str, line_number: int, proposed_line: str) -> str:
+    lines = current_text.splitlines(keepends=True)
+    target_line = lines[line_number - 1]
+    line_ending = ""
+    for candidate in ("\r\n", "\n", "\r"):
+        if target_line.endswith(candidate):
+            line_ending = candidate
+            break
+    lines[line_number - 1] = proposed_line + line_ending
+    return "".join(lines)
+
+
 def _patch_candidates(
     cma_plan: dict[str, Any],
     *,
     path_text: str,
+    current_text: str,
     lines: list[str],
     line_number: int,
     current_append_line: str,
+    current_sha256: str,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     raw_candidates = cma_plan.get("experiment_candidates")
@@ -123,8 +146,14 @@ def _patch_candidates(
         if token is None:
             continue
         proposed_line, action = _replace_or_append_cma_token(current_append_line, token)
+        proposed_text = _proposed_text(
+            current_text=current_text,
+            line_number=line_number,
+            proposed_line=proposed_line,
+        )
         candidates.append(
             {
+                "candidate_id": name,
                 "name": name,
                 "source": raw_candidate.get("source"),
                 "variant_id": raw_candidate.get("variant_id"),
@@ -132,6 +161,8 @@ def _patch_candidates(
                 "cma_token": token,
                 "action": action,
                 "line_number": line_number,
+                "expected_current_sha256": current_sha256,
+                "proposed_file_sha256": _sha256_text(proposed_text),
                 "proposed_append_line": proposed_line,
                 "unified_diff": _unified_diff(
                     path_text=path_text,
@@ -163,14 +194,22 @@ def build_boot_config_cma_plan(
         target_line_number = None
         current_append_line = None
         current_cma_tokens: list[str] = []
+        target_file_sha256 = None
+        target_file_size_bytes = None
         patch_candidates: list[dict[str, Any]] = []
     else:
         try:
-            text = resolved_path.read_text(encoding="utf-8", errors="replace")
+            raw_bytes = resolved_path.read_bytes()
+            text = raw_bytes.decode("utf-8", errors="replace")
             lines = text.splitlines()
+            target_file_sha256 = _sha256_bytes(raw_bytes)
+            target_file_size_bytes = len(raw_bytes)
         except OSError:
             missing_evidence.append("boot_config_readable_path_content")
             lines = []
+            text = ""
+            target_file_sha256 = None
+            target_file_size_bytes = None
         append_entries = _append_lines(lines)
         if len(append_entries) != 1:
             missing_evidence.append("single_boot_config_append_line")
@@ -184,9 +223,11 @@ def build_boot_config_cma_plan(
             patch_candidates = _patch_candidates(
                 cma_plan,
                 path_text=path_text,
+                current_text=text,
                 lines=lines,
                 line_number=target_line_number,
                 current_append_line=current_append_line,
+                current_sha256=target_file_sha256,
             )
             if not patch_candidates:
                 missing_evidence.append("mib_aligned_cma_experiment_candidates")
@@ -201,6 +242,8 @@ def build_boot_config_cma_plan(
         "source_selector_json": cma_plan.get("source_selector_json"),
         "target_boot_config_path": path_text,
         "resolved_boot_config_path": str(resolved_path) if resolved_path is not None else None,
+        "target_file_sha256": target_file_sha256,
+        "target_file_size_bytes": target_file_size_bytes,
         "target_append_line_number": target_line_number,
         "current_append_line": current_append_line,
         "current_cma_tokens": current_cma_tokens,

@@ -550,7 +550,9 @@ PYTHONPATH=src python -m edge_vlm.boot_config_cma_plan \
 
 The patch artifact converts the Q8/Q4/rounded CMA candidates into
 `cma=<MiB>M` `APPEND` line diffs. It remains read-only and sets
-`applies_boot_config=false`.
+`applies_boot_config=false`. It records the current boot config SHA256 and each
+candidate's proposed SHA256 so future approved write tooling can reject stale
+plans before touching `/boot`.
 The remote Qwen selector wrapper writes this artifact automatically when the
 selector chooses no variant and has a selector output path. It also writes the
 boot-config patch plan next to it as `<selector-output>.boot-config-cma-plan.json`.

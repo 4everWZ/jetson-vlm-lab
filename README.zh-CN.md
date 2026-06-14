@@ -431,8 +431,9 @@ PYTHONPATH=src python -m edge_vlm.boot_config_cma_plan \
 ```
 
 这个 patch plan 会把 Q8/Q4/rounded CMA candidate 转成 `cma=<MiB>M` 的 `APPEND`
-line diff，并写入 `applies_boot_config=false`。它只是 review artifact；备份、手动
-编辑、reboot 和 reboot 后 diagnostics 仍然是单独批准的步骤。
+line diff，并写入 `applies_boot_config=false`。它还会记录当前 boot config 的
+SHA256 和每个 candidate 的 proposed SHA256，让后续被批准的写入步骤可以拒绝过期
+plan；备份、手动编辑、reboot 和 reboot 后 diagnostics 仍然是单独批准的步骤。
 
 remote lightweight suite 现在也会自动使用这个 selector，而不是把
 `qwen3-vl-2b-instruct-q4-smoke` 固定写死在 candidate 列表里。默认行为是
